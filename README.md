@@ -41,28 +41,16 @@ Credit is entirely optional and I would never dream of asking. It's just that
 be refreshing the forks page regardless, serene, unbothered, definitely not
 counting.
 
-### If you wire up the account
+### Backups, when they get a backend
 
-The sign-in screen is a front without a back: nothing is verified and nothing
-is sent. The groundwork for a backend is in the repo, though, and because the
-source is public it is worth saying how it is meant to stay safe:
-
-- **The anon key is not a secret, and is still not in the repo.** It ships in
-  the binary, so assume it is in everyone's hands; every guarantee lives in
-  Postgres, where [`supabase/migrations`](supabase/migrations/) turns on
-  row-level security, locks the `anon` role out entirely, caps what one account
-  can store, and gives an account a way to delete itself. Read it before
-  trusting it. The key and project URL themselves come from `.env`, which is
-  ignored; [`.env.example`](.env.example) shows the shape.
-- **Sessions go in the Keychain / Keystore**, through `src/session.ts`, never
-  in AsyncStorage. Hand that adapter to the client; don't let it pick its own.
-- **The client trusts nothing it reads.** Months and tasks are re-validated
-  field by field on the way in (`src/storage.ts`, `src/tasks.ts`), so a bad
-  record can't crash the planner.
-- **Reset links must be verified links** (App Links / Universal Links), not the
-  bare custom URL scheme, which any app on Android can claim.
-- **The service-role key never enters the repo, the app, or `eas.json`.**
-  `.gitignore` already refuses the usual filenames; keep it that way.
+Nothing is sent anywhere yet. When it is, there will still be no accounts: no
+name, no email, no password. A backup is encrypted on the phone with a code
+only the phone holds, and the server stores ciphertext under an id derived from
+that code, so neither Google nor I can read it. [`firestore.rules`](firestore.rules)
+is the entire server side: signed-in installs only, no listing, fixed shapes
+and sizes. The code lives in the Keychain / Keystore through `src/session.ts`;
+Firebase's config files stay out of the repo ([`.env.example`](.env.example));
+and the phone re-validates everything it reads back.
 
 ## Features
 
@@ -99,9 +87,10 @@ npm test
 ```
 
 Covers the pure logic: how streaks are counted, how close a deadline is, what
-history says happened, what the month and task stores will accept off disk,
-and whether a session survives the trip through the keychain. None of it
-renders, so the suite runs in plain Node in well under a second.
+history says happened, what the stores will accept off disk, and whether a
+session survives the keychain. None of it renders, so the suite runs in plain
+Node in well under a second. `npm run test:rules` is the server side: it starts
+the Firestore emulator and checks every way the rules should say no.
 
 That is a deliberate line. These modules hold the parts that are easy to
 get quietly wrong: a run of days crossing a month border, a deadline landing
@@ -124,17 +113,8 @@ real device), and `production` (App Store / Play Store, an Android app bundle,
 with the build number incremented for you). Version numbers live in `app.json`
 rather than on Expo's servers, so what ships is whatever the repo says.
 
-Backend configuration does not live in the repo at all. Locally, copy
-`.env.example` to `.env` and fill it in. For EAS builds, set the same names as
-EAS environment variables so they never pass through a committed file:
-
-```bash
-npx eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_URL
-```
-
-Anything prefixed `EXPO_PUBLIC_` is inlined into the JavaScript bundle. That is
-fine for the anon key and the project URL, and exactly why the service-role key
-must never be given that prefix, or any place in this project at all.
+Firebase's two config files never enter the repo; `.env.example` says where
+they go, locally and for EAS builds.
 
 ## Structure
 
@@ -184,6 +164,7 @@ src/widgets/                   snapshot written to the shared container
 targets/widgets/               iOS WidgetKit (SwiftUI)
 targets/android-widgets/       Android home screen (Jetpack Glance)
 plugins/                       Expo config plugin for the Android widgets
-supabase/migrations/           the sync backend's schema and row-level security; reviewed, not yet wired up
-.env.example                   the backend variables the app expects; the real .env is never committed
+firestore.rules                the entire server side: what a signed-in phone may store (not wired up yet)
+firebase/                      the rules suite, run against the emulator
+.env.example                   backend config; the real .env is never committed
 ```

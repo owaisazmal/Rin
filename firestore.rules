@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// The entire server side of the app.
+//
+// There are no accounts. Nobody gives a name, an email or a password. When a
+// phone backs up, it signs in anonymously so the request carries an App Check
+// token and a throwaway uid, encrypts each record with a key derived from a
+// code that only the phone holds, and writes the ciphertext under an id that
+// is a one-way derivation of the same code. A second phone that is given the
+// code derives the same id and the same key, and can read it all back.
+//
+// So the database holds no identities and nothing readable, and these rules
+// only have to guarantee three things:
+//
+//   1. nothing is reachable without a signed-in app (App Check is enforced in
+//      the console, not here; rules cannot see it);
+//   2. nothing can be discovered — every read names its exact path, and the
+//      id space is 2^256, so knowing an id *is* the credential;
+//   3. every record has exactly the shape and size the app writes, so a
+//      script cannot park arbitrary data here or bloat a backup.
+//
+// Deliberately not enforced, because it cannot be: how many backups one
+// install creates. That is App Check's job, and on the free plan the worst
+// outcome is a day's quota gone, never a bill.
+
+service cloud.firestore {
+
+  function signedIn() {
+    return request.auth != null;
+  }
+
+  // hex(SHA-256) of the code's id-derivation: 64 lowercase hex characters
+  function isBackupId(id) {
+    return id.matches('^[0-9a-f]{64}$');
+  }
+
+  // one document per calendar month, so an id also bounds a backup at 1212 of them
+  function isMonthId(id) {
+    return id.matches('^20[0-9]{2}-(0[1-9]|1[0-2])$');
+  }
+
+  // An encrypted record. `iv` is the nonce (12 to 24 bytes, base64), `ct` the
+  // ciphertext (base64), `v` the format version, `updatedAt` the server's clock —
+  // never the phone's, so two phones sharing a code can tell which wrote last.
+  function isBlob(data, maxChars) {
+    return data.keys().hasOnly(['v', 'iv', 'ct', 'updatedAt'])
+      && data.keys().hasAll(['v', 'iv', 'ct', 'updatedAt'])
+      && data.v == 1
+      && data.iv is string && data.iv.size() >= 16 && data.iv.size() <= 32
+      && data.ct is string && data.ct.size() > 0 && data.ct.size() <= maxChars
+      && data.updatedAt == request.time;
+  }
+
+  match /databases/{database}/documents {
+
+    match /backups/{backup}/months/{month} {
+      // reading, or listing the months of one backup whose id you already know
+      allow get: if signedIn() && isBackupId(backup) && isMonthId(month);
+      allow list: if signedIn() && isBackupId(backup);
+      // a month in the clear is a few KB; base64 ciphertext of one stays well under this
+      allow create, update: if signedIn() && isBackupId(backup) && isMonthId(month)
+        && isBlob(request.resource.data, 65536);
+      allow delete: if signedIn() && isBackupId(backup);
+    }
+
+    // the deadline list travels as one record
+    match /backups/{backup}/tasks/{doc} {
+      allow get: if signedIn() && isBackupId(backup) && doc == 'current';
+      allow create, update: if signedIn() && isBackupId(backup) && doc == 'current'
+        && isBlob(request.resource.data, 262144);
+      allow delete: if signedIn() && isBackupId(backup) && doc == 'current';
+    }
+
+    // Everything else — the top-level backups collection, collection-group
+    // queries, any path not named above — is unreachable. Firestore denies by
+    // default; this just says so where a reader will look for it.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

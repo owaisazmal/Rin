@@ -56,3 +56,7 @@ modules/*/android/.gradle/
 # Firebase's equivalents are these files, uploaded to EAS as file variables
 google-services.json
 GoogleService-Info.plist
+
+# firebase cli / emulator scratch
+.firebase/
+*-debug.log

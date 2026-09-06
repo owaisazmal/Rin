@@ -19,10 +19,12 @@
     "react-native-svg": "15.15.4"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "babel-jest": "^29.7.0",
     "babel-preset-expo": "^57.0.10",
+    "firebase": "^12.18.0",
     "jest": "~29.7.0",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
@@ -33,7 +35,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "test:rules": "npx --yes firebase-tools emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\""
   },
   "private": true
 }

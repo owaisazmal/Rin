@@ -52,7 +52,7 @@ describe('sessionStorage', () => {
   });
 
   it('splits a value larger than one entry allows and reassembles it', async () => {
-    // roughly what a Supabase session looks like: two tokens and a user record
+    // several times larger than one entry, the way a session blob would be
     const blob = JSON.stringify({
       access_token: 'a'.repeat(2400),
       refresh_token: 'r'.repeat(64),

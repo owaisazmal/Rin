@@ -14,16 +14,15 @@ import * as SecureStore from 'expo-secure-store';
  * instead, so it is encrypted at rest and tied to this app. `THIS_DEVICE_ONLY`
  * keeps it out of backups too: a restored phone starts signed out.
  *
- * What is exposed is a storage adapter rather than a token, because that is
- * what both candidate backends ask for and neither stores a bare token.
- * Supabase takes this object as `auth.storage`; Firebase takes it as the
- * argument to `getReactNativePersistence`. Either way the value written is a
- * JSON blob — access token, refresh token, the user record — which runs to
- * several kilobytes, and SecureStore documents a 2 KB ceiling per entry. So a
- * value is split across as many entries as it needs and reassembled on read;
- * the caller never sees the seams. Writes are not atomic across those entries,
- * so whichever client is used should be given its own lock (Supabase:
- * `lock: processLock`) rather than being allowed to write concurrently.
+ * What goes here is the backup code: the one secret in the design, from which
+ * both the id a backup is stored under and the key it is encrypted with are
+ * derived (see firestore.rules for the other half). There are no accounts, so
+ * there is no session token to keep — but the shape exposed is the
+ * getItem / setItem / removeItem adapter Firebase's persistence accepts, in
+ * case one is ever wanted, and values are split across entries to stay under
+ * SecureStore's documented 2 KB ceiling, in case one is ever that large. A
+ * code never is; the seams cost nothing when there is only one piece. Writes
+ * are not atomic across pieces, so don't write the same key concurrently.
  *
  * Nothing calls this yet — there is no backend. Needs a native rebuild before
  * first use, since SecureStore ships native code.
@@ -83,7 +82,7 @@ async function deleteChunks(key: string, from: number, to: number): Promise<void
   }
 }
 
-/** The shape both Supabase's `auth.storage` and Firebase's persistence expect */
+/** The getItem / setItem / removeItem shape Firebase's persistence accepts */
 export interface SessionStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
