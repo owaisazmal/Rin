@@ -13,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import BackButton from '../components/BackButton';
 import { isEmail } from '../auth';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, useTheme } from '../theme';
+import { authStyles } from './authStyles';
 
 interface Props {
   /** whatever was already typed on the sign-in form, so it isn't retyped */
@@ -143,139 +144,55 @@ export default function ForgotPasswordScreen({ initialEmail, onBack }: Props) {
   );
 }
 
-const makeStyles = (p: Palette) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: 'transparent' },
-    flex: { flex: 1 },
-    topBar: {
-      height: 44,
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      marginTop: 4,
-    },
-    content: {
-      flexGrow: 1,
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      paddingBottom: 28,
-    },
-    brand: {
-      alignItems: 'center',
-      marginBottom: 22,
-    },
-    brandSub: {
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      letterSpacing: 4,
-      color: p.accent,
-      marginBottom: 2,
-    },
-    brandTitle: {
-      fontSize: 32,
-      fontFamily: FONT.bold,
-      letterSpacing: 1,
-      color: p.ink,
-    },
-    tagline: {
-      marginTop: 8,
-      fontSize: 13,
-      fontFamily: FONT.regular,
-      color: p.inkSoft,
-      textAlign: 'center',
-    },
-    card: {
-      ...cardSurface(p),
-      padding: 18,
-    },
-    label: {
-      fontSize: 10,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.inkSoft,
-      marginBottom: 6,
-    },
-    input: {
-      backgroundColor: p.chip,
-      borderRadius: RADIUS.control,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-      paddingHorizontal: 13,
-      paddingVertical: Platform.OS === 'ios' ? 13 : 9,
-      fontSize: 15,
-      fontFamily: FONT.medium,
-      color: p.ink,
-      marginBottom: 16,
-    },
-    inputFocused: {
-      borderColor: p.accent,
-    },
-    error: {
-      fontSize: 12,
-      fontFamily: FONT.medium,
-      color: p.missed,
-      marginTop: -8,
-      marginBottom: 12,
-    },
-    primary: {
-      height: 48,
-      borderRadius: RADIUS.control,
-      backgroundColor: p.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    primaryText: {
-      fontSize: 12,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.onAccent,
-    },
-    fine: {
-      marginTop: 14,
-      fontSize: 11,
-      fontFamily: FONT.regular,
-      lineHeight: 16,
-      color: p.inkSoft,
-      textAlign: 'center',
-    },
-    sealRow: {
-      alignItems: 'center',
-      marginBottom: 14,
-    },
-    seal: {
-      width: 52,
-      height: 52,
-      borderRadius: RADIUS.pill,
-      backgroundColor: p.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    sentTitle: {
-      fontSize: 19,
-      fontFamily: FONT.semibold,
-      color: p.ink,
-      textAlign: 'center',
-    },
-    sentBody: {
-      marginTop: 8,
-      marginBottom: 20,
-      fontSize: 13,
-      fontFamily: FONT.regular,
-      lineHeight: 20,
-      color: p.inkSoft,
-      textAlign: 'center',
-    },
-    sentEmail: {
-      fontFamily: FONT.semibold,
-      color: p.ink,
-    },
-    quiet: {
-      alignSelf: 'center',
-      marginTop: 14,
-    },
-    quietText: {
-      fontSize: 12,
-      fontFamily: FONT.medium,
-      color: p.inkSoft,
-      textDecorationLine: 'underline',
-    },
-  });
+const makeStyles = (p: Palette) => {
+  const base = authStyles(p);
+  return {
+    ...base,
+    ...StyleSheet.create({
+      brandTitle: { ...base.brandTitle, fontSize: 32 },
+      input: { ...base.input, marginBottom: 16 },
+      error: { ...base.error, marginTop: -8 },
+      sealRow: {
+        alignItems: 'center',
+        marginBottom: 14,
+      },
+      seal: {
+        width: 52,
+        height: 52,
+        borderRadius: RADIUS.pill,
+        backgroundColor: p.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      sentTitle: {
+        fontSize: 19,
+        fontFamily: FONT.semibold,
+        color: p.ink,
+        textAlign: 'center',
+      },
+      sentBody: {
+        marginTop: 8,
+        marginBottom: 20,
+        fontSize: 13,
+        fontFamily: FONT.regular,
+        lineHeight: 20,
+        color: p.inkSoft,
+        textAlign: 'center',
+      },
+      sentEmail: {
+        fontFamily: FONT.semibold,
+        color: p.ink,
+      },
+      quiet: {
+        alignSelf: 'center',
+        marginTop: 14,
+      },
+      quietText: {
+        fontSize: 12,
+        fontFamily: FONT.medium,
+        color: p.inkSoft,
+        textDecorationLine: 'underline',
+      },
+    }),
+  };
+};

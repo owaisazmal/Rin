@@ -8,7 +8,7 @@ import { ScreenLayer, useScreenTransition } from './ScreenLayer';
 import { Account } from '../auth';
 import { useTasks } from '../hooks/useTasks';
 import { HistoryFilter } from '../history';
-import { ChartType } from '../storage';
+import { ChartType } from '../settings';
 
 type Screen = 'planner' | 'settings' | 'history' | 'auth' | 'intro';
 type AuthVariant = 'onboarding' | 'standalone';

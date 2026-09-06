@@ -15,11 +15,10 @@ import BackButton from '../components/BackButton';
 import LogoMark from '../components/LogoMark';
 import SegmentedControl from '../components/SegmentedControl';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
-// straight to the module, not the barrel: the barrel also pulls in Navigator,
-// which imports this screen back
 import { ScreenLayer, useScreenTransition } from '../navigation/ScreenLayer';
 import { Account, isEmail } from '../auth';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, useTheme } from '../theme';
+import { authStyles } from './authStyles';
 
 type Tab = 'signin' | 'create';
 
@@ -278,145 +277,60 @@ export default function AuthScreen({ variant, onAuthenticated, onDismiss }: Prop
   );
 }
 
-const makeStyles = (p: Palette) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: 'transparent' },
-    flex: { flex: 1 },
-    topBar: {
-      height: 44,
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      marginTop: 4,
-    },
-    content: {
-      flexGrow: 1,
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      paddingBottom: 28,
-    },
-    brand: {
-      alignItems: 'center',
-      marginBottom: 22,
-    },
-    brandMark: {
-      marginBottom: 14,
-    },
-    brandSub: {
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      letterSpacing: 4,
-      color: p.accent,
-      marginBottom: 2,
-    },
-    brandTitle: {
-      fontSize: 34,
-      fontFamily: FONT.bold,
-      letterSpacing: 1,
-      color: p.ink,
-    },
-    tagline: {
-      marginTop: 8,
-      fontSize: 13,
-      fontFamily: FONT.regular,
-      color: p.inkSoft,
-      textAlign: 'center',
-    },
-    card: {
-      ...cardSurface(p),
-      padding: 18,
-    },
-    segment: {
-      marginBottom: 18,
-    },
-    fieldBox: {
-      marginBottom: 14,
-    },
-    labelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    label: {
-      fontSize: 10,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.inkSoft,
-      marginBottom: 6,
-    },
-    reveal: {
-      fontSize: 10,
-      fontFamily: FONT.bold,
-      letterSpacing: 1,
-      color: p.accent,
-      marginBottom: 6,
-    },
-    input: {
-      backgroundColor: p.chip,
-      borderRadius: RADIUS.control,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-      paddingHorizontal: 13,
-      paddingVertical: Platform.OS === 'ios' ? 13 : 9,
-      fontSize: 15,
-      fontFamily: FONT.medium,
-      color: p.ink,
-    },
-    inputFocused: {
-      borderColor: p.accent,
-    },
-    /** live nudge while typing the second password — quieter than a submit error */
-    hint: {
-      marginTop: 6,
-      fontSize: 11,
-      fontFamily: FONT.medium,
-      color: p.inkSoft,
-    },
-    error: {
-      fontSize: 12,
-      fontFamily: FONT.medium,
-      color: p.missed,
-      marginBottom: 12,
-    },
-    primary: {
-      marginTop: 4,
-      height: 48,
-      borderRadius: RADIUS.control,
-      backgroundColor: p.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    primaryText: {
-      fontSize: 12,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.onAccent,
-    },
-    forgot: {
-      alignSelf: 'center',
-      marginTop: 14,
-    },
-    forgotText: {
-      fontSize: 12,
-      fontFamily: FONT.medium,
-      color: p.inkSoft,
-    },
-    fine: {
-      marginTop: 14,
-      fontSize: 11,
-      fontFamily: FONT.regular,
-      lineHeight: 16,
-      color: p.inkSoft,
-      textAlign: 'center',
-    },
-    skip: {
-      alignSelf: 'center',
-      marginTop: 22,
-      paddingVertical: 6,
-    },
-    skipText: {
-      fontSize: 13,
-      fontFamily: FONT.semibold,
-      color: p.inkSoft,
-      textDecorationLine: 'underline',
-    },
-  });
+const makeStyles = (p: Palette) => {
+  const base = authStyles(p);
+  return {
+    ...base,
+    ...StyleSheet.create({
+      primary: { ...base.primary, marginTop: 4 },
+      brandMark: {
+        marginBottom: 14,
+      },
+      segment: {
+        marginBottom: 18,
+      },
+      fieldBox: {
+        marginBottom: 14,
+      },
+      labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      },
+      reveal: {
+        fontSize: 10,
+        fontFamily: FONT.bold,
+        letterSpacing: 1,
+        color: p.accent,
+        marginBottom: 6,
+      },
+      /** live nudge while typing the second password — quieter than a submit error */
+      hint: {
+        marginTop: 6,
+        fontSize: 11,
+        fontFamily: FONT.medium,
+        color: p.inkSoft,
+      },
+      forgot: {
+        alignSelf: 'center',
+        marginTop: 14,
+      },
+      forgotText: {
+        fontSize: 12,
+        fontFamily: FONT.medium,
+        color: p.inkSoft,
+      },
+      skip: {
+        alignSelf: 'center',
+        marginTop: 22,
+        paddingVertical: 6,
+      },
+      skipText: {
+        fontSize: 13,
+        fontFamily: FONT.semibold,
+        color: p.inkSoft,
+        textDecorationLine: 'underline',
+      },
+    }),
+  };
+};

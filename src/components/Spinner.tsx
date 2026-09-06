@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { FONT, Palette, useTheme } from '../theme';
+import { FONT, useTheme } from '../theme';
 
 /**
  * The waiting indicator, drawn rather than imported.
@@ -15,16 +15,8 @@ import { FONT, Palette, useTheme } from '../theme';
  * the thing it is covering for is a busy JS thread, and a spinner that stutters
  * whenever the work it represents is happening would be worse than none.
  */
-export default function Spinner({
-  size = 28,
-  palette,
-}: {
-  size?: number;
-  /** pass one to use a palette other than the current theme's */
-  palette?: Palette;
-}) {
-  const theme = useTheme();
-  const p = palette ?? theme.palette;
+export default function Spinner({ size = 28 }: { size?: number }) {
+  const { palette: p } = useTheme();
 
   const spin = useRef(new Animated.Value(0)).current;
 

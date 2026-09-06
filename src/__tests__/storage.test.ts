@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loadMonth,
   loadMonthWindow,
-  loadSettings,
   loadYearSummary,
   parseMonthData,
 } from '../storage';
@@ -224,12 +223,5 @@ describe('loadYearSummary', () => {
       tallies: { 1: { done: 1, missed: 1 }, 2: { done: 1, missed: 0 } },
     });
     expect(summary[0]).toEqual({ habitCount: 0, tallies: {} });
-  });
-});
-
-describe('loadSettings', () => {
-  it('only accepts values it knows', async () => {
-    stored({ theme: 'sepia', chart: 'github' });
-    await expect(loadSettings()).resolves.toEqual({ theme: 'dark', chart: 'github' });
   });
 });

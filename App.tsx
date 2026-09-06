@@ -1,19 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AuroraBackground from './src/components/AuroraBackground';
 import LaunchIntro from './src/components/LaunchIntro';
-import { Navigator } from './src/navigation';
+import Navigator from './src/navigation/Navigator';
 import { AuthState, loadAuth, saveAuth } from './src/auth';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
-import { Settings, loadSettings, saveSettings } from './src/storage';
-import {
-  ThemeContext,
-  Theme,
-  ThemeMode,
-  darkPalette,
-  lightPalette,
-} from './src/theme';
+import { Settings, loadSettings, saveSettings } from './src/settings';
+import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
 import {
   useFonts,
   JosefinSans_400Regular,
@@ -59,18 +53,21 @@ export default function App() {
     if (auth) saveAuth(auth);
   }, [auth]);
 
-  const mode: ThemeMode = settings?.theme ?? 'dark';
+  // Only once they have loaded: before that there is nothing to change, and a
+  // default written now would overwrite what is stored.
+  const updateSettings = useCallback(
+    (patch: Partial<Settings>) => setSettings((prev) => (prev ? { ...prev, ...patch } : prev)),
+    []
+  );
+
+  const mode = settings?.theme ?? 'dark';
   const theme: Theme = useMemo(
     () => ({
       mode,
       palette: mode === 'dark' ? darkPalette : lightPalette,
-      toggle: () =>
-        setSettings((prev) => ({
-          theme: (prev?.theme ?? 'dark') === 'dark' ? 'light' : 'dark',
-          chart: prev?.chart ?? 'radial',
-        })),
+      setMode: (next) => updateSettings({ theme: next }),
     }),
-    [mode]
+    [mode, updateSettings]
   );
 
   // hold the first paint until the persisted theme, the account and the font
@@ -88,7 +85,7 @@ export default function App() {
             initialScreen={start}
             account={auth.account}
             chart={settings.chart}
-            onSetChart={(chart) => setSettings((prev) => ({ ...(prev as Settings), chart }))}
+            onSetChart={(chart) => updateSettings({ chart })}
             onSignIn={(account) => setAuth({ account, onboarded: true })}
             onSignOut={() => setAuth({ account: null, onboarded: true })}
             onSkipOnboarding={() => setAuth({ account: null, onboarded: true })}

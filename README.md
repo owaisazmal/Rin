@@ -124,6 +124,8 @@ App.tsx                        root: persisted settings, account, font, theme pr
 src/theme.ts                   palettes, type scale, radii (the only place colour is defined)
 src/types.ts                   data model (MonthData, Habit, cell states)
 src/storage.ts                 AsyncStorage load/save per month + year summary
+src/settings.ts                theme and chart choice
+src/dates.ts                   calendar arithmetic and the month/day names
 src/tasks.ts                   deadlines, kept outside MonthData since a date isn't a month
 src/deadlines.ts               how close a deadline is, and how that should read
 src/history.ts                 the day-by-day log, derived from months and tasks
@@ -143,7 +145,6 @@ src/screens/ForgotPasswordScreen
 src/screens/SettingsScreen     account + appearance
 src/screens/HistoryScreen      the log, read-only
 src/screens/PlannerScreen      the planner, layout and gestures only
-src/screens/plannerStyles      its stylesheet
 
 src/hooks/useMonthData         the open month and every way it changes
 src/hooks/useYearSummary       year load + live tally overlay
@@ -152,11 +153,12 @@ src/hooks/useTasks             the deadline list and every way it changes
 src/hooks/useHistory           the history window, and paging further back
 src/hooks/useNow               a coarse clock, for the things that age on their own
 src/hooks/useOutboundSync      pushes to widgets and reminders
+src/hooks/useChartTransition   how the tracker and the month label arrive
 
-src/__tests__/                 the pure logic: streaks, deadlines, history, storage, tasks, session
+src/__tests__/                 the pure logic: streaks, deadlines, history, storage, settings, tasks, session
 
-src/components/                RadialTracker, YearChart, DailyCheck, HabitsList,
-                               Observations, KeyGoals, Deadlines, DueDatePicker,
+src/components/                TrackerCard, MonthNav, RadialTracker, YearChart, DailyCheck,
+                               HabitsList, Observations, KeyGoals, Deadlines, DueDatePicker,
                                StreakBadge, MarkButton, SegmentedControl,
                                AuroraBackground, …
 

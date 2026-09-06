@@ -5,11 +5,11 @@ import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { BRAND, FIRE, Palette, RADIUS } from '../theme';
 
 /**
- * The three intro illustrations.
+ * The four intro illustrations.
  *
- * Two are drawn from the app's own vocabulary — the year grid and the marks —
- * rather than stock artwork, so the intro is showing the thing it describes.
- * The third is the desk clip.
+ * Three are drawn in the app's own vocabulary — the open lock, the year grid
+ * and the marks — rather than stock artwork, so the intro is showing the thing
+ * it describes. The fourth is the desk clip.
  */
 
 /** An open padlock — nothing here is locked away, including the source */

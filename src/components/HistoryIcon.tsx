@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 /**
  * A clock with its hand swept back, the usual shorthand for "what happened
@@ -39,7 +39,6 @@ export default function HistoryIcon({
         strokeLinejoin="round"
         fill="none"
       />
-      <Circle cx={12} cy={12} r={0.1} fill={color} />
     </Svg>
   );
 }

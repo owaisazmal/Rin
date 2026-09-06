@@ -52,8 +52,7 @@ service-account*.json
 modules/*/android/build/
 modules/*/android/.gradle/
 
-# backend config: the anon key and project URL live in .env (ignored above);
-# Firebase's equivalents are these files, uploaded to EAS as file variables
+# backend config: Firebase's two config files, uploaded to EAS as file variables
 google-services.json
 GoogleService-Info.plist
 

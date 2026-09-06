@@ -22,7 +22,7 @@ export interface AuthState {
   onboarded: boolean;
 }
 
-export const emptyAuth: AuthState = { account: null, onboarded: false };
+const emptyAuth: AuthState = { account: null, onboarded: false };
 
 const AUTH_KEY = '@monthly-planning/auth';
 

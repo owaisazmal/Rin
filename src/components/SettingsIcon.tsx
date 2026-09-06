@@ -3,9 +3,9 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 /**
  * Sliders rather than the usual cog. A cog is a ring with spokes around it,
- * which at 20pt is the sun in ThemeIcon almost exactly — and the two now sit a
- * few points apart in the header. Rails and knobs read as "settings" without
- * the collision, and keep the stroked line style of the other icons.
+ * which at 20pt is the sun in ThemeIcon almost exactly. Rails and knobs read
+ * as "settings" without the collision, and keep the stroked line style of the
+ * other icons.
  */
 export default function SettingsIcon({
   color,

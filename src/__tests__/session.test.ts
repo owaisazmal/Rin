@@ -17,7 +17,6 @@ jest.mock('expo-secure-store', () => {
     __esModule: true,
     __store: store,
     WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
-    isAvailableAsync: jest.fn(async () => true),
     getItemAsync: jest.fn(async (key: string) => {
       check(key);
       return store.get(key) ?? null;
@@ -34,7 +33,7 @@ jest.mock('expo-secure-store', () => {
 });
 
 const keychain = (SecureStore as unknown as { __store: Map<string, string> }).__store;
-const KEY = 'sb-project-auth-token';
+const KEY = 'backup-code';
 
 const chunkEntries = () => [...keychain.entries()].filter(([k]) => !k.endsWith('.n'));
 
@@ -52,12 +51,8 @@ describe('sessionStorage', () => {
   });
 
   it('splits a value larger than one entry allows and reassembles it', async () => {
-    // several times larger than one entry, the way a session blob would be
-    const blob = JSON.stringify({
-      access_token: 'a'.repeat(2400),
-      refresh_token: 'r'.repeat(64),
-      user: { id: 'u', email: 'you@example.com' },
-    });
+    // several times larger than one entry allows
+    const blob = JSON.stringify({ code: 'a'.repeat(2400), salt: 'r'.repeat(64) });
     await sessionStorage.setItem(KEY, blob);
 
     const chunks = chunkEntries();
@@ -109,8 +104,7 @@ describe('sessionStorage', () => {
   });
 
   it('does not cut an emoji in half at a piece boundary', async () => {
-    // a display name in the user record can land anywhere; put an astral
-    // character exactly on the seam
+    // put an astral character exactly on the seam
     const value = 'n'.repeat(CHUNK_SIZE - 1) + '😀' + 'tail';
     await sessionStorage.setItem(KEY, value);
     for (const [, v] of chunkEntries()) {

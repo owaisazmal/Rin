@@ -8,16 +8,6 @@ import {
   cellKey,
   emptyMonthData,
 } from './types';
-import { ThemeMode } from './theme';
-
-export type ChartType = 'radial' | 'github';
-
-export interface Settings {
-  theme: ThemeMode;
-  chart: ChartType;
-}
-
-const SETTINGS_KEY = '@monthly-planning/settings';
 
 function monthKey(year: number, month: number): string {
   // month is 0-based
@@ -206,28 +196,5 @@ export async function loadYearSummary(year: number): Promise<YearMonthSummary[]>
     });
   } catch {
     return Array.from({ length: 12 }, () => EMPTY_MONTH_SUMMARY);
-  }
-}
-
-export async function loadSettings(): Promise<Settings> {
-  const fallback: Settings = { theme: 'dark', chart: 'radial' };
-  try {
-    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      theme: parsed.theme === 'light' ? 'light' : 'dark',
-      chart: parsed.chart === 'github' ? 'github' : 'radial',
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-export async function saveSettings(settings: Settings): Promise<void> {
-  try {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    // best-effort persistence
   }
 }

@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { CellState, Habit, cellKey } from './types';
 import { Task } from './tasks';
 import { dueLabel, pendingTasks } from './deadlines';
+import { DAY, HOUR } from './dates';
 
 /**
  * Daily nudges for habits you haven't ticked off yet.
@@ -55,10 +56,6 @@ const CONGRATS = [
   'Everything done. The grid is green and so are you.',
   'Done and dusted. Go and be insufferable about it.',
 ];
-
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
 
 const HABIT_CHANNEL = 'reminders';
 const DEADLINE_CHANNEL = 'deadlines';
@@ -156,7 +153,7 @@ async function scheduleDeadlines(tasks: Task[], now: Date): Promise<void> {
   }
 }
 
-export async function ensurePermission(): Promise<boolean> {
+async function ensurePermission(): Promise<boolean> {
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync(HABIT_CHANNEL, {

@@ -8,6 +8,7 @@ import {
   nextHabitId,
 } from '../types';
 import { loadMonth, saveMonth } from '../storage';
+import { monthLength } from '../dates';
 
 /**
  * The open month: what's in it, and every way it can change.
@@ -23,7 +24,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<{ year: number; month: number; data: MonthData } | null>(null);
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInMonth = monthLength(year, month);
 
   useEffect(() => {
     let cancelled = false;

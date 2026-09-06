@@ -23,7 +23,7 @@ interface Props {
 }
 
 export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }: Props) {
-  const { mode, palette, toggle } = useTheme();
+  const { mode, palette, setMode } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
   const confirmSignOut = () =>
@@ -100,12 +100,7 @@ export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowIcon}>
-              {/*
-                ThemeIcon is built for the old header toggle, where it showed
-                the mode you'd switch *to*. Here it labels the mode you're in,
-                next to text that says so — so it takes the flipped value.
-              */}
-              <ThemeIcon mode={mode === 'dark' ? 'light' : 'dark'} color={palette.accent} size={18} />
+              <ThemeIcon mode={mode} color={palette.accent} size={18} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Theme</Text>
@@ -117,9 +112,7 @@ export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }
           <SegmentedControl
             options={THEME_OPTIONS}
             value={mode}
-            // toggle() is the only mutator the theme exposes; tapping the mode
-            // that is already on would flip it, so guard instead
-            onChange={(next) => next !== mode && toggle()}
+            onChange={setMode}
             verticalPadding={9}
           />
         </View>

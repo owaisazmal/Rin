@@ -1,22 +1,23 @@
 import React from 'react';
 import Svg, { Circle, Path } from 'react-native-svg';
+import type { ThemeMode } from '../theme';
 
 /**
- * Sun / moon for the theme toggle. Drawn rather than typed as "☀"/"☾" because
- * iOS renders those as full-colour emoji, which would put an orange outside the
- * brand palette in the header.
+ * Sun for light mode, moon for dark. Drawn rather than typed as "☀"/"☾"
+ * because iOS renders those as full-colour emoji, which would put an orange
+ * outside the brand palette on the page.
  */
 export default function ThemeIcon({
   mode,
   color,
   size = 20,
 }: {
-  mode: 'dark' | 'light';
+  /** the mode the icon stands for */
+  mode: ThemeMode;
   color: string;
   size?: number;
 }) {
-  if (mode === 'dark') {
-    // showing the sun means "switch to light"
+  if (mode === 'light') {
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Circle cx={12} cy={12} r={4.4} stroke={color} strokeWidth={2} fill="none" />

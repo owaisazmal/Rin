@@ -2,6 +2,7 @@ import { cellKey } from './types';
 import type { CellState, Habit } from './types';
 import type { MonthRecord } from './storage';
 import type { Task } from './tasks';
+import { DAY, DAY_ABBR, HOUR, MINUTE, MONTH_ABBR, monthLength, startOfDay } from './dates';
 
 /**
  * What actually happened, day by day.
@@ -46,11 +47,6 @@ export interface HistoryDay {
 
 export type HistoryFilter = 'all' | 'habits' | 'deadlines';
 
-function startOfDay(ms: number): number {
-  const d = new Date(ms);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
 function marksFor(habits: Habit[], grid: Record<string, CellState>, day: number): HabitMark[] {
   const out: HabitMark[] = [];
   for (const h of habits) {
@@ -93,7 +89,7 @@ export function buildHistory(
 
   for (const record of months) {
     const { year, month, data } = record;
-    const len = new Date(year, month + 1, 0).getDate();
+    const len = monthLength(year, month);
     for (let day = 1; day <= len; day++) {
       const key = new Date(year, month, day).getTime();
       if (key > today) break; // nothing has happened in the future
@@ -136,28 +132,22 @@ export function filterHistory(days: HistoryDay[], filter: HistoryFilter): Histor
     .filter((d) => (filter === 'habits' ? d.marks.length > 0 : d.deadlines.length > 0));
 }
 
-const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 /** "TODAY", "YESTERDAY", or "SAT 29 AUG" */
 export function dayHeading(entry: HistoryDay, now: number): string {
-  const diff = Math.round((startOfDay(now) - entry.key) / 86_400_000);
+  const diff = Math.round((startOfDay(now) - entry.key) / DAY);
   if (diff === 0) return 'TODAY';
   if (diff === 1) return 'YESTERDAY';
   const d = new Date(entry.key);
-  return `${DAY_NAMES[d.getDay()]} ${entry.day} ${MONTH_NAMES[entry.month].toUpperCase()}`;
+  return `${DAY_ABBR[d.getDay()].toUpperCase()} ${entry.day} ${MONTH_ABBR[entry.month].toUpperCase()}`;
 }
 
 /** How late, in the coarsest unit that still says something — "2d late" */
 export function lateness(event: DeadlineEvent): string | null {
   if (!event.late || event.completedAt == null) return null;
   const over = event.completedAt - event.due;
-  if (over >= 86_400_000) return `${Math.floor(over / 86_400_000)}d late`;
-  if (over >= 3_600_000) return `${Math.floor(over / 3_600_000)}h late`;
-  return `${Math.max(1, Math.floor(over / 60_000))}m late`;
+  if (over >= DAY) return `${Math.floor(over / DAY)}d late`;
+  if (over >= HOUR) return `${Math.floor(over / HOUR)}h late`;
+  return `${Math.max(1, Math.floor(over / MINUTE))}m late`;
 }
 
 /** Totals across everything currently in view, for the summary strip */

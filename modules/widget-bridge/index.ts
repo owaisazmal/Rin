@@ -10,8 +10,6 @@ interface WidgetBridgeNativeModule {
  */
 const WidgetBridge = requireOptionalNativeModule<WidgetBridgeNativeModule>('WidgetBridge');
 
-export const isWidgetBridgeAvailable = WidgetBridge != null;
-
 /** Writes the snapshot into the App Group and asks WidgetKit to redraw. */
 export function setSnapshot(json: string): void {
   WidgetBridge?.setSnapshot(json);

@@ -32,8 +32,7 @@ const PREFIX = 'monthly-planning.session';
 
 /**
  * Characters per entry. Comfortably inside the documented ceiling even if
- * every character were a three-byte one — which, in a session blob, none of
- * them are outside the user's display name.
+ * every character were a three-byte one.
  */
 export const CHUNK_SIZE = 1024;
 
@@ -140,8 +139,3 @@ export const sessionStorage: SessionStorage = {
     }
   },
 };
-
-/** Whether SecureStore is usable — false on web, where there's no keystore */
-export function isAvailable(): Promise<boolean> {
-  return SecureStore.isAvailableAsync();
-}

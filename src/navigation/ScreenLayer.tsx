@@ -19,7 +19,7 @@ import {
 /**
  * Screen transitions, built on the Animated API alone.
  *
- * The app has no navigation library — screens are booleans in App.tsx — so this
+ * The app has no navigation library — screens are booleans in the Navigator — so this
  * is the smallest thing that makes those booleans move: one shared 0→1 value per
  * layer, driving both the screen coming in and the screen it covers, plus an
  * edge swipe that scrubs the same value by hand.
@@ -114,7 +114,7 @@ export function useScreenTransition(visible: boolean): ScreenTransition {
  */
 const DeeperLayers = createContext<(delta: number) => void>(() => {});
 
-export type Presentation = 'push' | 'fade';
+type Presentation = 'push' | 'fade';
 
 interface LayerProps {
   /**

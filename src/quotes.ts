@@ -1,3 +1,5 @@
+import { DAY } from './dates';
+
 export const DISCIPLINE_QUOTES = [
   "Discipline doesn't care how you feel. Discipline is doing what needs to be done, even when you don't feel like doing it.",
   'We are what we repeatedly do. Excellence, then, is not an act, but a habit.',
@@ -19,7 +21,7 @@ export const DISCIPLINE_QUOTES = [
 /** Stable quote for a given date — changes once per day. */
 export function quoteForDate(date: Date): string {
   const dayOfYear = Math.floor(
-    (date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000
+    (date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / DAY
   );
   return DISCIPLINE_QUOTES[dayOfYear % DISCIPLINE_QUOTES.length];
 }

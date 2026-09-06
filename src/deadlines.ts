@@ -1,4 +1,5 @@
 import type { Task } from './tasks';
+import { DAY, DAY_ABBR, HOUR, MINUTE, MONTH_ABBR, startOfDay } from './dates';
 
 /**
  * How close a deadline is, and how that should read.
@@ -8,10 +9,6 @@ import type { Task } from './tasks';
  * snapshot. If they disagreed, a task could look calm on screen while the
  * notifications were shouting.
  */
-
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
 
 /**
  * The run-up over which a deadline turns from "someday" into "now".
@@ -61,12 +58,6 @@ export function timeLeftLabel(due: number, now: number): string {
   return rem === 'moments' ? 'due any moment' : `${rem} left`;
 }
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 function hhmm(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
@@ -80,12 +71,11 @@ function hhmm(d: Date): string {
  */
 export function dueLabel(due: number, now: number): string {
   const d = new Date(due);
-  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const days = Math.round((startOfDay(d) - startOfDay(new Date(now))) / DAY);
+  const days = Math.round((startOfDay(due) - startOfDay(now)) / DAY);
   if (days === 0) return `Today · ${hhmm(d)}`;
   if (days === 1) return `Tomorrow · ${hhmm(d)}`;
   if (days === -1) return `Yesterday · ${hhmm(d)}`;
-  return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} · ${hhmm(d)}`;
+  return `${DAY_ABBR[d.getDay()]} ${d.getDate()} ${MONTH_ABBR[d.getMonth()]} · ${hhmm(d)}`;
 }
 
 /**

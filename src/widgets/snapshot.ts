@@ -5,6 +5,7 @@ import { DISCIPLINE_QUOTES } from '../quotes';
 import { computeStreaks } from '../streaks';
 import { Task } from '../tasks';
 import { pendingTasks } from '../deadlines';
+import { MONTH_NAMES, monthLength } from '../dates';
 
 /**
  * The payload handed to the iOS widgets.
@@ -78,11 +79,6 @@ export interface WidgetSnapshot {
   tasks: WidgetTask[];
 }
 
-const MONTH_NAMES = [
-  'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
-];
-
 /** Per-day per-habit states, packed one character per habit */
 function packGrid(data: MonthData, daysInMonth: number): Record<string, string> {
   const out: Record<string, string> = {};
@@ -113,7 +109,7 @@ export function buildSnapshot(
   theme: ThemeMode,
   tasks: Task[]
 ): WidgetSnapshot {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInMonth = monthLength(year, month);
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
   const today = isCurrentMonth ? now.getDate() : null;
 
@@ -135,7 +131,7 @@ export function buildSnapshot(
   let yearTotal = 0;
   for (let m = 0; m < 12; m++) {
     const info = yearMonths[m];
-    const len = new Date(year, m + 1, 0).getDate();
+    const len = monthLength(year, m);
     const done: number[] = [];
     const missed: number[] = [];
     for (let d = 1; d <= len; d++) {

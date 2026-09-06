@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MONTH_NAMES, monthLength, startOfDay } from '../dates';
 import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
@@ -13,10 +14,6 @@ import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
  */
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const MONTH_NAMES = [
-  'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
-];
 
 /** Minutes move in fives — a deadline is never meaningfully 18:37 */
 const MINUTE_STEP = 5;
@@ -29,14 +26,10 @@ interface Props {
   onConfirm: (due: number) => void;
 }
 
-function startOfDay(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
 /** Monday-first weeks, padded with nulls so every row has seven cells */
 function monthCells(year: number, month: number): (number | null)[] {
   const lead = (new Date(year, month, 1).getDay() + 6) % 7;
-  const len = new Date(year, month + 1, 0).getDate();
+  const len = monthLength(year, month);
   const cells: (number | null)[] = Array(lead).fill(null);
   for (let d = 1; d <= len; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
@@ -63,7 +56,7 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
   }, [visible, value]);
 
   const cells = useMemo(() => monthCells(cursor.year, cursor.month), [cursor]);
-  const todayStart = startOfDay(new Date());
+  const todayStart = startOfDay(Date.now());
 
   const shiftMonth = (delta: number) => {
     const d = new Date(cursor.year, cursor.month + delta, 1);

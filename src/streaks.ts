@@ -1,4 +1,5 @@
 import type { YearMonthSummary } from './storage';
+import { monthLength } from './dates';
 
 /**
  * How consecutive days are counted.
@@ -16,7 +17,7 @@ function flattenYear(year: number, months: YearMonthSummary[]) {
   const index: { month: number; day: number }[] = [];
   for (let m = 0; m < 12; m++) {
     const info = months[m];
-    const len = new Date(year, m + 1, 0).getDate();
+    const len = monthLength(year, m);
     for (let d = 1; d <= len; d++) {
       const t = info?.tallies[d];
       const done = t?.done ?? 0;

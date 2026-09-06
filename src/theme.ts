@@ -172,13 +172,13 @@ export function cardSurface(p: Palette): ViewStyle {
 export interface Theme {
   mode: ThemeMode;
   palette: Palette;
-  toggle: () => void;
+  setMode: (mode: ThemeMode) => void;
 }
 
 export const ThemeContext = createContext<Theme>({
   mode: 'dark',
   palette: darkPalette,
-  toggle: () => {},
+  setMode: () => {},
 });
 
 export function useTheme(): Theme {

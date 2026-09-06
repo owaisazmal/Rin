@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { YearMonthSummary } from '../storage';
+import { MONTH_ABBR, monthLength } from '../dates';
 import { useTheme, FONT } from '../theme';
 
 interface Props {
@@ -19,7 +20,6 @@ interface Props {
   onSelectDate: (month: number, day: number) => void;
 }
 
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAY_SHORT = ['', 'M', '', 'W', '', 'F', ''];
 
 const CELL = 13;
@@ -55,15 +55,14 @@ export default function YearChart({
   // Calendar geometry for the whole year: GitHub layout, columns = weeks, rows = Sun..Sat
   const cal = useMemo(() => {
     const startOffset = new Date(year, 0, 1).getDay(); // 0 = Sunday
-    const daysInYear = (new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / 86400000;
     const dates: { m: number; d: number }[] = [];
     const monthStartCol: number[] = [];
     for (let m = 0; m < 12; m++) {
       monthStartCol.push(Math.floor((startOffset + dates.length) / 7));
-      const len = new Date(year, m + 1, 0).getDate();
+      const len = monthLength(year, m);
       for (let d = 1; d <= len; d++) dates.push({ m, d });
     }
-    const weekCount = Math.ceil((startOffset + daysInYear) / 7);
+    const weekCount = Math.ceil((startOffset + dates.length) / 7);
     return { startOffset, dates, monthStartCol, weekCount };
   }, [year]);
 
@@ -163,7 +162,7 @@ export default function YearChart({
         >
           <View>
             <View style={[styles.monthRow, { width: cal.weekCount * STEP }]}>
-              {MONTH_SHORT.map((name, m) => (
+              {MONTH_ABBR.map((name, m) => (
                 <Text
                   key={m}
                   style={[

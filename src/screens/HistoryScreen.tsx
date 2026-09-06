@@ -15,6 +15,7 @@ import {
 } from '../history';
 import { useHistory } from '../hooks/useHistory';
 import { useNow } from '../hooks/useNow';
+import { startOfDay } from '../dates';
 import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
@@ -63,10 +64,7 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
    * handing them the raw clock would change their props every minute and defeat
    * the memo on every visible card. Rounded, the value is stable until midnight.
    */
-  const todayStart = useMemo(() => {
-    const d = new Date(now);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  }, [now]);
+  const todayStart = useMemo(() => startOfDay(now), [now]);
   const { days, loading, loadingMore, loadMore, canLoadMore } = useHistory(tasks, active, now);
 
   const shown = useMemo(() => filterHistory(days, filter), [days, filter]);
