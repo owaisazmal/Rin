@@ -3,8 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /**
  * Whether the intro has been shown.
  *
- * Kept apart from `auth.ts` on purpose: signing in, signing out and deleting an
- * account all rewrite auth state, and none of them should bring the intro back.
+ * Kept apart from `backupState.ts` on purpose: making a backup, restoring one
+ * and forgetting a code all rewrite that state, and none of them should bring
+ * the intro back.
  * It is answered once, by this install, and never again.
  */
 

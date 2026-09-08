@@ -168,6 +168,28 @@ export async function loadMonthWindow(
   }
 }
 
+/**
+ * Every month this phone has actually stored, oldest first.
+ *
+ * The other readers here ask for a window they already know the bounds of;
+ * backing up has no bounds to know, so it asks the store what is there. The
+ * pattern is deliberately strict: the same prefix also holds settings, tasks
+ * and the intro flag, none of which are months.
+ */
+export async function listStoredMonths(): Promise<{ year: number; month: number }[]> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    return keys
+      .map((key) => /^@monthly-planning\/(\d{4})-(\d{2})$/.exec(key))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => ({ year: Number(match[1]), month: Number(match[2]) - 1 }))
+      .filter((m) => m.month >= 0 && m.month <= 11)
+      .sort((a, b) => a.year - b.year || a.month - b.month);
+  } catch {
+    return [];
+  }
+}
+
 /** Per-day done/missed counts for one month, used by the yearly grid */
 export interface YearMonthSummary {
   habitCount: number;

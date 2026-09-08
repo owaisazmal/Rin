@@ -15,4 +15,7 @@ module.exports = {
     '<rootDir>/android/',
     '<rootDir>/.claude/',
   ],
+  // @noble/* ship ESM only. Metro reads them as-is; Jest needs to be told to
+  // transform them, since it skips node_modules by default.
+  transformIgnorePatterns: ['node_modules/(?!@noble/)'],
 };

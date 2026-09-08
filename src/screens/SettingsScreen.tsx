@@ -5,7 +5,6 @@ import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
-import { Account, displayName } from '../auth';
 import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
@@ -16,23 +15,42 @@ const THEME_OPTIONS = [
 const REPO_URL = 'https://github.com/owaisazmal/monthly-planning';
 
 interface Props {
-  account: Account | null;
-  onSignIn: () => void;
-  onSignOut: () => void;
+  hasBackup: boolean;
+  lastBackupAt: number | null;
+  onOpenBackup: () => void;
+  onForgetBackup: () => void;
   onClose: () => void;
 }
 
-export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }: Props) {
+/** "today", "yesterday", or a plain date — precise enough to be reassuring */
+function whenBackedUp(at: number): string {
+  const then = new Date(at);
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const days = Math.floor((midnight.getTime() - then.getTime()) / 86_400_000) + 1;
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+export default function SettingsScreen({
+  hasBackup,
+  lastBackupAt,
+  onOpenBackup,
+  onForgetBackup,
+  onClose,
+}: Props) {
   const { mode, palette, setMode } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
-  const confirmSignOut = () =>
+  const confirmForget = () =>
     Alert.alert(
-      'Sign out?',
-      'Your habits stay on this device either way.',
+      'Forget the code?',
+      'This phone stops backing up. The backup itself stays where it is — anyone with the code written down can still restore it.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: onSignOut },
+        { text: 'Forget', style: 'destructive', onPress: onForgetBackup },
       ],
       { cancelable: true }
     );
@@ -53,44 +71,41 @@ export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }
           </Pressable>
         </View>
 
-        <SectionHeader title="ACCOUNT" />
+        <SectionHeader title="BACKUP" />
         <View style={styles.card}>
-          {account ? (
+          {hasBackup ? (
             <>
-              <View style={styles.identity}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {displayName(account).charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.identityText}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {displayName(account)}
-                  </Text>
-                  <Text style={styles.email} numberOfLines={1}>
-                    {account.email}
-                  </Text>
-                </View>
-              </View>
+              <Text style={styles.emptyTitle}>This phone has a backup</Text>
+              <Text style={styles.emptyBody}>
+                {lastBackupAt
+                  ? `Last saved ${whenBackedUp(lastBackupAt)}. Encrypted with your code before it left.`
+                  : 'Encrypted with your code before it left.'}
+              </Text>
               <Pressable
-                onPress={confirmSignOut}
+                onPress={onOpenBackup}
+                style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
+              >
+                <Text style={styles.primaryText}>BACK UP NOW</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmForget}
                 style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
               >
-                <Text style={styles.ghostText}>SIGN OUT</Text>
+                <Text style={styles.ghostText}>FORGET THE CODE</Text>
               </Pressable>
             </>
           ) : (
             <>
-              <Text style={styles.emptyTitle}>Not signed in</Text>
+              <Text style={styles.emptyTitle}>No backup</Text>
               <Text style={styles.emptyBody}>
-                Everything works without an account. Sign in to keep your habits when
-                you change phones.
+                Everything works without one. A backup carries your months to your next
+                phone, encrypted with a code only you hold.
               </Text>
               <Pressable
-                onPress={onSignIn}
+                onPress={onOpenBackup}
                 style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
               >
-                <Text style={styles.primaryText}>SIGN IN</Text>
+                <Text style={styles.primaryText}>SET ONE UP</Text>
               </Pressable>
             </>
           )}
@@ -141,9 +156,9 @@ export default function SettingsScreen({ account, onSignIn, onSignOut, onClose }
             <Text style={styles.repoText}>{REPO_URL.replace('https://', '')}</Text>
           </Pressable>
           <Text style={styles.madeBy}>
-            App is public, and staying that way.
-            No trackers, no data collection, nothing leaving this phone. There is
-            no server to send it to even if I wanted it.
+            App is public, and staying that way. No trackers, no analytics, no
+            data collection. Nothing leaves this phone unless you ask for a
+            backup, and what leaves then is encrypted with a code I never see.
           </Text>
         </View>
       </ScrollView>
@@ -213,40 +228,6 @@ const makeStyles = (p: Palette) =>
         ios: { marginTop: 50, marginBottom: 54 },
         default: { marginTop: 10, marginBottom: 16 },
       }),
-    },
-    identity: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    avatar: {
-      width: 46,
-      height: 46,
-      borderRadius: RADIUS.pill,
-      backgroundColor: p.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 13,
-    },
-    avatarText: {
-      fontSize: 20,
-      fontFamily: FONT.bold,
-      color: p.onAccent,
-      // Josefin sits high in its line box; nudge the initial onto the circle's centre
-      marginTop: 2,
-    },
-    identityText: {
-      flex: 1,
-    },
-    name: {
-      fontSize: 17,
-      fontFamily: FONT.semibold,
-      color: p.ink,
-    },
-    email: {
-      marginTop: 1,
-      fontSize: 13,
-      fontFamily: FONT.regular,
-      color: p.inkSoft,
     },
     ghostBtn: {
       marginTop: 16,

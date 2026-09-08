@@ -2,33 +2,34 @@ import { useState } from 'react';
 import PlannerScreen from '../screens/PlannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
-import AuthScreen from '../screens/AuthScreen';
+import BackupScreen from '../screens/BackupScreen';
 import IntroScreen from '../screens/IntroScreen';
 import { ScreenLayer, useScreenTransition } from './ScreenLayer';
-import { Account } from '../auth';
 import { useTasks } from '../hooks/useTasks';
 import { HistoryFilter } from '../history';
 import { ChartType } from '../settings';
 
-type Screen = 'planner' | 'settings' | 'history' | 'auth' | 'intro';
-type AuthVariant = 'onboarding' | 'standalone';
+type Screen = 'planner' | 'settings' | 'history' | 'backup' | 'intro';
+type BackupVariant = 'onboarding' | 'standalone';
 
 export default function Navigator({
   initialScreen,
-  account,
+  hasBackup,
+  lastBackupAt,
   chart,
   onSetChart,
-  onSignIn,
-  onSignOut,
+  onBackedUp,
+  onForgetBackup,
   onSkipOnboarding,
   onIntroDone,
 }: {
   initialScreen: Exclude<Screen, 'settings' | 'history'>;
-  account: Account | null;
+  hasBackup: boolean;
+  lastBackupAt: number | null;
   chart: ChartType;
   onSetChart: (c: ChartType) => void;
-  onSignIn: (account: Account) => void;
-  onSignOut: () => void;
+  onBackedUp: (code: string, restored: boolean) => void;
+  onForgetBackup: () => void;
   onSkipOnboarding: () => void;
   onIntroDone: () => void;
 }) {
@@ -48,10 +49,10 @@ export default function Navigator({
     setHistoryFilter(filter);
     setScreen('history');
   };
-  // Frozen at the moment the auth screen opens rather than derived from the
-  // account, which changes the instant someone signs in — mid-exit, that would
-  // swap the screen's back button in behind the animation.
-  const [authVariant, setAuthVariant] = useState<AuthVariant>(
+  // Frozen at the moment the backup screen opens rather than derived from
+  // whether a backup exists, which changes the instant one is made — mid-exit,
+  // that would swap the screen's back button in behind the animation.
+  const [backupVariant, setBackupVariant] = useState<BackupVariant>(
     initialScreen === 'planner' ? 'standalone' : 'onboarding'
   );
 
@@ -62,19 +63,19 @@ export default function Navigator({
 
   const finishIntro = () => {
     onIntroDone();
-    setScreen('auth');
+    setScreen('backup');
   };
 
-  // Settings stays in the stack underneath a sign-in reached from it, so
-  // dismissing that sign-in slides Settings back rather than rebuilding it.
+  // Settings stays in the stack underneath a backup screen reached from it, so
+  // dismissing that slides Settings back rather than rebuilding it.
   const settingsLayer = useScreenTransition(
-    screen === 'settings' || (screen === 'auth' && authVariant === 'standalone')
+    screen === 'settings' || (screen === 'backup' && backupVariant === 'standalone')
   );
-  const authLayer = useScreenTransition(screen === 'auth' || screen === 'intro');
+  const backupLayer = useScreenTransition(screen === 'backup' || screen === 'intro');
   const historyLayer = useScreenTransition(screen === 'history');
 
-  const dismissAuth = () => {
-    if (authVariant === 'standalone') {
+  const dismissBackup = () => {
+    if (backupVariant === 'standalone') {
       setScreen('settings');
     } else {
       onSkipOnboarding();
@@ -82,11 +83,13 @@ export default function Navigator({
     }
   };
 
-  const authenticated = (acc: Account) => {
-    onSignIn(acc);
-    // back to Settings if that's where the sign-in started, otherwise the
-    // planner — which on first run is the screen behind the onboarding fade
-    setScreen(authVariant === 'standalone' ? 'settings' : 'planner');
+  /**
+   * Stays on the backup screen rather than leaving the moment it succeeds: it
+   * has just shown someone a code they need to write down, and sliding it away
+   * under them would be the one moment in this app where haste costs data.
+   */
+  const backedUp = (code: string, restored: boolean) => {
+    onBackedUp(code, restored);
   };
 
   return (
@@ -100,7 +103,7 @@ export default function Navigator({
       <ScreenLayer
         coveredBy={settingsLayer.progress}
         hidden={
-          settingsLayer.settledOpen || authLayer.settledOpen || historyLayer.settledOpen
+          settingsLayer.settledOpen || backupLayer.settledOpen || historyLayer.settledOpen
         }
       >
         <PlannerScreen
@@ -137,16 +140,17 @@ export default function Navigator({
 
       <ScreenLayer
         transition={settingsLayer}
-        coveredBy={authVariant === 'standalone' ? authLayer.progress : undefined}
+        coveredBy={backupVariant === 'standalone' ? backupLayer.progress : undefined}
         onSwipeBack={() => setScreen('planner')}
       >
         <SettingsScreen
-          account={account}
-          onSignIn={() => {
-            setAuthVariant('standalone');
-            setScreen('auth');
+          hasBackup={hasBackup}
+          lastBackupAt={lastBackupAt}
+          onOpenBackup={() => {
+            setBackupVariant('standalone');
+            setScreen('backup');
           }}
-          onSignOut={onSignOut}
+          onForgetBackup={onForgetBackup}
           onClose={() => setScreen('planner')}
         />
       </ScreenLayer>
@@ -157,20 +161,20 @@ export default function Navigator({
         nowhere to swipe back to.
       */}
       <ScreenLayer
-        transition={authLayer}
-        presentation={authVariant === 'onboarding' ? 'fade' : 'push'}
-        swipeBackEnabled={authVariant === 'standalone'}
-        onSwipeBack={dismissAuth}
+        transition={backupLayer}
+        presentation={backupVariant === 'onboarding' ? 'fade' : 'push'}
+        swipeBackEnabled={backupVariant === 'standalone'}
+        onSwipeBack={dismissBackup}
         // Screens are transparent so the drifting background reads through
         // them — which also means a screen resting on top of this one would
         // read through to it. Hidden only while the intro is fully open, so it
         // is back in place the instant the intro starts to go.
         hidden={introLayer.settledOpen}
       >
-        <AuthScreen
-          variant={authVariant}
-          onAuthenticated={authenticated}
-          onDismiss={dismissAuth}
+        <BackupScreen
+          variant={backupVariant}
+          onDone={backedUp}
+          onDismiss={dismissBackup}
         />
       </ScreenLayer>
 

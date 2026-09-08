@@ -17,6 +17,19 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
+import { randomBytes as mockRandomBytes } from 'crypto';
+import type { Sealed } from '../src/backup';
+
+// The real backup module runs here too, so what the app actually produces can
+// be checked against the rules that will actually receive it. Only its source
+// of randomness is swapped, since expo-crypto needs a device.
+jest.mock('expo-crypto', () => ({
+  __esModule: true,
+  getRandomBytes: (n: number) => new Uint8Array(mockRandomBytes(n)),
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const backup = require('../src/backup') as typeof import('../src/backup');
 
 /**
  * The rules are the whole server side, so this is the whole server-side test
@@ -171,5 +184,65 @@ describe('anything else', () => {
     await assertFails(setDoc(doc(db, 'users', 'u1'), { any: 'thing' }));
     await assertFails(setDoc(doc(db, 'backups', ID), { any: 'thing' }));
     await assertFails(setDoc(doc(db, 'backups', ID, 'notes', 'n1'), blob()));
+  });
+});
+
+/**
+ * The seam between the two halves of the design: what `src/backup.ts` encrypts
+ * on the phone, and what `firestore.rules` will let through. Both are checked
+ * on their own above; this is the only place they meet, and a change to either
+ * that breaks the other shows up here rather than on a user's phone.
+ */
+describe('what the app actually produces', () => {
+  const code = backup.generateCode();
+  const id = backup.deriveBackupId(code);
+  const key = backup.deriveKey(code);
+
+  it('files a real month under an id the rules accept, and reads it back', async () => {
+    const db = phone();
+    const plaintext = JSON.stringify({
+      habits: [{ id: '0', name: 'Run' }],
+      grid: { '1:0': 1 },
+      observations: ['凛'],
+      keyGoals: [{ text: 'Ship it', done: true }],
+    });
+    const sealed = backup.seal(key, plaintext);
+
+    await assertSucceeds(
+      setDoc(doc(db, 'backups', id, 'months', '2026-09'), {
+        ...sealed,
+        updatedAt: serverTimestamp(),
+      })
+    );
+
+    const stored = await assertSucceeds(getDoc(doc(db, 'backups', id, 'months', '2026-09')));
+    const data = stored.data() as Sealed;
+    // the server holds nothing readable
+    expect(JSON.stringify(data)).not.toContain('Run');
+    expect(JSON.stringify(data)).not.toContain('Ship it');
+    // and the phone gets it all back
+    expect(backup.open(key, data)).toBe(plaintext);
+  });
+
+  it('files the task list the same way', async () => {
+    const plaintext = JSON.stringify([{ id: '0', text: 'Send the invoice', due: 1, done: false }]);
+    await assertSucceeds(
+      setDoc(doc(phone(), 'backups', id, 'tasks', 'current'), {
+        ...backup.seal(key, plaintext),
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('produces an id no other code produces', async () => {
+    const other = backup.deriveBackupId(backup.generateCode());
+    expect(other).not.toBe(id);
+    // and it is still a shape the rules accept
+    await assertSucceeds(
+      setDoc(doc(phone(), 'backups', other, 'months', '2026-01'), {
+        ...backup.seal(backup.deriveKey(code), 'x'),
+        updatedAt: serverTimestamp(),
+      })
+    );
   });
 });

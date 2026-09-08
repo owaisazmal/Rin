@@ -8,4 +8,6 @@ module.exports = {
   testMatch: ['<rootDir>/firebase/**/*.test.ts'],
   testTimeout: 20000,
   modulePathIgnorePatterns: ['<rootDir>/ios/', '<rootDir>/android/', '<rootDir>/.claude/'],
+  // src/backup.ts is exercised here too, and @noble/* ship ESM only
+  transformIgnorePatterns: ['node_modules/(?!@noble/)'],
 };

@@ -4,10 +4,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AuroraBackground from './src/components/AuroraBackground';
 import LaunchIntro from './src/components/LaunchIntro';
 import Navigator from './src/navigation/Navigator';
-import { AuthState, loadAuth, saveAuth } from './src/auth';
+import {
+  BackupState,
+  loadBackupState,
+  loadCode,
+  forgetCode,
+  saveBackupState,
+} from './src/backupState';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
+import { startAppCheck } from './src/sync';
 import {
   useFonts,
   JosefinSans_400Regular,
@@ -18,14 +25,24 @@ import {
 } from '@expo-google-fonts/josefin-sans';
 
 /**
- * The root: persisted settings, the account, the font, and the theme every
+ * The root: persisted settings, the backup state, the font, and the theme every
  * screen reads from. Which screens exist and how they move is the Navigator's
  * job; what a month contains is the planner's.
  */
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [auth, setAuth] = useState<AuthState | null>(null);
-  const [start, setStart] = useState<'planner' | 'auth' | 'intro' | null>(null);
+  const [backup, setBackup] = useState<BackupState | null>(null);
+  // whether this phone holds a backup code, which lives in the Keychain rather
+  // than beside the rest of the state
+  const [hasCode, setHasCode] = useState(false);
+  const [start, setStart] = useState<'planner' | 'backup' | 'intro' | null>(null);
+  /**
+   * Bumped when a restore replaces everything on this phone. The screens below
+   * read storage once, when they mount, which is right for every other way
+   * data changes — a restore is the one moment when what they are holding is
+   * wholesale wrong, so they are rebuilt rather than asked to notice.
+   */
+  const [dataEpoch, setDataEpoch] = useState(0);
   const [fontsLoaded] = useFonts({
     JosefinSans_400Regular,
     JosefinSans_400Regular_Italic,
@@ -34,15 +51,22 @@ export default function App() {
     JosefinSans_700Bold,
   });
 
+  // Before anything can reach the backup server, and once per launch. It is a
+  // no-op for someone who never backs up, which is most people.
+  useEffect(startAppCheck, []);
+
   useEffect(() => {
     loadSettings().then(setSettings);
     // Neither the intro nor the welcome screen is shown to someone who has
     // already answered it, so the first screen can't be chosen until both
     // flags land. Intro first, then sign-in, then the planner.
-    Promise.all([loadAuth(), loadIntroSeen()]).then(([a, introSeen]) => {
-      setAuth(a);
-      setStart(a.onboarded ? 'planner' : introSeen ? 'auth' : 'intro');
-    });
+    Promise.all([loadBackupState(), loadIntroSeen(), loadCode()]).then(
+      ([state, introSeen, code]) => {
+        setBackup(state);
+        setHasCode(code !== null);
+        setStart(state.onboarded ? 'planner' : introSeen ? 'backup' : 'intro');
+      }
+    );
   }, []);
 
   useEffect(() => {
@@ -50,8 +74,8 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
-    if (auth) saveAuth(auth);
-  }, [auth]);
+    if (backup) saveBackupState(backup);
+  }, [backup]);
 
   // Only once they have loaded: before that there is nothing to change, and a
   // default written now would overwrite what is stored.
@@ -70,10 +94,10 @@ export default function App() {
     [mode, updateSettings]
   );
 
-  // hold the first paint until the persisted theme, the account and the font
+  // hold the first paint until the persisted theme, the backup state and the font
   // are all ready, so nothing flashes in the system font, the wrong palette, or
   // the wrong screen
-  if (!settings || !auth || !start || !fontsLoaded) return null;
+  if (!settings || !backup || !start || !fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
@@ -82,13 +106,25 @@ export default function App() {
         <View style={{ flex: 1, backgroundColor: theme.palette.bg }}>
           <AuroraBackground />
           <Navigator
+            key={dataEpoch}
             initialScreen={start}
-            account={auth.account}
+            hasBackup={hasCode}
+            lastBackupAt={backup.lastBackupAt}
             chart={settings.chart}
             onSetChart={(chart) => updateSettings({ chart })}
-            onSignIn={(account) => setAuth({ account, onboarded: true })}
-            onSignOut={() => setAuth({ account: null, onboarded: true })}
-            onSkipOnboarding={() => setAuth({ account: null, onboarded: true })}
+            onBackedUp={(_code, restored) => {
+              setHasCode(true);
+              setBackup({ onboarded: true, lastBackupAt: Date.now() });
+              if (restored) setDataEpoch((n) => n + 1);
+            }}
+            onForgetBackup={() => {
+              forgetCode();
+              setHasCode(false);
+              setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: null }));
+            }}
+            onSkipOnboarding={() =>
+              setBackup((prev) => ({ ...(prev as BackupState), onboarded: true }))
+            }
             onIntroDone={saveIntroSeen}
           />
           {/* Drawn over the finished app on cold start, then lifts away and unmounts */}

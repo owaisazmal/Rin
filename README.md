@@ -22,12 +22,13 @@ platforms is in [`screenshot-widgets/`](screenshot-widgets/).
 
 I built this for myself, and then put it somewhere anyone could take it.
 
-**Nothing you write here leaves your phone.** No analytics, no trackers, no
-crash reporters, no ad SDKs. The dependency list is short enough to read in a
-minute, and you are welcome to. Your habits, notes and goals live in local
-storage on the device and nowhere else. An account is optional and exists only
-so your history can follow you to a new phone; the app is fully usable without
-ever creating one.
+**Nothing you write here leaves your phone unless you ask it to.** No
+analytics, no trackers, no crash reporters, no ad SDKs. Your habits, notes and
+goals live in local storage on the device. The one exception is a backup, which
+you turn on yourself: it is encrypted on the phone with a code only you hold,
+so what reaches the server is ciphertext filed under a number. There are no
+accounts — no name, no email, no password — and the app is fully usable
+without ever making a backup.
 
 **The source stays public for as long as this app exists.** That is a promise
 about the licence, not just the current state of the repo. See [LICENSE](LICENSE).
@@ -66,7 +67,7 @@ and the phone re-validates everything it reads back.
 - **Dark mode**: on by default, switched in Settings. The choice persists, and the home-screen widgets follow it.
 - **Widgets**: eight of them on both platforms (radial, year, streak, today, goals, progress, daily quote, deadlines), plus Lock Screen accessories on iOS.
 - **Reminders**: a few nudges a day, only while something is still unmarked, and a note when the day is done. Habit nudges and deadline reminders are rewritten together, within a budget, because iOS keeps only the 64 soonest pending local notifications.
-- **Account**: optional, and only for carrying history to a new phone.
+- **Backup**: optional, and only for carrying your months to a new phone. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. No account, and no way to recover a lost code — which is the same sentence twice, and why the app says so before you rely on it.
 - **Month navigation**: every month keeps its own habits, grid, observations, and goals, persisted on-device with AsyncStorage.
 
 ## Run it
@@ -76,9 +77,11 @@ npm install
 npx expo start
 ```
 
-- **On your phone**: install the Expo Go app (App Store / Play Store) and scan the QR code printed in the terminal.
-- **Android emulator**: `npx expo start --android`
-- **iOS simulator** (needs Xcode): `npx expo start --ios`
+The widgets and the backup server are native, so this needs a development
+build rather than Expo Go:
+
+- **iOS simulator** (needs Xcode): `npx expo run:ios`
+- **Android emulator** (needs Android Studio): `npx expo run:android`
 
 ## Test it
 
@@ -130,8 +133,10 @@ src/tasks.ts                   deadlines, kept outside MonthData since a date is
 src/deadlines.ts               how close a deadline is, and how that should read
 src/history.ts                 the day-by-day log, derived from months and tasks
 src/streaks.ts                 how consecutive days are counted
-src/auth.ts                    local account record (no password is ever stored)
-src/session.ts                 auth session storage: Keychain / Keystore, never AsyncStorage
+src/backupState.ts             whether this phone has a backup, and where the code is kept
+src/backup.ts                  the backup code, and the id and key derived from it
+src/sync.ts                    the only code here that touches a network
+src/session.ts                 where the code is kept: Keychain / Keystore, never AsyncStorage
 src/onboarding.ts              whether the intro has been shown
 src/quotes.ts                  discipline quotes, one per day
 src/notifications.ts           reminder schedule
@@ -140,8 +145,7 @@ src/navigation/ScreenLayer     how a layer slides, recedes and swipes back
 src/navigation/Navigator       which screens exist and what sits under what
 
 src/screens/IntroScreen        four-page first run
-src/screens/AuthScreen         sign in / create account
-src/screens/ForgotPasswordScreen
+src/screens/BackupScreen       make a backup, or restore one
 src/screens/SettingsScreen     account + appearance
 src/screens/HistoryScreen      the log, read-only
 src/screens/PlannerScreen      the planner, layout and gestures only

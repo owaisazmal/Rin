@@ -36,7 +36,7 @@ export function nextTaskId(tasks: Task[]): string {
 }
 
 /** Drops anything that isn't a usable task rather than letting it reach the UI */
-function parseTasks(raw: unknown): Task[] {
+export function parseTasks(raw: unknown): Task[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(
