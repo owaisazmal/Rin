@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Rin</title>
+<meta name="description" content="What Rin stores, what it sends, and what it never collects. Written to be checked against the source rather than taken on trust.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#242424">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffe3">
+<link rel="icon" href="assets/favicon.png">
+<link rel="stylesheet" href="css/site.css">
+<script>
+  try {
+    var stored = localStorage.getItem('rin-theme');
+    document.documentElement.dataset.theme =
+      stored || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+  document.documentElement.classList.add('js');
+  window.__rinFallback = setTimeout(function () {
+    document.documentElement.classList.add('no-reveal');
+  }, 2000);
+</script>
+</head>
+<body>
+
+<a class="skip" href="#doc">Skip to content</a>
+<div id="ground" aria-hidden="true"></div>
+
+<div class="page">
+
+<header id="masthead">
+  <div class="masthead-in">
+    <a class="brand" href="index.html">
+      <span data-mark></span>
+      <b>RIN</b>
+    </a>
+    <nav class="mast-nav" aria-label="Sections">
+      <a class="keep" href="index.html">Back to the app</a>
+      <a class="keep" href="https://github.com/owaisazmal/Rin">Source</a>
+    </nav>
+    <div id="theme-top" aria-label="Appearance"></div>
+  </div>
+</header>
+
+<main>
+<section id="doc">
+  <div class="wrap doc">
+
+    <span class="eyebrow">Privacy policy</span>
+    <h1>What Rin stores,<br>and what it sends.</h1>
+    <p class="updated">Last updated 7 September 2026 · applies to Rin for iOS and Android</p>
+
+    <p class="lede" style="max-width:none">Rin is a habit planner made by Owais Khan. It is free
+      and open-source, and this policy describes it as it is actually built. Every claim below
+      corresponds to code you can read in
+      <a href="https://github.com/owaisazmal/Rin">the repository</a>.</p>
+
+    <div class="card" style="margin:26px 0">
+      <div class="shead"><h2 class="shead-title" style="margin:0">The short version</h2></div>
+      <p style="margin-bottom:8px">There are no accounts and no analytics. Everything you write
+        stays on your device unless you switch on backup.</p>
+      <p style="margin-bottom:0">If you switch on backup, your months and deadlines are encrypted
+        on your phone and the encrypted result is stored on Google Firebase, filed under an
+        anonymous id. The key never leaves your phone, so neither Google nor the developer can
+        read it. That is still data leaving your device, so this policy says so plainly rather
+        than claiming nothing is collected.</p>
+      <p class="caption" style="margin-bottom:0">This describes the app as built. Firebase's
+        config files are not in the public repo, so a phone built from source has no backend to
+        reach until you point it at a project of your own.</p>
+    </div>
+
+    <h2>Who is responsible</h2>
+    <p>Owais Khan, the sole developer, is the data controller for the small amount of data
+      described below. There is no company, no team and no third party with access.</p>
+    <p>Contact: <a href="mailto:owais.develops@gmail.com">owais.develops@gmail.com</a>, or open a
+      <a href="https://github.com/owaisazmal/Rin/issues">GitHub issue</a> if the question suits
+      being asked in public.</p>
+
+    <h2>What stays on your device</h2>
+    <p>By default, and permanently if you never turn on backup, all of the following is stored
+      only in the app's own local storage on your phone, and is deleted when you uninstall the app:</p>
+    <ul>
+      <li>your habits, and the marks you make against them each day;</li>
+      <li>your deadlines, their dates and whether they are finished;</li>
+      <li>your observations and key goals;</li>
+      <li>your settings: the theme and which chart you prefer;</li>
+      <li>the snapshot the home-screen widgets read, in a container shared with the app.</li>
+    </ul>
+    <p>None of it is transmitted, and none of it is readable by the developer. There is no cloud
+      copy of a device that has not enabled backup.</p>
+
+    <h2>What is sent on every launch</h2>
+    <h3>A device attestation</h3>
+    <p>Firebase App Check runs once when the app starts, whether or not you ever use backup. It
+      uses Apple's App Attest on iOS and the Play Integrity API on Android to confirm that a
+      request came from a genuine install of this app rather than a script, which is what stops
+      the backup store being a free key-value database for anyone who read the repo. It involves
+      Apple or Google under their own terms, and it carries nothing about you or your habits. It does reach Google, which sees your IP
+      address, so it is listed here rather than under backup, where it does not belong.</p>
+
+    <h2>What is sent, and only if you enable backup</h2>
+    <p>Backup is off until you turn it on, and the app is fully usable without it. When you do
+      turn it on, two more things happen.</p>
+
+    <h3>1 · An anonymous sign-in</h3>
+    <p>The app signs in to Firebase Authentication anonymously. This creates a throwaway
+      identifier for the install. It is not an account: no name, no email address, no password,
+      and nothing you have written is filed under it. Reinstalling produces a different one. It
+      exists so that requests carry an attestation token and Firebase can apply its own rate
+      limits.</p>
+
+    <h3>2 · Encrypted records</h3>
+    <p>Each month, and your list of deadlines, is encrypted on the phone with XChaCha20-Poly1305
+      using a key derived from a backup code that the app generates on your device and stores in
+      the iOS Keychain or the Android Keystore. Only the resulting ciphertext is uploaded, filed
+      under an id derived separately from the same code by HKDF-SHA256.</p>
+    <p>Because the id and the key come from different derivations, the id reveals nothing about
+      the key. Anyone holding the entire database, whether Google, the developer or someone who got
+      in, has a pile of unreadable ciphertext under opaque ids. The whole of the server side
+      is 81 lines, and it is
+      <a href="https://github.com/owaisazmal/Rin/blob/main/firestore.rules">in the repository</a>.</p>
+    <p>The backup code never leaves your phone. There is deliberately no recovery path: if you
+      lose the code, the backup stays encrypted forever, and nobody, including the developer,
+      can restore it for you. A way to reset it would be a way in.</p>
+
+    <h2>What is never collected</h2>
+    <ul>
+      <li>No analytics, telemetry, usage statistics or crash reporting.</li>
+      <li>No advertising, no ad identifiers, no ad SDKs.</li>
+      <li>No name, email address, phone number, or any other contact information.</li>
+      <li>No contacts, calendar, photos, camera, microphone or location data. The app never
+        requests these permissions.</li>
+      <li>No persistent advertising or tracking identifier of any kind.</li>
+      <li>No data is sold, shared or transferred to any third party for their own purposes.</li>
+    </ul>
+
+    <h2>Google Play Data Safety, in the same terms Google asks for</h2>
+    <p>This is the honest mapping of the above onto Play's Data Safety questions.</p>
+    <div class="dtable-scroll" tabindex="0" role="group" aria-label="Play Data Safety answers, scrollable">
+      <table class="dtable">
+        <thead>
+          <tr><th scope="col">Question</th><th scope="col">Answer</th><th scope="col">Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Does the app collect or share user data?</td>
+            <td><span class="yes">Yes, collect</span>, if backup is enabled</td>
+            <td>Encrypted content leaves the device. Nothing is <em>shared</em> with third parties.</td>
+          </tr>
+          <tr>
+            <td>Data type</td>
+            <td>App activity: other user-generated content</td>
+            <td>Habits, marks, deadlines, notes and goals, as one encrypted blob.</td>
+          </tr>
+          <tr>
+            <td>Purpose</td>
+            <td>App functionality</td>
+            <td>Restoring your months onto a new phone. Nothing else.</td>
+          </tr>
+          <tr>
+            <td>Is collection optional?</td>
+            <td><span class="yes">Optional</span></td>
+            <td>Off by default; the app works fully without it.</td>
+          </tr>
+          <tr>
+            <td>Encrypted in transit?</td>
+            <td><span class="yes">Yes</span></td>
+            <td>HTTPS, and the payload is already end-to-end encrypted before it is sent.</td>
+          </tr>
+          <tr>
+            <td>Can users request deletion?</td>
+            <td><span class="yes">Yes</span></td>
+            <td>See “Deleting your data” below.</td>
+          </tr>
+          <tr>
+            <td>Data used for tracking or advertising?</td>
+            <td><span class="no">No</span></td>
+            <td>There are no ads and no tracking of any kind.</td>
+          </tr>
+          <tr>
+            <td>Account creation required?</td>
+            <td><span class="no">No</span></td>
+            <td>There are no accounts at all.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Processors</h2>
+    <p>Only if backup is enabled, and only for the purposes above:</p>
+    <ul>
+      <li><strong>Google</strong> (Firebase App Check) and <strong>Apple</strong> (App Attest) or
+        <strong>Google Play</strong> (Play Integrity), for the launch-time device attestation
+        described above. This happens on every install, backup or not.</li>
+      <li><strong>Google Firebase</strong> (Authentication, Firestore) stores the encrypted
+        records and, like any hosted service, processes the connection metadata that reaching it
+        necessarily involves, including your IP address, under
+        <a href="https://firebase.google.com/support/privacy">Google's own privacy terms</a>.
+        Only if backup is enabled.</li>
+    </ul>
+    <p>Nothing else. The app contains no other network code: the only file in the project that
+      touches a network is
+      <a href="https://github.com/owaisazmal/Rin/blob/main/src/sync.ts"><code>src/sync.ts</code></a>,
+      and its entire surface is eight functions: one that starts App Check, and seven that will
+      not do anything without a backup code.</p>
+
+    <h2>Notifications</h2>
+    <p>Habit nudges and deadline reminders are scheduled locally by your device. They are not
+      push notifications, no server is involved, and no notification token is registered or sent
+      anywhere.</p>
+
+    <h2>Retention, and deleting your data</h2>
+    <p>Local data lives until you delete it in the app or uninstall the app.</p>
+    <p>An encrypted backup is kept until it is overwritten by a newer one from a device holding
+      the same code. Two separate things you can do, and it is worth being clear about which is
+      which:</p>
+    <ul>
+      <li><strong>Forget the code</strong>, in the app's Settings, removes the code from your
+        phone. Your local data is untouched, but the stored backup becomes permanently
+        unreadable, by you as much as by anyone else, and is left as ciphertext nobody holds a
+        key for.</li>
+      <li><strong>Deleting the stored record</strong> is a separate request. Send an
+        <a href="mailto:owais.develops@gmail.com">email</a>, or open a
+        <a href="https://github.com/owaisazmal/Rin/issues">GitHub issue</a>, asking
+        for the backup under your id to be removed. You will need to supply that id, because it
+        is the only thing that identifies the record. Nothing else links it to you, which is the
+        point of the design and also its one inconvenience.</li>
+    </ul>
+
+    <h2>Children</h2>
+    <p>Rin is not directed at children and collects no personal information from anyone, of any
+      age.</p>
+
+    <h2>Your rights</h2>
+    <p>Where the GDPR, the UK GDPR or similar laws apply, you have rights of access, correction,
+      deletion, restriction and portability. In practice almost all of your data is already only
+      on your own device and under your direct control; for an encrypted backup, the deletion
+      route above is the mechanism. The lawful basis for processing an encrypted backup is your
+      consent, given by switching backup on, and you may withdraw it at any time by turning it
+      off.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the date at the top changes with it, and the history of every
+      change is in the
+      <a href="https://github.com/owaisazmal/Rin/commits/main/docs/privacy.html">commit
+      log for this file</a>, which is a more useful record than a paragraph promising to notify
+      you.</p>
+
+    <h2>This website</h2>
+    <p>This site sets no cookies, runs no analytics and makes no third-party requests. The fonts
+      are served from this origin. It stores one thing in your browser: whether you chose the
+      dark or the light theme. The
+      <a href="index.html#privacy">front page prints a live list</a> of every request it has made,
+      so this is checkable rather than merely stated.</p>
+
+  </div>
+</section>
+</main>
+
+<footer id="colophon">
+  <div class="wrap colo">
+    <span class="mark-lg" data-mark></span>
+    <h2>Rin</h2>
+    <p class="defn">凛 — dignity in showing up, day after day.</p>
+    <p><a href="index.html">Back to the app</a> · <a href="https://github.com/owaisazmal/Rin">Source</a></p>
+    <div class="colo-appearance">
+      <div class="shead" style="margin:0"><span class="shead-title">Appearance</span></div>
+      <div id="theme-foot" aria-label="Appearance"></div>
+    </div>
+    <p class="fine">MIT · © 2026 Owais Khan</p>
+  </div>
+</footer>
+
+</div>
+
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

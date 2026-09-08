@@ -108,7 +108,24 @@ function DriftBlob({
     >
       <Svg width={diameter} height={diameter}>
         <Defs>
-          <RadialGradient id={gradientId} cx="50%" cy="50%" r="50%">
+          {/*
+           * The radius reaches the square's corner, not its edge — so the ramp
+           * is still at roughly a quarter alpha where the circle below clips
+           * it, and every blob keeps a faint rim.
+           *
+           * That rim is the whole effect. `r="50%"` lands the transparent stop
+           * exactly on the rim instead, and the blobs stop reading as circles
+           * at all: they blur out into one formless wash, and a third of the
+           * spread goes with them. Corner distance is `√2 / 2` of the box, so
+           * the gradient has to be given the radius outright.
+           */}
+          <RadialGradient
+            id={gradientId}
+            gradientUnits="userSpaceOnUse"
+            cx={diameter / 2}
+            cy={diameter / 2}
+            r={(diameter / 2) * Math.SQRT2}
+          >
             <Stop offset="0%" stopColor={color} stopOpacity={1} />
             <Stop offset="45%" stopColor={color} stopOpacity={0.5} />
             <Stop offset="100%" stopColor={color} stopOpacity={0} />

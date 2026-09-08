@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rin: a month of habits, drawn as a circle</title>
+<meta name="description" content="Rin is a free, open-source monthly habit planner for iOS and Android. One sector per day, one ring per habit. No account, no analytics, nothing leaving your phone.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#242424">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffe3">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preload" href="fonts/JosefinSans_700Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/JosefinSans_400Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/site.css">
+<meta property="og:title" content="Rin: a month of habits, drawn as a circle">
+<meta property="og:description" content="A free, open-source monthly habit planner. One mark a day. No account, no analytics, nothing leaving your phone.">
+<meta property="og:image" content="assets/logo/banner-dark.png">
+<meta property="og:type" content="website">
+<script>
+  /* Before first paint, so nothing flashes in the wrong palette: the same
+     reason App.tsx holds the first frame until the stored theme has loaded.
+     Dark is the default; a light system preference is honoured when nothing
+     has been chosen. */
+  try {
+    var stored = localStorage.getItem('rin-theme');
+    document.documentElement.dataset.theme =
+      stored || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+
+  /* Reveal styles only apply once this class is set, and it is set before first
+     paint so nothing flashes in and back out. If the module never boots
+     (a parse error, a blocked script, an old browser) the fallback below un-hides
+     everything, so a broken script can never cost the reader the page. */
+  document.documentElement.classList.add('js');
+  window.__rinFallback = setTimeout(function () {
+    document.documentElement.classList.add('no-reveal');
+  }, 2000);
+</script>
+</head>
+<body>
+
+<a class="skip" href="#hero">Skip to content</a>
+<div id="ground" aria-hidden="true"></div>
+
+<div class="page">
+
+<header id="masthead">
+  <div class="masthead-in">
+    <a class="brand" href="#hero">
+      <span data-mark></span>
+      <b>RIN</b>
+    </a>
+    <nav class="mast-nav" aria-label="Sections">
+      <a href="#tracker">What it is</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#widgets">Widgets</a>
+      <a class="keep" href="https://github.com/owaisazmal/Rin">Source</a>
+    </nav>
+    <div id="theme-top" aria-label="Appearance"></div>
+  </div>
+</header>
+
+<main>
+
+<!-- ==================================================================== hero -->
+<section id="hero">
+  <div class="wrap hero-grid">
+    <div class="reveal">
+      <span class="eyebrow hero-eyebrow">Rin · 凛</span>
+      <h1>A month of habits,<br>drawn as a circle.</h1>
+      <p class="lede">One sector per day, one ring per habit. Tick it or cross it — that is the
+        entire ritual, and the month fills in behind you.</p>
+      <p class="lede">Free and open-source, and it runs entirely on the phone. There is no
+        account, because there is nothing an account would be for.</p>
+      <p class="defn">凛 — dignity in showing up, day after day.</p>
+      <div class="btn-row">
+        <a class="btn" href="https://github.com/owaisazmal/Rin">Read the source</a>
+        <a class="btn ghost" href="#tracker">How it works</a>
+      </div>
+    </div>
+
+    <div class="reveal" style="--rd:60ms">
+      <div class="card" id="demo">
+        <div class="tcard-head">
+          <span class="streak" id="demo-streak" role="img"></span>
+          <div class="monthnav">
+            <button class="navbtn" type="button" disabled aria-label="Previous month">‹</button>
+            <span class="label" id="month-label"></span>
+            <button class="navbtn" type="button" disabled aria-label="Next month">›</button>
+          </div>
+        </div>
+
+        <div class="radial-slot">
+          <svg class="radial" id="hero-radial" role="group"
+               aria-label="Radial habit tracker. Only today can be marked."></svg>
+        </div>
+
+        <div class="progress" id="demo-bar"><i></i></div>
+        <p class="stats" id="demo-stats"></p>
+
+        <div class="legend" aria-hidden="true">
+          <i style="background:var(--done)"></i><span>done</span>
+          <i style="background:var(--missed)"></i><span>missed</span>
+          <i class="e"></i><span>pending</span>
+        </div>
+
+        <div class="shead" style="margin-top:18px">
+          <span class="shead-title">Daily check</span>
+          <span class="today-badge">Today</span>
+        </div>
+        <div class="checklist" id="demo-check"></div>
+
+        <p class="sr" id="demo-live" aria-live="polite"></p>
+      </div>
+
+      <div class="demo-note">
+        <p class="caption" id="demo-caption">Pre-filled with sample marks; today is yours. A demo
+          of this page, not a web version of the app.
+          There isn’t one.</p>
+        <button class="quiet" type="button" id="demo-reset">Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================= privacy -->
+<section id="privacy">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">Before anything else</span>
+      <h2>Built for myself.<br>Open to everyone.</h2>
+      <p>Nothing you write here leaves your phone unless you ask it to. No analytics, no trackers,
+        no crash reporters, no ad SDKs, and no account: no name, no email, no password. Your
+        habits, notes and goals live in local storage on the device.</p>
+      <p>The source stays public for as long as this app exists. That is a promise about the
+        licence, not just the current state of the repo.</p>
+      <p>And if something here annoys you, change it. Fork it, strip out the parts you don’t want,
+        build the version you would rather use. You don’t need permission and you don’t need to ask.</p>
+    </div>
+
+    <div class="two-up">
+      <div class="card reveal">
+        <div class="shead"><h3 class="shead-title">The refusals</h3></div>
+        <ul class="refusals" id="refusals">
+          <li>analytics</li><li>trackers</li><li>crash reporters</li><li>ad SDKs</li>
+          <li>accounts</li><li>passwords</li><li>email addresses</li><li>anything readable leaving the phone</li>
+        </ul>
+        <hr class="hairline">
+        <div class="linkrow">
+          <a href="privacy.html">Privacy policy ›</a>
+          <a href="https://github.com/owaisazmal/Rin/blob/main/LICENSE">MIT licence ›</a>
+          <a href="https://github.com/owaisazmal/Rin/blob/main/firestore.rules">firestore.rules ›</a>
+        </div>
+      </div>
+
+      <div class="card reveal" style="--rd:60ms">
+        <div class="shead"><h3 class="shead-title">This page, right now</h3></div>
+        <p class="bigstat" id="ledger-count">0</p>
+        <p class="caption" style="margin-top:0">third-party requests</p>
+        <div class="ledger-scroll" tabindex="0" role="group" aria-label="Request ledger, scrollable">
+          <table class="ledger">
+            <thead><tr><th scope="col">Origin</th><th scope="col">File</th><th scope="col">Size</th></tr></thead>
+            <tbody id="ledger-body"></tbody>
+          </table>
+        </div>
+        <p class="caption">Everything the browser has fetched since this page loaded, as it
+          reports it. The fonts are served from this origin and there is no analytics script to
+          list. Go back up, mark a few cells, and come back. The number does not move.</p>
+      </div>
+    </div>
+
+    <div class="aside reveal">
+      <p>Credit is entirely optional, and I mean that. I’ll just be here, reading every fork’s
+        commit history like it’s a group chat I wasn’t invited to but am definitely still in.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================= problem -->
+<section id="problem">
+  <div class="wrap measure-wrap">
+    <div class="reveal">
+      <span class="eyebrow">The problem</span>
+      <h2>Habits don’t break.<br>They fade.</h2>
+      <p>Nobody quits on purpose. You miss a Tuesday, then most of a week, and by the time it
+        registers there is nothing to point at. A grid remembers what memory quietly rounds off.</p>
+      <p>And a blank square tells you what happened, never why, so every month keeps room for
+        notes, and “travel weeks are hard” stops being a vague feeling and turns into something you
+        can plan around.</p>
+      <svg id="fadegrid" class="fadegrid" style="width:min(100%,480px);height:auto;margin-top:20px"
+           role="img" aria-label="A run of check-ins thinning out from left to right."></svg>
+      <p class="caption">A run of check-ins, thinning out. Sample data, not a real month.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================= tracker -->
+<section id="tracker">
+  <div class="wrap diagram">
+    <div class="reveal">
+      <svg id="diagram-radial" class="radial" style="max-width:440px;margin-inline:auto"
+           role="img" aria-label="A radial tracker: one sector per day around the circle, one ring per habit."></svg>
+      <p class="caption" style="text-align:center">Sample data, not a real month.</p>
+    </div>
+    <div class="reveal" style="--rd:60ms">
+      <span class="eyebrow">The tracker</span>
+      <h2>One sector per day.<br>One ring per habit.</h2>
+      <p>The circle is divided into one sector for each day of the month, running clockwise from
+        twelve o’clock, and one ring for each habit, with the first habit innermost. Tap a cell to
+        cycle it: pending, then done, then missed, then back to pending.</p>
+      <p>Today’s date is picked out in the accent colour, and today is the only day you can mark.
+        A chart you can fill in afterwards records what you wish had happened.</p>
+      <p>With fewer than six habits the extra rings are still drawn, empty, so the grid keeps its
+        shape rather than collapsing into a thin band.</p>
+      <ol class="callouts">
+        <li><b>1</b>A sector: one day, clockwise from twelve</li>
+        <li><b>2</b>A ring: one habit, the first innermost</li>
+        <li data-tone="done"><b>3</b>Green done, red missed</li>
+        <li data-tone="accent"><b>4</b>Today, and only today, is markable</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== views -->
+<section id="views">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">The other views</span>
+      <h2>The same marks, from further back.</h2>
+      <p>All three panels read the marks you made at the top of this page. Change one and all
+        three change. In the app they are the same stored month: history is worked out from what
+        is already there rather than written down twice.</p>
+    </div>
+
+    <div class="card reveal" style="--rd:60ms">
+      <div class="shead">
+        <h3 class="shead-title">Tracker</h3>
+        <span id="views-seg" class="seg-inline"></span>
+      </div>
+
+      <div class="panelbox">
+        <div class="panel" id="panel-year">
+          <div class="yearbody">
+            <!-- the weekday gutter stays put while the year scrolls past it,
+                 exactly as YearChart.tsx holds it outside the ScrollView -->
+            <svg class="yeargutter" id="yeargutter" aria-hidden="true"></svg>
+            <div class="yearscroll" id="year-scroll" tabindex="0" role="img"
+                 aria-label="A year of check-ins as a contribution grid.">
+              <svg class="yeargrid" id="yeargrid"></svg>
+            </div>
+          </div>
+          <div class="yearfoot">
+            <span><b class="num" id="year-total">0</b> check-ins in <span id="year-now"></span></span>
+            <span class="ramp" id="year-ramp"><span>less</span><i></i><i></i><i></i><i></i><i></i><span>more</span></span>
+          </div>
+          <p class="caption" id="year-note"></p>
+        </div>
+
+        <div class="panel" id="panel-day" hidden>
+          <div id="panel-day-list"></div>
+          <p class="caption">The daily check, for today. In the app the arrows walk back through
+            the month; every day but today is read-only.</p>
+        </div>
+
+        <div class="panel" id="panel-history" hidden>
+          <div id="panel-history-list"></div>
+          <button class="btn ghost" type="button" disabled style="margin-top:14px">Older</button>
+          <p class="caption">History pages back six months at a time, and this demo only has one.</p>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+</section>
+
+<!-- =============================================================== deadlines -->
+<section id="deadlines">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">Deadlines</span>
+      <h2>The half with teeth.</h2>
+      <p>Tasks with a date and a time on them, below the daily check. Each row shows how long is
+        left, and a bar that fills over the final week, so the pressure is visible between the
+        colour bands as well as through them.</p>
+    </div>
+
+    <div class="two-up">
+      <div class="card reveal">
+        <div class="task">
+          <div class="task-top">
+            <button class="checkbox" type="button" id="task-check"
+                    aria-pressed="false" aria-label="Mark “File the quarterly return” done"></button>
+            <p id="task-text">File the quarterly return</p>
+          </div>
+          <div class="task-meta"><b id="task-left">7d left</b></div>
+          <div class="pressure" id="task-track"><i id="task-fill"></i></div>
+        </div>
+
+        <label class="sr" for="pressure-slider">Time until the deadline</label>
+        <input class="slider" id="pressure-slider" type="range" min="0" max="100" value="0"
+               aria-valuetext="7d left">
+        <div class="sliderlabels"><span>7 days out</span><span>Overdue</span></div>
+        <p class="caption">Drag it. The wording, the bar and the colour are the app’s own, from
+          <code>src/deadlines.ts</code>.</p>
+      </div>
+
+      <div class="card reveal" style="--rd:60ms">
+        <div class="shead"><h3 class="shead-title">Reminders escalate</h3></div>
+        <p class="caption" style="margin-top:0">Getting louder as the date approaches is the whole
+          feature, so the spacing tightens rather than staying even.</p>
+        <ul class="ladder" id="ladder"></ul>
+
+        <hr class="hairline">
+        <div class="shead"><h3 class="shead-title">The daily nudges</h3></div>
+        <p class="caption" style="margin-top:0">Three fixed times, 12:30 and 17:30 and 20:45, and
+          only while something is still unmarked. Once the day is accounted for they are replaced
+          by a single note saying so. Deadlines live on their own Android notification channel, so
+          the habit nudges can be muted without losing them.</p>
+
+        <div class="notif" id="notif">
+          <b>Evening check</b>
+          <p>The grid has a hole in it and it’s shaped exactly like today.</p>
+        </div>
+        <p class="caption">The app’s own 17:30 line, as it goes out on a day queued ahead.</p>
+        <p class="caption">Twenty-eight notifications are budgeted, five per task, because iOS
+          keeps only the 64 soonest pending local notifications.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================= widgets -->
+<section id="widgets">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">Widgets</span>
+      <h2>Remembering is not your job.</h2>
+      <p>Eight of them on both platforms, plus Lock Screen accessories on iOS: the radial
+        tracker, the year, month progress, the streak, today’s check, key goals, the daily quote
+        and what is due next.</p>
+      <p>They are drawn from the same snapshot the app writes, so they cannot disagree with it, and
+        they follow the theme chosen in Settings rather than the system’s.</p>
+      <p class="caption">These captures predate the deadlines widget, so they are not all eight.</p>
+    </div>
+
+    <div class="rail reveal" style="--rd:60ms" tabindex="0" role="group" aria-label="Widget screenshots, scrollable">
+      <figure><span class="frame"><picture><source srcset="assets/widgets/smalls-dark.webp" type="image/webp"><img src="assets/widgets/smalls-dark.png" width="285" height="620" loading="lazy" decoding="async" alt="Small home screen widgets on iOS in dark mode"></picture></span><figcaption>iOS · dark</figcaption></figure>
+      <figure><span class="frame"><picture><source srcset="assets/widgets/mediums-light.webp" type="image/webp"><img src="assets/widgets/mediums-light.png" width="285" height="620" loading="lazy" decoding="async" alt="Medium home screen widgets on iOS in light mode"></picture></span><figcaption>iOS · light</figcaption></figure>
+      <figure><span class="frame"><picture><source srcset="assets/widgets/large-radial-dark.webp" type="image/webp"><img src="assets/widgets/large-radial-dark.png" width="285" height="620" loading="lazy" decoding="async" alt="The large radial tracker widget on iOS in dark mode"></picture></span><figcaption>iOS · dark</figcaption></figure>
+      <figure><span class="frame"><picture><source srcset="assets/widgets/quotes-light.webp" type="image/webp"><img src="assets/widgets/quotes-light.png" width="285" height="620" loading="lazy" decoding="async" alt="The daily quote widget on iOS in light mode"></picture></span><figcaption>iOS · light</figcaption></figure>
+      <figure><span class="frame"><picture><source srcset="assets/widgets/android-page1-dark.webp" type="image/webp"><img src="assets/widgets/android-page1-dark.png" width="279" height="620" loading="lazy" decoding="async" alt="Home screen widgets on Android in dark mode"></picture></span><figcaption>Android · dark</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== backup -->
+<section id="backup">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">Backup</span>
+      <h2>One code, and nothing to sign into. <span class="tag">Not wired up yet</span></h2>
+      <p>A backup is for carrying your months to your next phone, and nothing else. There is no
+        account behind it: no name, no email, no password.</p>
+      <p>Write the code down. Nobody can look it up for you, not me and not Google, and without it
+      the backup stays encrypted forever. There is deliberately no way to reset it, because a way
+        to reset it would be a way in.</p>
+      <p>There is no backend behind this build. The code is written and tested, but Firebase's
+        config files are not in the repo, so a phone built from it has nowhere to send anything
+        until you point it at a project of your own. The app is fully usable without ever making a
+        backup, which is how most people will use it.</p>
+      <p>The anonymous sign-in in <code>src/sync.ts</code> is a throwaway id carrying an App Check
+        token, not an account.</p>
+    </div>
+
+    <div class="two-up">
+      <div class="card reveal">
+        <div class="shead"><h3 class="shead-title">A code, generated here</h3></div>
+        <div class="chip-box codebox" id="backup-code">····-····-····-····-····-····</div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="quiet" type="button" id="backup-new">New code</button>
+          <button class="quiet" type="button" id="backup-copy">Copy</button>
+        </div>
+        <p class="caption">Generated in your browser a moment ago by
+          <code>crypto.getRandomValues</code>, and it has not left it. This page has no server to
+          send it to; see the ledger further up.</p>
+        <p class="caption">XChaCha20-Poly1305, HKDF-SHA256, a 120-bit code.</p>
+      </div>
+
+      <div class="card reveal" style="--rd:60ms">
+        <div class="codehead">
+          <div class="shead" style="margin:0"><h3 class="shead-title">The entire server side</h3></div>
+          <a href="https://github.com/owaisazmal/Rin/blob/main/firestore.rules"
+             style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none">On GitHub ›</a>
+        </div>
+        <pre class="code numbered" id="rules" tabindex="0"><span class="l">rules_version = '2';</span><span class="l"> </span><span class="l">// The entire server side of the app.</span><span class="l">//</span><span class="l">// There are no accounts. Nobody gives a name, an email or a password. When a</span><span class="l">// phone backs up, it signs in anonymously so the request carries an App Check</span><span class="l">// token and a throwaway uid, encrypts each record with a key derived from a</span><span class="l">// code that only the phone holds, and writes the ciphertext under an id that</span><span class="l">// is a one-way derivation of the same code. A second phone that is given the</span><span class="l">// code derives the same id and the same key, and can read it all back.</span><span class="l">//</span><span class="l">// So the database holds no identities and nothing readable, and these rules</span><span class="l">// only have to guarantee three things:</span><span class="l">//</span><span class="l">//   1. nothing is reachable without a signed-in app (App Check is enforced in</span><span class="l">//      the console, not here; rules cannot see it);</span><span class="l">//   2. nothing can be discovered — every read names its exact path, and the</span><span class="l">//      id space is 2^256, so knowing an id *is* the credential;</span><span class="l">//   3. every record has exactly the shape and size the app writes, so a</span><span class="l">//      script cannot park arbitrary data here or bloat a backup.</span><span class="l">//</span><span class="l">// Deliberately not enforced, because it cannot be: how many backups one</span><span class="l">// install creates. That is App Check's job, and on the free plan the worst</span><span class="l">// outcome is a day's quota gone, never a bill.</span><span class="l"> </span><span class="l">service cloud.firestore {</span><span class="l"> </span><span class="l">  function signedIn() {</span><span class="l">    return request.auth != null;</span><span class="l">  }</span><span class="l"> </span><span class="l">  // hex(SHA-256) of the code's id-derivation: 64 lowercase hex characters</span><span class="l">  function isBackupId(id) {</span><span class="l">    return id.matches('^[0-9a-f]{64}$');</span><span class="l">  }</span><span class="l"> </span><span class="l">  // one document per calendar month, so an id also bounds a backup at 1212 of them</span><span class="l">  function isMonthId(id) {</span><span class="l">    return id.matches('^20[0-9]{2}-(0[1-9]|1[0-2])$');</span><span class="l">  }</span><span class="l"> </span><span class="l">  // An encrypted record. `iv` is the nonce (12 to 24 bytes, base64), `ct` the</span><span class="l">  // ciphertext (base64), `v` the format version, `updatedAt` the server's clock —</span><span class="l">  // never the phone's, so two phones sharing a code can tell which wrote last.</span><span class="l">  function isBlob(data, maxChars) {</span><span class="l">    return data.keys().hasOnly(['v', 'iv', 'ct', 'updatedAt'])</span><span class="l">      &amp;&amp; data.keys().hasAll(['v', 'iv', 'ct', 'updatedAt'])</span><span class="l">      &amp;&amp; data.v == 1</span><span class="l">      &amp;&amp; data.iv is string &amp;&amp; data.iv.size() &gt;= 16 &amp;&amp; data.iv.size() &lt;= 32</span><span class="l">      &amp;&amp; data.ct is string &amp;&amp; data.ct.size() &gt; 0 &amp;&amp; data.ct.size() &lt;= maxChars</span><span class="l">      &amp;&amp; data.updatedAt == request.time;</span><span class="l">  }</span><span class="l"> </span><span class="l">  match /databases/{database}/documents {</span><span class="l"> </span><span class="l">    match /backups/{backup}/months/{month} {</span><span class="l">      // reading, or listing the months of one backup whose id you already know</span><span class="l">      allow get: if signedIn() &amp;&amp; isBackupId(backup) &amp;&amp; isMonthId(month);</span><span class="l">      allow list: if signedIn() &amp;&amp; isBackupId(backup);</span><span class="l">      // a month in the clear is a few KB; base64 ciphertext of one stays well under this</span><span class="l">      allow create, update: if signedIn() &amp;&amp; isBackupId(backup) &amp;&amp; isMonthId(month)</span><span class="l">        &amp;&amp; isBlob(request.resource.data, 65536);</span><span class="l">      allow delete: if signedIn() &amp;&amp; isBackupId(backup);</span><span class="l">    }</span><span class="l"> </span><span class="l">    // the deadline list travels as one record</span><span class="l">    match /backups/{backup}/tasks/{doc} {</span><span class="l">      allow get: if signedIn() &amp;&amp; isBackupId(backup) &amp;&amp; doc == 'current';</span><span class="l">      allow create, update: if signedIn() &amp;&amp; isBackupId(backup) &amp;&amp; doc == 'current'</span><span class="l">        &amp;&amp; isBlob(request.resource.data, 262144);</span><span class="l">      allow delete: if signedIn() &amp;&amp; isBackupId(backup) &amp;&amp; doc == 'current';</span><span class="l">    }</span><span class="l"> </span><span class="l">    // Everything else — the top-level backups collection, collection-group</span><span class="l">    // queries, any path not named above — is unreachable. Firestore denies by</span><span class="l">    // default; this just says so where a reader will look for it.</span><span class="l">    match /{document=**} {</span><span class="l">      allow read, write: if false;</span><span class="l">    }</span><span class="l">  }</span><span class="l">}</span></pre>
+        <p class="caption">Eighty-one lines, printed in full rather than excerpted, because “short
+          enough to read in a minute” is only true if you are actually let read it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== run -->
+<section id="run">
+  <div class="wrap">
+    <div class="reveal measure">
+      <span class="eyebrow">Run it</span>
+      <h2>There is no store link yet.</h2>
+      <p>It isn’t on the App Store or Google Play. What there is, is the repo. Clone it and build
+        it onto your own phone. The widgets and the backup are native, so it needs a development
+        build rather than Expo Go.</p>
+    </div>
+
+    <div class="two-up">
+      <div class="reveal">
+        <div class="codehead">
+          <div class="shead" style="margin:0"><h3 class="shead-title">Build it</h3></div>
+          <button class="quiet" type="button" data-copy="#cmd-build">Copy</button>
+        </div>
+        <pre class="code" id="cmd-build" tabindex="0">npm install
+npx expo start
+
+npx expo run:ios       # needs Xcode
+npx expo run:android   # needs Android Studio</pre>
+      </div>
+
+      <div class="reveal" style="--rd:60ms">
+        <div class="codehead">
+          <div class="shead" style="margin:0"><h3 class="shead-title">Check it</h3></div>
+          <button class="quiet" type="button" data-copy="#cmd-test">Copy</button>
+        </div>
+        <pre class="code" id="cmd-test" tabindex="0">npm test
+npm run test:rules</pre>
+        <p class="caption">The screens are checked by looking at them; this is for the arithmetic
+          underneath, which looks the same whether or not it is right.</p>
+      </div>
+    </div>
+
+    <div class="btn-row reveal">
+      <a class="btn" href="https://github.com/owaisazmal/Rin">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================================================================ colophon -->
+<footer id="colophon">
+  <div class="wrap colo">
+    <div class="card quotecard reveal">
+      <div class="shead"><h3 class="shead-title" style="color:var(--accent)">Discipline.</h3></div>
+      <p id="quote"></p>
+    </div>
+
+    <span class="mark-lg" data-mark></span>
+    <h2>Rin</h2>
+    <p class="defn">凛 — dignity in showing up, day after day.</p>
+    <p class="fine">Free and open-source. Made by Owais Khan. No team, no investors, and no
+      analytics to tell me whether anyone ever reads this line.</p>
+    <p><a href="https://github.com/owaisazmal/Rin">github.com/owaisazmal/Rin</a></p>
+
+    <div class="colo-appearance">
+      <div class="shead" style="margin:0"><span class="shead-title">Appearance</span></div>
+      <div id="theme-foot" aria-label="Appearance"></div>
+    </div>
+
+    <details class="proof" id="proof">
+      <summary>The mark</summary>
+      <div class="proof-body">
+        <div class="proof-grid">
+          <span id="proof-mark" data-mark style="display:block;width:132px"></span>
+          <div>
+            <p class="caption" style="margin-top:0">Twelve sectors, a day each, and twelve also
+              reads as the months. Four rings, one per habit. Eight days are marked, three of
+              them missed, and a slate tick sits on the day that is up next. It is the app’s own
+              tracker, caught mid-month.</p>
+            <p class="caption">The mark above was drawn a moment ago from the formulas in
+              <code>src/logo.ts</code>. Below: its first path, beside the first path of the
+              committed <code>assets/logo/mark-dark.svg</code>.</p>
+          </div>
+        </div>
+        <pre class="code" style="margin-top:12px"><span id="proof-generated"></span>
+<span id="proof-committed"></span></pre>
+        <p class="verdict" id="proof-verdict"></p>
+      </div>
+    </details>
+
+    <p class="fine" style="margin-top:22px">
+      <a href="privacy.html">Privacy policy</a> · MIT · © 2026 Owais Khan
+    </p>
+  </div>
+</footer>
+
+</div>
+
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Publishes docs/ to GitHub Pages exactly as it is written.
+#
+# The site is hand-written HTML, CSS and JS with no build step, so there is
+# nothing for Jekyll to do here and a Jekyll run only risks rewriting files it
+# does not understand. This workflow uploads the directory verbatim.
+#
+# Requires Settings -> Pages -> Source = "GitHub Actions".
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

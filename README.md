@@ -6,7 +6,7 @@
 </p>
 
 # Rin
-*凛 (rin) — quiet composure, discipline that doesn't waver.*
+*凛 (rin) — dignity in showing up, day after day.*
 
 Free and open-source. A digital version of the whiteboard "Monthly Planning" board — Rin's home screen — with a **radial habit tracker**, built with Expo / React Native for iOS and Android.
 
@@ -37,10 +37,9 @@ about the licence, not just the current state of the repo. See [LICENSE](LICENSE
 don't want, build the version you would rather use. That is the entire point of
 it being open. You don't need permission and you don't need to ask.
 
-Credit is entirely optional and I would never dream of asking. It's just that
-"Owais Khan" fits very comfortably in a footer, costs you one line, and I will
-be refreshing the forks page regardless, serene, unbothered, definitely not
-counting.
+Credit is entirely optional, and I mean that. I'll just be here, reading every
+fork's commit history like it's a group chat I wasn't invited to but am
+definitely still in.
 
 ### Backups, when they get a backend
 
@@ -173,4 +172,5 @@ plugins/                       Expo config plugin for the Android widgets
 firestore.rules                the entire server side: what a signed-in phone may store (not wired up yet)
 firebase/                      the rules suite, run against the emulator
 .env.example                   backend config; the real .env is never committed
+docs/                          the website, and the privacy policy the stores ask for
 ```

@@ -1,10 +1,9 @@
 import React, { useMemo } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
-import ThemeBackdrop from '../components/ThemeBackdrop';
 import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
@@ -134,14 +133,12 @@ export default function SettingsScreen({
 
         <Text style={styles.footer}>Your widgets follow this too.</Text>
 
-        <View style={styles.clipPanel}>
-          <ThemeBackdrop />
-        </View>
+        <View style={styles.slack} />
 
         <View style={styles.colophon}>
           <Text style={styles.appName}>Rin</Text>
           <Text style={styles.appDefinition}>
-            凛 — quiet composure, discipline that doesn't waver.
+            凛 — dignity in showing up, day after day.
           </Text>
           <Text style={styles.madeBy}>
             Free and open-source. Made by Owais Khan. No team, no investors, and
@@ -210,24 +207,18 @@ const makeStyles = (p: Palette) =>
       marginBottom: 22,
     },
     /**
-     * Home for the theme clip, and the screen's slack. Taking the leftover
-     * space rather than a fixed ratio puts the colophon on the bottom edge on
-     * any screen without the page having to scroll to reach it — and the clip
-     * is drawn with `contain`, so a wide short panel shrinks the drawing
-     * instead of cropping it.
+     * The screen's slack, and nothing else — the drifting background shows
+     * through it. Taking the leftover space rather than a fixed ratio puts the
+     * colophon on the bottom edge on any screen without the page having to
+     * scroll to reach it.
      */
-    clipPanel: {
+    slack: {
       flex: 1,
-      minHeight: 96,
-      // Clearance for the clip's edge fades, which reach outside the panel —
-      // without it they wash over the caption and the colophon. Only iOS draws
-      // them, and on a short screen this margin is the difference between a
-      // drawing that fills the panel and one that looks like a stamp, so
-      // Android keeps its space instead of paying for a fade it never renders.
-      ...Platform.select({
-        ios: { marginTop: 50, marginBottom: 54 },
-        default: { marginTop: 10, marginBottom: 16 },
-      }),
+      // A floor, not a target: this is breathing room and can give ground when
+      // the screen is tight, rather than pushing the colophon off the bottom.
+      minHeight: 24,
+      marginTop: 10,
+      marginBottom: 16,
     },
     ghostBtn: {
       marginTop: 16,
