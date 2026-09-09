@@ -22,6 +22,9 @@ export default function Navigator({
   onSetChart,
   onBackedUp,
   onRetryBackup,
+  backupHolds,
+  restorableMonth,
+  onRestoreMonth,
   onForgetBackup,
   onSkipOnboarding,
   onIntroDone,
@@ -36,6 +39,18 @@ export default function Navigator({
   onBackedUp: (code: string, outcome: BackupOutcome) => void;
   /** takes the park off everything stuck and offers the lot again, now */
   onRetryBackup: () => Promise<void>;
+  /** which months the backup holds, or null when nobody has looked */
+  backupHolds: readonly string[] | null;
+  /**
+   * The month Settings is offering to put back, by document name, or null.
+   *
+   * Passed straight through to the planner, which compares it against the month
+   * it has open. That is the whole of what the planner is told: not whether a
+   * backup exists, not what is in one, only that there is a way out of this one
+   * month and where to take it.
+   */
+  restorableMonth: string | null;
+  onRestoreMonth: (key: string) => Promise<void>;
   onForgetBackup: () => void;
   onSkipOnboarding: () => void;
   onIntroDone: () => void;
@@ -119,6 +134,7 @@ export default function Navigator({
           onOpenSettings={() => setScreen('settings')}
           onOpenHistory={openHistory}
           taskStore={taskStore}
+          restorableMonth={restorableMonth}
         />
       </ScreenLayer>
 
@@ -159,6 +175,8 @@ export default function Navigator({
             setScreen('backup');
           }}
           onRetryBackup={onRetryBackup}
+          backupHolds={backupHolds}
+          onRestoreMonth={onRestoreMonth}
           onForgetBackup={onForgetBackup}
           onClose={() => setScreen('planner')}
         />

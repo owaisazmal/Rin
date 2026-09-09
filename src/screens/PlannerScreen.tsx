@@ -29,7 +29,7 @@ import TrackerCard from '../components/TrackerCard';
 import YearChart from '../components/YearChart';
 import { useChartTransition } from '../hooks/useChartTransition';
 import { useCurrentStreak } from '../hooks/useCurrentStreak';
-import { useMonthData } from '../hooks/useMonthData';
+import { monthDocKey, useMonthData } from '../hooks/useMonthData';
 import { useNow } from '../hooks/useNow';
 import { useReminderSync, useWidgetSync } from '../hooks/useOutboundSync';
 import { TaskStore } from '../hooks/useTasks';
@@ -67,6 +67,7 @@ export default function PlannerScreen({
   onOpenSettings,
   onOpenHistory,
   taskStore,
+  restorableMonth = null,
 }: {
   chart: ChartType;
   onSetChart: (c: ChartType) => void;
@@ -74,6 +75,21 @@ export default function PlannerScreen({
   onOpenHistory: (filter?: HistoryFilter) => void;
   /** owned by the Navigator, because history reads the same list */
   taskStore: TaskStore;
+  /**
+   * The month Settings is offering to put back, by document name, or null.
+   *
+   * The notice below tells somebody that writing in a damaged month lets go of
+   * what did not survive, and until this existed that was the end of it — the
+   * remedy lived behind a card they had no reason to open. This is that remedy,
+   * handed down as a name so the screen need learn nothing about backups to
+   * point at it: whether there is a copy, whether anything has looked, and what
+   * looking costs are all decided above the Navigator. All this screen does is
+   * notice that the month being warned about is the month being offered.
+   *
+   * Defaulted rather than required, because a caller with no answer is the
+   * ordinary case and the notice is completely true without the clause.
+   */
+  restorableMonth?: string | null;
 }) {
   const { mode, palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
@@ -257,7 +273,17 @@ export default function PlannerScreen({
           */}
           {loaded && !vouched ? (
             <View style={styles.damaged}>
-              <Text style={styles.damagedText}>{damagedNotice('month')}</Text>
+              <Text style={styles.damagedText}>
+                {/*
+                  The clause about Settings appears for the month it is
+                  actually about and for no other. Comparing the names rather
+                  than taking a bare flag is what keeps that exact: the card
+                  offers one document at a time, and a phone with two damaged
+                  months would otherwise carry the promise into the one that
+                  has no copy waiting for it.
+                */}
+                {damagedNotice('month', restorableMonth === monthDocKey(year, month))}
+              </Text>
             </View>
           ) : null}
           {tasksLoaded && !tasksVouched ? (

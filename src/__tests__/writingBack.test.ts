@@ -2,7 +2,16 @@ import { useMonthData } from '../hooks/useMonthData';
 import { useTasks } from '../hooks/useTasks';
 import { loadMonth, readMonthVouched, saveMonth } from '../storage';
 import { loadTasks, readTasksVouched, saveTasks } from '../tasks';
-import { loadLedger, pendingKeys } from '../syncLedger';
+import {
+  digestOf,
+  loadLedger,
+  pendingKeys,
+  recordPushed,
+  resetFor,
+  unvouchedKeys,
+  unvouchedNote,
+} from '../syncLedger';
+import { NO_RUNS, statusOf } from '../hooks/autoBackupPolicy';
 import { emptyMonthData } from '../types';
 import type { Task } from '../tasks';
 
@@ -181,6 +190,7 @@ const AFTER_THE_TYPING_STOPS = 1_000;
 
 const MONTH_BLOB = '@monthly-planning/2026-09';
 const TASKS_BLOB = '@monthly-planning/tasks';
+const LEDGER_BLOB = '@monthly-planning/sync-ledger';
 
 const month = {
   ...emptyMonthData(),
@@ -407,5 +417,237 @@ describe('a deadline list this phone read in full', () => {
 
     expect(deadlines.shown.tasks).toEqual([]);
     expect(deadlines.shown.vouched).toBe(true);
+  });
+});
+
+/**
+ * What the screen tells the backup about the record it just read.
+ *
+ * The guards above stop a half-read record being written back, which saves the
+ * data and leaves the evidence on disk. They do not tell anybody. A backup run
+ * only ever looks at documents whose contents changed; a month that rotted on
+ * disk changed nothing, so no run examined it, nothing was ever blocked, and
+ * the card in Settings said "Backed up. Everything on this phone is in the
+ * backup." over a September missing a third of itself — with no way offered to
+ * fetch the whole one the server was holding. Reading the record is the only
+ * moment anybody finds out, so reading it is when it gets written down.
+ */
+describe('telling the backup about a record this phone cannot read', () => {
+  /** A backup id of the shape `deriveBackupId` produces, without the crypto */
+  const ID = 'a'.repeat(64);
+
+  /**
+   * Give the ledger's own read-modify-write queue its turns. It is a chain of
+   * promises behind the same storage the hooks use, so it lands a few
+   * microtasks after the render that started it.
+   */
+  async function ledgerSettled() {
+    for (let turn = 0; turn < 24; turn++) await Promise.resolve();
+    return loadLedger();
+  }
+
+  it('writes down what was lost, in the words the voucher used', async () => {
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+
+    const ledger = await ledgerSettled();
+    expect(unvouchedKeys(ledger)).toEqual(['2026-09']);
+    expect(unvouchedNote(ledger, '2026-09')).toBe('1 of 2 habits, 1 grid entry');
+  });
+
+  it('does not mark the month dirty, and does not give the backup a reason to run', async () => {
+    // The one that matters most. A dirty flag here would carry the surviving
+    // third of September to the server over the whole copy already sitting
+    // there — the exact loss the guard above refuses to commit to disk, done to
+    // the one copy that is not on this phone. Nothing was edited, so nothing is
+    // waiting, and a phone that has noticed a damaged month still costs no
+    // request, no anonymous sign-in and nothing on the wire.
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await planner.settle();
+
+    const ledger = await ledgerSettled();
+    expect(ledger.dirty).toEqual({});
+    expect(pendingKeys(ledger)).toEqual([]);
+  });
+
+  it('leaves the note where the next launch will find it', async () => {
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+    await ledgerSettled();
+
+    // nothing in this process: the ledger is a file, and this is the file
+    expect(JSON.parse(mockLocal.get(LEDGER_BLOB)!)).toMatchObject({
+      unvouched: { '2026-09': '1 of 2 habits, 1 grid entry' },
+    });
+  });
+
+  it('stops the card claiming everything on this phone is in the backup', async () => {
+    // End to end, and the sentence this whole change exists to stop. The phone
+    // has backed up, nothing is dirty, nothing was refused; every other signal
+    // says settled, and September is missing half of itself.
+    await resetFor(ID);
+    await recordPushed('2026-09', digestOf('september as it was'), 0);
+    expect(statusOf(await loadLedger(), NO_RUNS).reconciled).toBe(true);
+
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+
+    const status = statusOf(await ledgerSettled(), NO_RUNS);
+    expect(status.reconciled).toBe(false);
+    expect(status.damaged).toEqual([
+      { key: '2026-09', lost: '1 of 2 habits, 1 grid entry' },
+    ]);
+    // and still nothing waiting, because there is nothing here to send
+    expect(status.waiting).toEqual([]);
+  });
+
+  it('says nothing at all about a month it read in full', async () => {
+    // An undamaged phone does not so much as create the file.
+    await saveMonth(2026, 8, month);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await planner.settle();
+    await ledgerSettled();
+
+    expect(mockLocal.has(LEDGER_BLOB)).toBe(false);
+  });
+
+  it('takes the note back when somebody repairs the month', async () => {
+    // The first way out, and the one both backup screens describe: write in the
+    // month and the record goes back to disk whole. The card has to stop
+    // calling it damaged the moment that lands, because a way out that does not
+    // say it worked is not one.
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+    expect(unvouchedKeys(await ledgerSettled())).toEqual(['2026-09']);
+
+    planner.shown.renameHabit('0', 'Walk');
+    await planner.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await planner.settle();
+
+    const ledger = await ledgerSettled();
+    expect(unvouchedKeys(ledger)).toEqual([]);
+    // and the edit is waiting to go, exactly as any other edit would be
+    expect(pendingKeys(ledger)).toEqual(['2026-09']);
+  });
+
+  it('keeps the note when somebody typed but nothing was written', async () => {
+    // The narrow case `flushSave` reports without saving. The flag is right —
+    // the phone holds something the backup has not seen — and the note is right
+    // too, because the record on disk is still the damaged one. Clearing it
+    // here would be the app going quiet about a month it knows it cannot read.
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+    planner.shown.renameHabit('0', 'Walk');
+    // no settle, so the save effect has not run and there is nothing pending
+    planner.shown.flushSave();
+    await planner.settle();
+
+    const ledger = await ledgerSettled();
+    expect(mockLocal.get(MONTH_BLOB)).toBe(halfReadableMonth);
+    expect(unvouchedKeys(ledger)).toEqual(['2026-09']);
+  });
+
+  it('takes it back when the whole month is put back from the backup', async () => {
+    // The second way out. `restoreMonth` writes the backup's copy straight to
+    // disk without going anywhere near this hook, so what retires the note here
+    // is the next read: a record this phone can vouch for is the only proof of
+    // a whole one there is.
+    mockLocal.set(MONTH_BLOB, halfReadableMonth);
+
+    const damaged = mount(() => useMonthData(2026, 8, null));
+    await damaged.settle();
+    expect(unvouchedKeys(await ledgerSettled())).toEqual(['2026-09']);
+
+    // what the restore leaves behind: both habits and both marks, on disk
+    await saveMonth(2026, 8, month);
+
+    const restored = mount(() => useMonthData(2026, 8, null));
+    await restored.settle();
+
+    expect(restored.shown.vouched).toBe(true);
+    expect(unvouchedKeys(await ledgerSettled())).toEqual([]);
+  });
+
+  it('names a document even when it cannot say what was lost', async () => {
+    // Bytes that are not a month at all. Nothing survived to be counted against
+    // anything, so there is no phrase — and the month is named anyway, because
+    // being unable to describe the damage is not being unable to see it.
+    mockLocal.set(MONTH_BLOB, '{not json');
+
+    const planner = mount(() => useMonthData(2026, 8, null));
+    await planner.settle();
+
+    const ledger = await ledgerSettled();
+    expect(unvouchedKeys(ledger)).toEqual(['2026-09']);
+    expect(unvouchedNote(ledger, '2026-09')).toBe('');
+    expect(statusOf(ledger, NO_RUNS).damaged).toEqual([{ key: '2026-09' }]);
+  });
+});
+
+describe('telling the backup about a deadline list this phone cannot read', () => {
+  async function ledgerSettled() {
+    for (let turn = 0; turn < 24; turn++) await Promise.resolve();
+    return loadLedger();
+  }
+
+  it('writes it down under the document the open list travels in', async () => {
+    // The deadlines are one record on this phone; the year shards are only how
+    // that record is divided up on the way to the server. `current` is the one
+    // every edit touches, so it is the one to name.
+    mockLocal.set(TASKS_BLOB, halfReadableTasks);
+
+    const deadlines = mount(() => useTasks());
+    await deadlines.settle();
+
+    const ledger = await ledgerSettled();
+    expect(unvouchedKeys(ledger)).toEqual(['current']);
+    expect(unvouchedNote(ledger, 'current')).toBe('1 of 2 deadlines');
+    // and nothing is waiting: the only list this phone holds is the rows that
+    // survived, and sending those would empty the archive of the ones that did not
+    expect(pendingKeys(ledger)).toEqual([]);
+  });
+
+  it('takes it back when somebody rebuilds the list', async () => {
+    mockLocal.set(TASKS_BLOB, halfReadableTasks);
+
+    const deadlines = mount(() => useTasks());
+    await deadlines.settle();
+    expect(unvouchedKeys(await ledgerSettled())).toEqual(['current']);
+
+    deadlines.shown.addTask();
+    await deadlines.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await deadlines.settle();
+
+    expect(unvouchedKeys(await ledgerSettled())).toEqual([]);
+  });
+
+  it('says nothing at all about a list it read in full', async () => {
+    await saveTasks([deadline]);
+
+    const deadlines = mount(() => useTasks());
+    await deadlines.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await deadlines.settle();
+    await ledgerSettled();
+
+    expect(mockLocal.has(LEDGER_BLOB)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Task, nextTaskId, readTasksForEditing, saveTasks } from '../tasks';
-import { markDirty } from '../syncLedger';
+import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 
 /**
  * The deadline list: what's on it, and every way it can change.
@@ -85,7 +85,26 @@ export function useTasks(): TaskStore {
 
   useEffect(() => {
     let cancelled = false;
-    readTasksForEditing().then(({ data, complete }) => {
+    readTasksForEditing().then(({ data, complete, lost }) => {
+      /**
+       * What this read found, told to the ledger, for the reason set out at
+       * length in `useMonthData`: a record damaged on disk changes nothing, the
+       * backup only ever looks at what changed, and so a screen reading it is
+       * the one moment anybody finds out. A local write, no dirty flag, and no
+       * run — a list this phone cannot read has nothing the backup should be
+       * sent, since the only thing it could send is the rows that survived.
+       *
+       * Filed under `current` alone, though the damage is not really about one
+       * document at all: the deadlines are a single record on this phone, and
+       * the year shards are how that record is divided up on the way to the
+       * server. `current` is the one every edit touches and the one that
+       * carries the open list, so it is the document to name. Naming every
+       * shard the ledger has ever heard of would need a ledger read this hook
+       * has no other reason to make, and would say the same thing five times.
+       */
+      if (complete) clearUnvouched(CURRENT);
+      else recordUnvouched(CURRENT, lost ?? '');
+
       if (cancelled) return;
       vouched.current = complete;
       setTasks(data);
@@ -138,6 +157,15 @@ export function useTasks(): TaskStore {
     const keys = [...touched.current];
     touched.current.clear();
     for (const key of keys) markDirty(key);
+    /**
+     * And the list is no longer one this phone cannot read. This is only ever
+     * called from the debounce, immediately after the whole list has gone to
+     * disk, so by here the record really has been rewritten whole — which is
+     * what makes adding a deadline the repair the backup screens describe.
+     * Under `current`, because that is the only key the note is ever filed
+     * under; free when there was nothing noted.
+     */
+    clearUnvouched(CURRENT);
   }, []);
 
   /**

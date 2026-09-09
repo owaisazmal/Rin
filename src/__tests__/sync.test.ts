@@ -8,6 +8,7 @@ import {
   pushMonth,
   pushTasks,
   restoreEverything,
+  restoreMonth,
 } from '../sync';
 import { loadMonth, readMonthForEditing, readMonthVouched, saveMonth } from '../storage';
 import { loadTasks, saveTasks } from '../tasks';
@@ -331,8 +332,13 @@ describe('when it cannot work', () => {
     await expect(listMonths(CODE)).resolves.toMatchObject({ ok: false });
   });
 
-  it('re-parses what comes back instead of trusting it', async () => {
-    // a record that decrypts but says something the app does not understand
+  /**
+   * This used to expect an empty month back, on the grounds that re-parsing
+   * whatever arrives is better than trusting it. Re-parsing is right and
+   * handing the result over is not: the answer went to `restoreEverything`,
+   * which wrote it to disk over the month this phone already had.
+   */
+  it('refuses a month that decrypts but says something it cannot read', async () => {
     const { seal } = jest.requireActual('../backup') as typeof import('../backup');
     await pushMonth(CODE, 2026, 8, month);
     const [path] = [...mockDocs.keys()];
@@ -340,8 +346,10 @@ describe('when it cannot work', () => {
       ...seal(deriveKey(CODE), JSON.stringify({ habits: 'not an array', grid: 42 })),
       updatedAt: '<server-time>',
     });
-    const result = await pullMonth(CODE, 2026, 8);
-    expect(result).toEqual({ ok: true, value: emptyMonthData() });
+    await expect(pullMonth(CODE, 2026, 8)).resolves.toEqual({
+      ok: false,
+      reason: 'unreadable',
+    });
   });
 
   it('refuses a month too big for the rules without sending it', async () => {
@@ -1361,5 +1369,309 @@ describe('a restore that could not bring the deadlines down', () => {
     await saveMonth(2026, 0, month);
     await restoreEverything(CODE);
     expect(pendingKeys(await loadLedger())).toEqual(['2026-01']);
+  });
+});
+
+/**
+ * The same rule, pointed the other way.
+ *
+ * Everything above is about what leaves this phone. Nothing arriving used to be
+ * vouched for at all: a document was decrypted, handed to a deliberately lossy
+ * parser, and whatever survived was written to disk over the copy that was
+ * already there. That is the outbound bug read backwards, and it is the worse
+ * half of it — the record it overwrites is the one on somebody's phone, and
+ * there is no server to fall back to afterwards.
+ *
+ * So a payload gets the same question a stored record gets, from the same
+ * function, and a restore writes nothing it cannot answer for.
+ */
+describe('never writing what came down and cannot be vouched for', () => {
+  /** Puts arbitrary plaintext into a document the backup already holds */
+  function tamper(suffix: string, plaintext: string) {
+    const { seal } = jest.requireActual('../backup') as typeof import('../backup');
+    const path = `backups/${deriveBackupId(CODE)}/${suffix}`;
+    mockDocs.set(path, { ...seal(deriveKey(CODE), plaintext), updatedAt: '<server-time>' });
+  }
+
+  it('never writes a half-parsed month over the copy this phone already holds', async () => {
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+
+    // The server's copy goes half-readable — a newer build wrote it, or the
+    // write was corrupted, or the transfer was truncated. It decrypts, it is a
+    // month, and it parses to less than it holds, which is the one shape that
+    // used to sail through: not a decryption failure, not a JSON failure, just
+    // an ordinary-looking month with a third of it gone.
+    tamper('months/2026-09', halfReadable);
+
+    await expect(restoreEverything(CODE)).resolves.toEqual({
+      ok: true,
+      months: 0,
+      skipped: 1,
+      deadlines: 'none',
+    });
+
+    // the phone's own September is untouched, and still whole
+    await expect(loadMonth(2026, 8)).resolves.toEqual(twoHabits);
+    await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+  });
+
+  it('counts a half-parsed month exactly as one that would not decrypt', async () => {
+    await saveMonth(2026, 0, month);
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+
+    tamper('months/2026-09', halfReadable);
+    const [january] = [...mockDocs.keys()].filter((k) => k.endsWith('2026-01'));
+    mockDocs.set(january, { ...mockDocs.get(january)!, ct: 'QQQQ' });
+
+    // one document will not open and the other opens onto less than it holds;
+    // the restore has to say the same thing about both, so the screen can
+    await expect(restoreEverything(CODE)).resolves.toMatchObject({
+      ok: true,
+      months: 0,
+      skipped: 2,
+    });
+  });
+
+  it('pulls a month back whole when the document really is whole', async () => {
+    // the guard above is only worth having if it lets an ordinary month past
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+    mockLocal.clear();
+
+    await expect(restoreEverything(CODE)).resolves.toMatchObject({ ok: true, months: 1 });
+    await expect(loadMonth(2026, 8)).resolves.toEqual(twoHabits);
+  });
+
+  /**
+   * The deadline half, and the quieter of the two. A shard that will not
+   * decrypt was already counted; one that decrypts to a perfectly good array
+   * with a row missing from it was not counted at all — so the restore poured
+   * the short list over the phone's own and called it a clean success.
+   */
+  it('leaves the deadlines alone when a document opens with rows missing from it', async () => {
+    await saveMonth(2026, 8, month);
+    await saveTasks([tasks[0], finishedIn2024]);
+    await backupEverything(CODE);
+
+    // the 2024 archive still decrypts and is still an array of deadlines. One
+    // of its rows is simply not one this build can read.
+    tamper('tasks/2024', JSON.stringify([finishedIn2024, { ...finishedIn2024, id: 7 }]));
+
+    // another phone, holding deadlines that exist nowhere else
+    mockLocal.clear();
+    const mine = [tasks[0], alsoOpen, finishedIn2025];
+    await saveTasks(mine);
+
+    await expect(restoreEverything(CODE)).resolves.toEqual({
+      ok: true,
+      months: 1,
+      skipped: 0,
+      deadlines: 'partial',
+    });
+    await expect(loadTasks()).resolves.toEqual(mine);
+    // and nothing here claims to be the backup's copy of a deadline document,
+    // so this phone's own list is left waiting to be sent rather than orphaned
+    expect(pendingKeys(await loadLedger())).toEqual(['2025', 'current']);
+  });
+
+  it('never empties the local list over a shard that is not a deadline list at all', async () => {
+    await saveMonth(2026, 8, month);
+    await saveTasks([tasks[0]]);
+    await backupEverything(CODE);
+
+    // it decrypts, and it is JSON, and it is not a list — which used to parse
+    // to an empty array and reach the phone as "the backup holds no deadlines"
+    tamper('tasks/current', JSON.stringify({ deadlines: 'moved' }));
+
+    mockLocal.clear();
+    await saveTasks([alsoOpen]);
+    await expect(restoreEverything(CODE)).resolves.toMatchObject({
+      ok: true,
+      deadlines: 'unreadable',
+    });
+    await expect(loadTasks()).resolves.toEqual([alsoOpen]);
+  });
+
+  it('still brings a deadline list down when every row of it arrives', async () => {
+    await saveMonth(2026, 8, month);
+    await saveTasks([tasks[0], finishedIn2024]);
+    await backupEverything(CODE);
+
+    mockLocal.clear();
+    await expect(restoreEverything(CODE)).resolves.toMatchObject({ deadlines: 'restored' });
+    await expect(loadTasks()).resolves.toEqual([tasks[0], finishedIn2024]);
+  });
+});
+
+/**
+ * The way out of the one trap the vouching leaves behind.
+ *
+ * `has nothing left to catch once a damaged month has been re-saved`, further
+ * up this file, is the trap itself, and it is standing evidence rather than a
+ * bug fixed: a month whose record rotted on disk is drawn from the survivors
+ * and never sent, which keeps the whole copy safe on the server, right up until
+ * somebody does what the card tells them and writes in the month. From that
+ * save on the thinned version is an ordinary healthy record with nothing left
+ * anywhere to say what it lost, and the next run carries it over the better
+ * copy.
+ *
+ * So the repair is made in the other direction: one month, pulled down and
+ * written over the damaged one. Everything below is about the three ways that
+ * could itself destroy something — writing a payload this phone cannot vouch
+ * for, writing over a month the backup never held, and sending the month
+ * straight back up over the document it was just copied from.
+ */
+describe('pulling one damaged month back', () => {
+  /** Puts a month into the backup as another phone on the same code would */
+  function publish(suffix: string, plaintext: string) {
+    const { seal } = jest.requireActual('../backup') as typeof import('../backup');
+    const path = `backups/${deriveBackupId(CODE)}/${suffix}`;
+    mockDocs.set(path, { ...seal(deriveKey(CODE), plaintext), updatedAt: '<server-time>' });
+  }
+
+  /** The state the offer is made in: a good copy up there, a rotted one here */
+  async function damaged() {
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+    mockLocal.set(monthBlob('2026-09'), halfReadable);
+    await markDirty('2026-09');
+  }
+
+  it('replaces the damaged copy with the whole month from the backup', async () => {
+    await damaged();
+    // what the planner is drawing, and what it is not allowed to write back
+    await expect(readMonthForEditing(2026, 8)).resolves.toMatchObject({ complete: false });
+
+    await expect(restoreMonth(CODE, 2026, 8)).resolves.toEqual({ ok: true, value: twoHabits });
+
+    // both habits and both marks are on the phone again, and the record is one
+    // this phone can now vouch for, so an edit to it is an ordinary edit
+    await expect(loadMonth(2026, 8)).resolves.toEqual(twoHabits);
+    await expect(readMonthForEditing(2026, 8)).resolves.toEqual({
+      data: twoHabits,
+      complete: true,
+    });
+  });
+
+  /**
+   * The half that costs a write rather than data, and the reason the ledger is
+   * told anything at all. The backup here holds a September this phone never
+   * sent — another phone on the same code added a habit — so what comes down
+   * disagrees with the digest on record exactly as an edit would, and without
+   * the seed the very next run would seal the restored month and send it back
+   * over the document it was copied from.
+   */
+  it('does not send the month straight back up over the one it came from', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    publish('months/2026-09', JSON.stringify(twoHabits));
+    mockLocal.set(monthBlob('2026-09'), halfReadable);
+    await markDirty('2026-09');
+
+    await restoreMonth(CODE, 2026, 8);
+    const sent = mockState.writes;
+    await backupEverything(CODE);
+
+    expect(mockState.writes).toBe(sent);
+    expect(readBack('months/2026-09')).toEqual(twoHabits);
+  });
+
+  /**
+   * One month restored accounts for one document. The digests for every other
+   * month are this phone's belief about the same server and are still true, so
+   * replacing the map rather than adding to it would re-send the whole history
+   * to repair a single month.
+   */
+  it('leaves the rest of the history accounted for rather than re-sending it', async () => {
+    await saveMonth(2026, 0, month);
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    publish('months/2026-09', JSON.stringify(twoHabits));
+    mockLocal.set(monthBlob('2026-09'), halfReadable);
+    await markDirty('2026-09');
+
+    await restoreMonth(CODE, 2026, 8);
+    const sent = mockState.writes;
+    await backupEverything(CODE);
+
+    // January was never touched by any of this and does not go up again
+    expect(mockState.writes).toBe(sent);
+  });
+
+  it('stops calling the month damaged once the damage has been replaced', async () => {
+    await damaged();
+    await backupEverything(CODE);
+    expect((await loadLedger()).blocked).toContain('2026-09');
+
+    await restoreMonth(CODE, 2026, 8);
+
+    // the park was put on against bytes that are no longer on this phone, and a
+    // way out that leaves the card still reporting the fault has not worked
+    expect((await loadLedger()).blocked).not.toContain('2026-09');
+  });
+
+  /**
+   * The inbound half of the rule the whole file is built on. A document that
+   * decrypts to a well-formed month with a third of it missing is the one shape
+   * that looks like nothing at all going wrong, and writing it here would be
+   * the same silent deletion as sending the survivors, aimed at the phone.
+   */
+  it('refuses a month that arrives with part of it missing rather than writing it', async () => {
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+    publish('months/2026-09', halfReadable);
+
+    await expect(restoreMonth(CODE, 2026, 8)).resolves.toEqual({
+      ok: false,
+      reason: 'unreadable',
+    });
+    // nothing was written, so the phone still holds what it held
+    await expect(loadMonth(2026, 8)).resolves.toEqual(twoHabits);
+    await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+  });
+
+  it('says so, and writes nothing, when the backup has never held that month', async () => {
+    mockLocal.set(monthBlob('2026-09'), halfReadable);
+
+    await expect(restoreMonth(CODE, 2026, 8)).resolves.toEqual({
+      ok: false,
+      reason: 'missing',
+    });
+    // the damaged record is the only copy there is, and it is still here
+    expect(mockLocal.get(monthBlob('2026-09'))).toBe(halfReadable);
+  });
+
+  it('leaves the month alone when the request never arrived', async () => {
+    mockLocal.set(monthBlob('2026-09'), halfReadable);
+    mockState.failWith = 'firestore/unavailable';
+
+    await expect(restoreMonth(CODE, 2026, 8)).resolves.toEqual({
+      ok: false,
+      reason: 'offline',
+    });
+    expect(mockLocal.get(monthBlob('2026-09'))).toBe(halfReadable);
+  });
+
+  /**
+   * `saveMonth` is best-effort and swallows whatever went wrong, so the write
+   * is a belief rather than a fact — and this is why the dirty flag is left
+   * standing afterwards instead of being retired along with the park. The next
+   * run reads the month, finds the damage still there, and parks it again.
+   * Retiring the flag would have that run skip the month unread from then on,
+   * and the card would call a damaged month backed up.
+   */
+  it('finds the damage again when the write it made never landed', async () => {
+    await damaged();
+    const setItem = AsyncStorage.setItem as jest.MockedFunction<typeof AsyncStorage.setItem>;
+    setItem.mockImplementationOnce(async () => undefined);
+
+    await expect(restoreMonth(CODE, 2026, 8)).resolves.toMatchObject({ ok: true });
+
+    await expect(backupEverything(CODE)).resolves.toMatchObject({
+      blocked: [{ key: '2026-09', reason: 'incomplete', detail: '1 of 2 habits, 1 grid entry' }],
+    });
+    expect(readBack('months/2026-09')).toEqual(twoHabits);
   });
 });

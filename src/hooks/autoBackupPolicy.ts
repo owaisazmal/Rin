@@ -1,5 +1,5 @@
 import type { BackupRun, BlockedDoc } from '../sync';
-import { Ledger, pendingCount, pendingKeys } from '../syncLedger';
+import { Ledger, pendingCount, pendingKeys, unvouchedKeys, unvouchedNote } from '../syncLedger';
 
 /**
  * When the phone backs up on its own, and what the card is allowed to say about it.
@@ -55,6 +55,18 @@ import { Ledger, pendingCount, pendingKeys } from '../syncLedger';
  *     refused has to be a reason to run in its own right. Both are below, and
  *     between them they are the difference between an install refused for an
  *     afternoon and one refused for good.
+ *   * **And does any of that outlive the app being closed?** It did not. All
+ *     three of the answers above were facts about one process, so a phone that
+ *     was refused and then shut sat down again knowing nothing: the park was
+ *     off, the refused documents had no dirty flag of their own to raise, the
+ *     ledger was bound and dated, and so nothing was waiting, nothing was
+ *     stuck, and the card said everything was in the backup over documents
+ *     that had never gone. It is the same silence the park produced, reached
+ *     from the other side, and the answer is the same shape as the fix that
+ *     caused it: not a per-document park, which is what could not go down
+ *     again, but a count of what the last finished run was turned away from —
+ *     `turnedAway` on `RunMemory`, written down by `backupRuns` and rewritten
+ *     by the next finished run, whether that is up, down, or to nothing.
  */
 
 /**
@@ -140,12 +152,49 @@ export interface Refusal {
   detail?: string;
 }
 
+/**
+ * A document this phone cannot read in full off its own disk.
+ *
+ * Deliberately not a `Refusal`, though the card will want to say something
+ * about both, because the cause and the way out are opposites. A refusal is the
+ * server saying no to bytes this phone was happy with, and it is fixed by
+ * trying again — a smaller month, a fresh token, a network that works. This is
+ * the phone's own copy being unreadable, which no amount of retrying touches:
+ * what fixes it is a whole record, either the copy in the backup put back over
+ * it or somebody rewriting the month by hand. Folding the two into one list
+ * would have the card offering "try again" for the one thing trying again
+ * cannot mend.
+ */
+export interface Damage {
+  /** the document's name on the server: `2026-09`, `current`, `2024` */
+  key: string;
+  /**
+   * What the voucher could not account for — `2 of 12 habits, 1 grid entry`.
+   *
+   * Absent rather than invented, exactly as `Refusal.reason` is: a record that
+   * could not be read at all leaves nothing to count, and a note that outlived
+   * the words it was written with is a note the card may name but not
+   * describe.
+   */
+  lost?: string;
+}
+
 /** Everything the Settings card needs to describe the backup honestly */
 export interface BackupStatus {
   /** documents this phone holds that the backup does not, refusals aside */
   waiting: string[];
   /** what the server turned down, with a reason where this launch has one */
   blocked: Refusal[];
+  /**
+   * Documents this phone has read and could not understand in full.
+   *
+   * Not a refusal, and not something waiting either: there is nothing here the
+   * backup should be sent, because the only version of one of these documents
+   * this phone holds is the part that survived the parse. It is on the card for
+   * the opposite reason — the backup may well hold the whole thing, and until
+   * this list existed there was no state in which the app ever offered it.
+   */
+  damaged: Damage[];
   /**
    * Whether anything has ever checked this phone against the backup.
    *
@@ -158,7 +207,12 @@ export interface BackupStatus {
 }
 
 /** Stable identity for the state before anything is known, and for no code at all */
-export const NOTHING: BackupStatus = { waiting: [], blocked: [], reconciled: false };
+export const NOTHING: BackupStatus = {
+  waiting: [],
+  blocked: [],
+  damaged: [],
+  reconciled: false,
+};
 
 /**
  * Has anything ever accounted for this phone against the backup it holds a code
@@ -191,19 +245,25 @@ export function isReconciled(ledger: Ledger, accounted: boolean): boolean {
 }
 
 /**
- * The ledger, plus what this launch knows that the ledger cannot hold, as the
- * card reads it.
+ * The ledger, plus what the runs know that the ledger cannot hold, as the card
+ * reads it.
  *
- * `refusals` is why a document is stuck, which the ledger deliberately does not
- * store: it remembers the keys across launches, but a reason recorded weeks ago
- * could easily be wrong now, so a phone that has not run since it started says
- * what it can see and leaves the reason out.
+ * It takes the whole `RunMemory` rather than the two or three fields it happens
+ * to need, and that is on purpose. The card and the trigger have to agree about
+ * whether this phone is behind, and the way they stopped agreeing last time was
+ * a field added to one of two argument lists: `turnedAway` reached `shouldRun`
+ * and never reached here, so the card went on saying everything was in the
+ * backup about documents the run had just been refused. One argument cannot be
+ * half passed.
+ *
+ * `memory.refusals` is why a document is stuck, which is deliberately not
+ * written down anywhere: the ledger remembers the keys it parks across
+ * launches, but a reason recorded weeks ago could easily be wrong now, so a
+ * phone that has not run since it started says what it can see and leaves the
+ * reason out.
  */
-export function statusOf(
-  ledger: Ledger,
-  refusals: ReadonlyMap<string, BlockedDoc>,
-  accounted: boolean
-): BackupStatus {
+export function statusOf(ledger: Ledger, memory: RunMemory): BackupStatus {
+  const { refusals, accounted } = memory;
   /**
    * Two lists, and the second one is why this is not simply `ledger.blocked`.
    *
@@ -219,6 +279,23 @@ export function statusOf(
   const turnedAside = [...refusals.values()]
     .filter((doc) => doc.reason === 'rejected' && !ledger.blocked.includes(doc.key))
     .map((doc) => doc.key);
+
+  /**
+   * What the phone has said about its own copies, read straight off the ledger.
+   *
+   * It comes from the ledger rather than from a run because that is the entire
+   * point of putting it there. A month damaged on disk has not changed, so no
+   * run ever picks it up, so no run has anything to say about it — which is how
+   * a phone with an unreadable September sat here reading as fully reconciled.
+   * The screens write these notes down as they read the records, so the card
+   * knows without a run, without a request, and without a sign-in.
+   */
+  const damaged: Damage[] = unvouchedKeys(ledger).map((key) => {
+    const lost = unvouchedNote(ledger, key);
+    // an empty phrase is a record nothing survived of, so there is nothing to
+    // name and the field is left off rather than filled with an empty string
+    return lost ? { key, lost } : { key };
+  });
 
   return {
     /**
@@ -236,7 +313,33 @@ export function statusOf(
      * document can honestly be in both.
      */
     blocked: [...ledger.blocked, ...turnedAside].map((key) => refusals.get(key) ?? { key }),
-    reconciled: isReconciled(ledger, accounted),
+    damaged,
+    /**
+     * Three questions now, and the phone has to pass all of them before the
+     * card may say the backup holds everything.
+     *
+     * `isReconciled` is the older one: has anything ever *looked*? The count is
+     * the newer one and it is about a phone that has been looked at and told
+     * no. On the launch the refusal happened in, the list above says so out
+     * loud and the wording leads with it; on the launch after, all that
+     * survives is the count, and without this line the card would fall through
+     * to "everything on this phone is in the backup" over exactly the documents
+     * that did not go. It says less than it could — it cannot name them, since
+     * naming them across launches is the park that could not be lifted — but
+     * what it says is true, and a run is usually seconds away from replacing it
+     * with something better.
+     *
+     * And the third is the damage, which is the newest and the plainest. "This
+     * phone holds a record it cannot read" and "everything on this phone is in
+     * the backup" cannot both be said, and until now the second one was said
+     * anyway — over a September with a habit missing, on a card that offered
+     * nothing to do about it. The claim is what this withholds, and only the
+     * claim: a run is unaffected, because `shouldRun` reads `isReconciled`
+     * rather than this and a damaged month is not something to send. What
+     * changes is that the card can now name it, and offer the copy in the
+     * backup while there is still one to offer.
+     */
+    reconciled: memory.turnedAway === 0 && damaged.length === 0 && isReconciled(ledger, accounted),
   };
 }
 
@@ -245,7 +348,10 @@ export function stampOf(status: BackupStatus): string {
   const blocked = status.blocked.map(
     (doc) => `${doc.key}:${doc.reason ?? ''}:${doc.detail ?? ''}`
   );
-  return `${status.waiting.join(',')}|${blocked.join(',')}|${status.reconciled}`;
+  // the phrase is in here as well as the key, because a month that was read
+  // again and found to have lost more of itself is a card that has to change
+  const damaged = status.damaged.map((doc) => `${doc.key}:${doc.lost ?? ''}`);
+  return `${status.waiting.join(',')}|${blocked.join(',')}|${damaged.join(',')}|${status.reconciled}`;
 }
 
 /**
@@ -316,11 +422,15 @@ export function turnedAway(blocked: readonly BlockedDoc[]): string[] {
 /**
  * What the hook remembers between runs.
  *
- * None of it is written down. `settled` and `attempted` are facts about this
- * process, and `refusals` is deliberately not persisted — the ledger remembers
- * *which* documents are stuck across launches, because that survives being
- * turned off overnight, but a reason recorded weeks ago could easily be wrong
- * now.
+ * Almost none of it is written down, and the exception is the last field.
+ * `settled` and `attempted` are facts about this process, and `refusals` is
+ * deliberately not persisted — the ledger remembers *which* documents are stuck
+ * across launches, because that survives being turned off overnight, but a
+ * reason recorded weeks ago could easily be wrong now.
+ *
+ * `turnedAway` is the one thing here that has to survive the process, because
+ * for a document the server refused it is the only record anywhere that the
+ * document did not go. See its own note, and `backupRuns` for where it is kept.
  */
 export interface RunMemory {
   /**
@@ -347,6 +457,25 @@ export interface RunMemory {
    * launch that claims to have checked it, and no reason to ever run again.
    */
   accounted: boolean;
+  /**
+   * How many documents the last finished run was turned away from by the
+   * server, and the only field here that is written down.
+   *
+   * It has to be, because for one of those documents there is nothing else. The
+   * park comes off — that is what stops one expired token being permanent — and
+   * a document refused without a dirty flag of its own then leaves no trace on
+   * disk at all: the ledger reads exactly like a phone that has sent
+   * everything. Keeping it in the process meant the phone forgot at the first
+   * restart and went quiet for good, which is the same silence the park caused.
+   *
+   * A count rather than the keys, and that is the whole of why it is safe. It
+   * says the phone is behind without saying which document is at fault, which
+   * is all either the card or the trigger needs, and it cannot become the
+   * per-document silence it replaces: every *finished* run replaces it with
+   * what that run was refused, and a finished run refused nothing sets it to
+   * zero. It can go down, and it goes down on its own.
+   */
+  turnedAway: number;
 }
 
 /** The state before anything has been attempted */
@@ -356,6 +485,7 @@ export const NO_RUNS: RunMemory = {
   setbacks: 0,
   refusals: new Map(),
   accounted: false,
+  turnedAway: 0,
 };
 
 /** Everything the hook does once a run is over, decided as a value */
@@ -368,6 +498,17 @@ export interface Aftermath {
   unpark: string[];
   /** Whether bytes reached the server, which is the only thing that dates a backup */
   dated: boolean;
+  /**
+   * Whether this run got a real answer, and so may replace what the phone has
+   * written down about being turned away.
+   *
+   * Only a finished run may. An attempt that never got out learned nothing
+   * about which documents are on the server, so overwriting the record with its
+   * silence would erase the one thing standing between this phone and a backup
+   * it never makes again — the same erasure `retryEverything` was written to
+   * stop doing before the run.
+   */
+  answered: boolean;
 }
 
 /**
@@ -420,9 +561,16 @@ export function aftermath(
       // that was turned away has not checked anything either, which is the same
       // `stalled` the two lines above are governed by and for the same reason.
       accounted: before.accounted || !stalled,
+      // Replaced outright by a run that got an answer, and left alone by one
+      // that did not. Outright rather than added to: this is what the last
+      // finished run was refused, not a tally of every refusal there has ever
+      // been, so a server that comes back to its senses takes it to zero in one
+      // run and a status that could only climb never exists.
+      turnedAway: finished ? unpark.length : before.turnedAway,
     },
     unpark,
     dated: sentAnything(result),
+    answered: finished,
   };
 }
 
@@ -456,7 +604,7 @@ export interface Moment {
   /** how many attempts in a row have got nothing through at the far end */
   setbacks: number;
   /**
-   * How many documents this launch knows the server turned this install away
+   * How many documents the phone knows the server turned this install away
    * from.
    *
    * It is here because the ledger cannot hold the answer. A refusal about the
@@ -464,9 +612,14 @@ export interface Moment {
    * what left a phone unable to back up after one expired token — so once the
    * run is over the ledger has nothing to say about those documents at all. For
    * one that was dirty that is fine, since it is waiting again and counted
-   * below; for one that was never dirty, this launch's memory of the run is the
-   * only place the refusal exists, and without it the phone would sit there
-   * reconciled, with nothing waiting, over documents that did not go.
+   * below; for one that was never dirty, this count is the only place the
+   * refusal exists, and without it the phone would sit there reconciled, with
+   * nothing waiting, over documents that did not go.
+   *
+   * Which is why it is the one thing about a run that is written down. It used
+   * to be this launch's memory alone, and a memory is gone by the time somebody
+   * opens the app again — so the phone recovered from an expired token only if
+   * it was never closed in between, which is not how anybody uses a phone.
    */
   turnedAway: number;
   /** how long ago a run was last attempted, in milliseconds */

@@ -264,15 +264,15 @@ describe('what the card is allowed to assert', () => {
   });
 
   it('carries the answer through to the card', () => {
-    const unknown = statusOf(emptyLedger(ID), new Map(), false);
+    const unknown = statusOf(emptyLedger(ID), memory());
     expect(unknown.reconciled).toBe(false);
     expect(unknown.waiting).toEqual([]);
-    expect(statusOf(settledLedger(), new Map(), false).reconciled).toBe(true);
+    expect(statusOf(settledLedger(), memory()).reconciled).toBe(true);
   });
 
   it('is not the same status merely because both have nothing waiting', () => {
-    const unknown = statusOf(emptyLedger(ID), new Map(), false);
-    const verified = statusOf(settledLedger(), new Map(), false);
+    const unknown = statusOf(emptyLedger(ID), memory());
+    const verified = statusOf(settledLedger(), memory());
     expect(stampOf(unknown)).not.toBe(stampOf(verified));
   });
 });
@@ -290,7 +290,7 @@ describe('what the card calls waiting', () => {
   it('leaves out a document the server refused and nobody has touched since', () => {
     // A number that never goes down is not a status, it is a nag. The card says
     // what is stuck instead.
-    const status = statusOf(stuck(), new Map(), false);
+    const status = statusOf(stuck(), memory());
     expect(status.waiting).toEqual([]);
     expect(status.blocked).toEqual([{ key: JANUARY }]);
   });
@@ -300,7 +300,7 @@ describe('what the card calls waiting', () => {
     // and the trimmed version has never been offered to anybody.
     const ledger = stuck();
     ledger.dirty[JANUARY] = 2;
-    const status = statusOf(ledger, new Map(), false);
+    const status = statusOf(ledger, memory());
     expect(status.waiting).toEqual([JANUARY]);
     // still listed as stuck: that is what the last run was refused, and it is
     // what the card should still be naming until a run says otherwise
@@ -312,13 +312,13 @@ describe('what the card calls waiting', () => {
     // never reassure somebody about a backup the timer privately knows is behind.
     const ledger = stuck();
     ledger.dirty[JANUARY] = 2;
-    expect(statusOf(ledger, new Map(), false).waiting.length).toBeGreaterThan(0);
+    expect(statusOf(ledger, memory()).waiting.length).toBeGreaterThan(0);
     expect(shouldRun('opened', moment({ ledger, settled: '' }))).toBe(true);
   });
 
   it('names the reason when a run this launch found one out', () => {
     const refusals = new Map([[JANUARY, TOO_LARGE]]);
-    expect(statusOf(stuck(), refusals, false).blocked).toEqual([TOO_LARGE]);
+    expect(statusOf(stuck(), memory({ refusals })).blocked).toEqual([TOO_LARGE]);
   });
 });
 
@@ -523,7 +523,8 @@ describe('when the server turns the whole install away', () => {
     // launch's memory of the run is the only place the refusal exists at all.
     // Without it the card would go quiet about a document that did not go.
     const ledger = editedSince(SEPTEMBER);
-    const status = statusOf(ledger, new Map([[SEPTEMBER, REFUSED]]), true);
+    const refusals = new Map([[SEPTEMBER, REFUSED]]);
+    const status = statusOf(ledger, memory({ refusals, accounted: true, turnedAway: 1 }));
 
     expect(status.blocked).toEqual([REFUSED]);
     expect(status.waiting).toEqual([SEPTEMBER]);
@@ -535,7 +536,9 @@ describe('when the server turns the whole install away', () => {
     ledger.blockedAt = { [JANUARY]: 1 };
     const refusals = new Map([[JANUARY, { key: JANUARY, reason: 'rejected' as const }]]);
 
-    expect(statusOf(ledger, refusals, true).blocked).toEqual([{ key: JANUARY, reason: 'rejected' }]);
+    expect(
+      statusOf(ledger, memory({ refusals, accounted: true, turnedAway: 1 })).blocked
+    ).toEqual([{ key: JANUARY, reason: 'rejected' }]);
   });
 
   /**
@@ -574,5 +577,163 @@ describe('when the server turns the whole install away', () => {
 
     expect(shouldRun('opened', moment({ ...morning, turnedAway: 0 }))).toBe(false);
     expect(shouldRun('opened', moment({ ...morning, turnedAway: 1 }))).toBe(true);
+  });
+});
+
+describe('the count that has to outlive the app being closed', () => {
+  /**
+   * Which is the same refusal again, asked one day later.
+   *
+   * Everything above happens inside one launch, and inside one launch it works.
+   * But a refusal about the install is parked against no document on purpose,
+   * so a document refused without a dirty flag of its own leaves nothing on
+   * disk at all — and a phone that was refused and then shut sat down again
+   * with a bound, dated ledger, nothing waiting, nothing stuck and no reason to
+   * run, over documents that had never gone. So one number is written down, and
+   * these are the rules it has to obey to be worth writing: a finished run
+   * decides it, an unfinished one may not touch it, and while it stands the
+   * card may not say the backup holds everything.
+   */
+  it('counts what the last finished run was turned away from', () => {
+    const outcome = aftermath(
+      memory(),
+      run({ blocked: [REFUSED, { key: AUGUST, reason: 'rejected' }, TOO_LARGE] }),
+      'now'
+    );
+
+    // the month over the size cap is not in it: that one is parked against the
+    // document, where the ledger remembers it perfectly well across launches
+    expect(outcome.memory.turnedAway).toBe(2);
+    expect(outcome.answered).toBe(true);
+  });
+
+  it('lets a good run take it back to nothing in one go', () => {
+    // The whole difference between this and the park it replaces. A number that
+    // could only climb would be the same permanent silence under another name.
+    const refused = aftermath(memory(), run({ blocked: [REFUSED] }), 'now').memory;
+    expect(refused.turnedAway).toBe(1);
+
+    const cleared = aftermath(refused, run(), 'now');
+    expect(cleared.memory.turnedAway).toBe(0);
+    expect(cleared.answered).toBe(true);
+  });
+
+  it('does not let an attempt that got nowhere speak for what is outstanding', () => {
+    // A run that never reached the server learned nothing about which documents
+    // are on it, and letting its silence overwrite the record is the erasure
+    // that made pressing "try again" worse than not pressing it.
+    const refused = aftermath(memory(), run({ blocked: [REFUSED] }), 'now').memory;
+
+    for (const nothing of [null, { ok: false, reason: 'offline' } as const]) {
+      const outcome = aftermath(refused, nothing, 'now');
+      expect(outcome.memory.turnedAway).toBe(1);
+      expect(outcome.answered).toBe(false);
+    }
+  });
+
+  it('will not call a phone reconciled while it stands', () => {
+    // The card's half. On the launch the refusal happened in, the blocked list
+    // says so out loud; on the launch after, the count is all that is left, and
+    // without this the card falls straight through to "everything on this phone
+    // is in the backup" over the documents that did not go.
+    const backedUp = settledLedger();
+    expect(statusOf(backedUp, memory()).reconciled).toBe(true);
+
+    const outstanding = statusOf(backedUp, memory({ turnedAway: 1 }));
+    expect(outstanding.reconciled).toBe(false);
+    // and it is still not claiming anything is waiting, because nothing is: the
+    // refused document has no dirty flag of its own and never had one
+    expect(outstanding.waiting).toEqual([]);
+  });
+
+  it('is a different status from a phone that really has sent everything', () => {
+    // So the card re-renders rather than sitting on the reassurance it drew a
+    // moment before the ledger read landed.
+    const behind = statusOf(settledLedger(), memory({ turnedAway: 2 }));
+    const settled = statusOf(settledLedger(), memory());
+
+    expect(stampOf(behind)).not.toBe(stampOf(settled));
+  });
+});
+
+/**
+ * The month that was damaged on the phone rather than refused by the server.
+ *
+ * This is the one the card could not see. A backup run only ever looks at
+ * documents whose contents changed, and a September that rotted on disk changed
+ * nothing — so nothing examined it, nothing blocked it, and the card said
+ * everything on this phone was in the backup over a month missing a third of
+ * itself, with no way offered to get it back. The screens write the damage into
+ * the ledger as they read it, and everything below is what the card may then
+ * say, and what it still may not do.
+ */
+describe('a document this phone cannot read', () => {
+  /** A phone that has backed up, and whose September has since rotted on disk */
+  function damagedLedger(lost = '1 of 2 habits, 1 grid entry'): Ledger {
+    const ledger = settledLedger();
+    ledger.unvouched = { [SEPTEMBER]: lost };
+    return ledger;
+  }
+
+  it('is named on the card, in the words the voucher used', () => {
+    const status = statusOf(damagedLedger(), memory());
+    expect(status.damaged).toEqual([
+      { key: SEPTEMBER, lost: '1 of 2 habits, 1 grid entry' },
+    ]);
+  });
+
+  it('stops the card saying everything on this phone is in the backup', () => {
+    // The sentence this whole change exists to stop. Every other signal on this
+    // phone says settled — pushed, digested, nothing dirty, nothing refused —
+    // and a month is still missing half of itself.
+    expect(statusOf(settledLedger(), memory()).reconciled).toBe(true);
+    expect(statusOf(damagedLedger(), memory()).reconciled).toBe(false);
+  });
+
+  it('is not a refusal, and is not waiting either', () => {
+    // Both lists would be false. Nothing was offered to the server and nothing
+    // was turned down, so there is nothing to retry; and the only version of
+    // September this phone holds is the part that survived the parse, so there
+    // is nothing here it should be sending.
+    const status = statusOf(damagedLedger(), memory());
+    expect(status.blocked).toEqual([]);
+    expect(status.waiting).toEqual([]);
+  });
+
+  it('names the document even when it can no longer say what was lost', () => {
+    // A record that would not parse at all leaves nothing to count against
+    // anything, and a phrase is not invented to fill the gap — the same way a
+    // refusal with no reason on this launch is left without one.
+    expect(statusOf(damagedLedger(''), memory()).damaged).toEqual([{ key: SEPTEMBER }]);
+    expect(statusOf(damagedLedger(''), memory()).reconciled).toBe(false);
+  });
+
+  it('is a different status from a phone whose months are all readable', () => {
+    // So the card redraws rather than sitting on the reassurance it painted a
+    // moment before the ledger read landed.
+    expect(stampOf(statusOf(damagedLedger(), memory()))).not.toBe(
+      stampOf(statusOf(settledLedger(), memory()))
+    );
+  });
+
+  it('redraws when the same month turns out to have lost more of itself', () => {
+    expect(stampOf(statusOf(damagedLedger('1 of 2 habits'), memory()))).not.toBe(
+      stampOf(statusOf(damagedLedger('2 of 2 habits'), memory()))
+    );
+  });
+
+  it('does not start a backup run', () => {
+    // The load-bearing one. A damaged month has nothing the backup should be
+    // sent — carrying it would put the thinned September over the whole copy on
+    // the server, which is the fault rather than the fix — so an idle phone
+    // that has noticed one still costs no request, no sign-in and no read.
+    expect(shouldRun('opened', moment({ ledger: damagedLedger() }))).toBe(false);
+    expect(shouldRun('idle', moment({ ledger: damagedLedger() }))).toBe(false);
+  });
+
+  it('stops being said the moment the record is whole again', () => {
+    const repaired = statusOf(settledLedger(), memory());
+    expect(repaired.damaged).toEqual([]);
+    expect(repaired.reconciled).toBe(true);
   });
 });

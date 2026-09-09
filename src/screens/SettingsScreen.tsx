@@ -6,7 +6,8 @@ import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
 import type { BackupStatus } from '../hooks/useAutoBackup';
-import { backupCard } from './backupWording';
+import { backupCard, nameOf } from './backupWording';
+import type { BackupHolds } from './backupWording';
 import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
@@ -32,6 +33,28 @@ interface Props {
    * in September, and neither is a month shortened by hand outside the app.
    */
   onRetryBackup: () => Promise<void>;
+  /**
+   * Which documents the backup is known to hold, or null when nothing has
+   * looked. Optional so a caller that has not got the answer says nothing
+   * rather than guessing — see `BackupHolds`, where the difference between "not
+   * there" and "not asked" is the whole point.
+   */
+  backupHolds?: BackupHolds;
+  /**
+   * Pull one month back down over this phone's damaged copy of it.
+   *
+   * The way out of the trap the card has only ever been able to describe. A
+   * month this phone could not read in full is drawn from the survivors and
+   * never sent, so the whole copy stays safe on the server — and the only
+   * remedy on offer was to write in the month again, which turns the thinned
+   * version into a healthy record and sends it over the better one. This is the
+   * same repair made in the direction that keeps the data.
+   *
+   * Optional, and the offer is withheld unless it is here: a sentence promising
+   * a restore over a card with no button on it would be worse than the warning
+   * it replaced.
+   */
+  onRestoreMonth?: (key: string) => Promise<void>;
   onForgetBackup: () => void;
   onClose: () => void;
 }
@@ -51,12 +74,22 @@ export default function SettingsScreen({
   backupStatus,
   onOpenBackup,
   onRetryBackup,
+  backupHolds,
+  onRestoreMonth,
   onForgetBackup,
   onClose,
 }: Props) {
   const { mode, palette, setMode } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const card = backupCard(backupStatus, lastBackupAt);
+  /**
+   * The card is told what the backup holds only when there is something this
+   * screen could do about the answer. Without a handler there is no button to
+   * draw, and a card that named a restore nobody could reach would be a worse
+   * dead end than the one it was written to open.
+   */
+  const card = backupCard(backupStatus, lastBackupAt, onRestoreMonth ? backupHolds ?? null : null);
+  /** The month the card is offering to pull back, if it is offering one */
+  const damagedMonth = card.restore;
 
   /**
    * The retry is the one action here that takes a noticeable moment — it signs
@@ -74,6 +107,40 @@ export default function SettingsScreen({
     } finally {
       setRetrying(false);
     }
+  };
+
+  /**
+   * The restore, which is the one destructive thing this screen can do to
+   * somebody's own data, so it asks first and says exactly what it costs.
+   *
+   * The wording is the same trade the card's sentence makes, said again at the
+   * moment of the tap: the backup's copy replaces this phone's, and whatever
+   * was typed into that month after the record went bad is part of what is
+   * replaced. Nobody should discover that afterwards.
+   */
+  const [restoring, setRestoring] = useState(false);
+  const restore = (key: string) => {
+    if (restoring || !onRestoreMonth) return;
+    Alert.alert(
+      `Restore ${nameOf(key)}?`,
+      "This replaces this phone's damaged copy of that month with the one in the backup. Anything written in it since the damage is lost with it. Nothing else on this phone is touched.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            setRestoring(true);
+            try {
+              await onRestoreMonth(key);
+            } finally {
+              setRestoring(false);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   /**
@@ -144,6 +211,25 @@ export default function SettingsScreen({
               >
                 <Text style={styles.primaryText}>BACK UP NOW</Text>
               </Pressable>
+              {/*
+                Above the generic retry, because it is the answer to the
+                sentence the card has just finished saying. Trying again does
+                nothing for a month this phone cannot read — the next run reads
+                the same damaged record and declines to send it for the same
+                reason — and this is the only control on the screen that changes
+                that.
+              */}
+              {damagedMonth !== null ? (
+                <Pressable
+                  disabled={restoring}
+                  onPress={() => restore(damagedMonth)}
+                  style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={[styles.ghostText, styles.retryText]}>
+                    {restoring ? 'RESTORING…' : 'RESTORE THIS MONTH'}
+                  </Text>
+                </Pressable>
+              ) : null}
               {card.retry ? (
                 <Pressable
                   disabled={retrying}

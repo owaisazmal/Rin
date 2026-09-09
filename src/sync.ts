@@ -23,13 +23,14 @@ import {
   seal,
 } from './backup';
 import { MonthData } from './types';
-import { Task, loadTasks, parseTasks, readTasksVouched, saveTasks } from './tasks';
+import { Task, loadTasks, readTasksVouched, saveTasks, vouchTasksValue } from './tasks';
+import type { VouchedValue } from './tasks';
 import {
   listStoredMonths,
-  parseMonthData,
   readMonthVouched,
   readStoredMonths,
   saveMonth,
+  vouchMonthValue,
 } from './storage';
 import {
   Ledger,
@@ -301,10 +302,26 @@ export async function pushMonth(
 /**
  * Reads one month back.
  *
- * What comes off the wire is decrypted and then handed to the same parser that
- * guards AsyncStorage, so a record that decrypts but says something the app
- * doesn't understand — an older format, a hand-edited document, a corrupted
- * write — becomes an empty month rather than a crash.
+ * What comes off the wire is decrypted and then vouched by the same function
+ * that guards AsyncStorage, which is the whole of the difference between this
+ * and the version that used to parse and hand over whatever survived.
+ *
+ * That version was the outbound bug read backwards, and the copy it destroyed
+ * was the one on this phone. `parseMonthData` is deliberately lossy — a month
+ * whose habit list is half garbage comes back as the habits that survived — so
+ * a document that decrypts but only half parses, because a newer build wrote
+ * it or the server holds a corrupted write or the transfer was truncated, came
+ * back looking like an ordinary month and went straight to `restoreEverything`,
+ * which wrote it to disk over whatever was there. A month with two of its
+ * habits missing overwriting the complete one is the same silent deletion as
+ * sealing the survivors and sending them, in the other direction.
+ *
+ * So: `complete` is the only answer that is handed back. `partial` and
+ * `unreadable` come back as `unreadable`, which is what they both are from
+ * here — a document this phone cannot say it read whole, and therefore one it
+ * must not write over anything. The caller counts it exactly as it counts a
+ * month that would not decrypt, because the consequence of writing it is the
+ * same and the local copy is left standing either way.
  */
 export async function pullMonth(
   code: string,
@@ -317,7 +334,9 @@ export async function pullMonth(
     if (!snapshot.exists()) return { ok: false, reason: 'missing' };
     const plaintext = open(deriveKey(code), snapshot.data() as Sealed);
     if (plaintext === null) return { ok: false, reason: 'unreadable' };
-    return { ok: true, value: parseMonthData(JSON.parse(plaintext)) };
+    const record = vouchMonthValue(JSON.parse(plaintext));
+    if (record.status !== 'complete') return { ok: false, reason: 'unreadable' };
+    return { ok: true, value: record.data };
   } catch (error) {
     return { ok: false, reason: reasonFor(error) };
   }
@@ -395,8 +414,19 @@ interface TaskShard {
  */
 interface TaskArchive {
   shards: TaskShard[];
-  /** documents that were listed and could not be opened or parsed */
-  unopened: number;
+  /**
+   * Documents that were listed and did not come back whole: they would not
+   * decrypt, they were not JSON, or they parsed to fewer deadlines than they
+   * hold.
+   *
+   * The third of those is here because leaving it out was the same bug as the
+   * first two wearing better clothes. A shard that decrypts to a perfectly good
+   * array from which `parseTasks` silently drops rows — a newer build's fields,
+   * a hand-edited document — used not to be counted at all, so a restore
+   * replaced the phone's one flat list with fewer deadlines than the backup
+   * holds and reported a clean success over the top of it.
+   */
+  incomplete: number;
 }
 
 /**
@@ -408,6 +438,14 @@ interface TaskArchive {
  * one unreadable year costs that year, not the deadline list — but it is
  * counted on the way past, because a caller that overwrites the local list
  * needs to know it was handed less than the backup holds.
+ *
+ * A shard that opens and only half parses is counted the same way, and is the
+ * quieter half of the same fault: nothing about it looks like a failure, since
+ * what comes back is a well-formed array of deadlines. It is simply a shorter
+ * one than the document holds. Its surviving rows still go into `shards`,
+ * because this is the lossy view and `pullTasks` below is right to show
+ * somebody most of their archive — the count is what stops a *write* being
+ * decided from it.
  *
  * Order is fixed here — the open list, then the archive oldest first — so the
  * same backup always reassembles into the same list. Nothing downstream depends
@@ -425,24 +463,35 @@ async function pullTaskShards(code: string): Promise<RestoreResult<TaskArchive>>
     const key = deriveKey(code);
     const order = (id: string) => (id === CURRENT ? '' : id);
     const shards: TaskShard[] = [];
-    let unopened = 0;
+    let incomplete = 0;
     for (const entry of [...listing.docs].sort((a, b) =>
       order(a.id).localeCompare(order(b.id))
     )) {
       const plaintext = open(key, entry.data() as Sealed);
       if (plaintext === null) {
-        unopened++;
+        incomplete++;
         continue;
       }
+      let record: VouchedValue<Task[]>;
       try {
-        shards.push({ key: entry.id, tasks: parseTasks(JSON.parse(plaintext)) });
+        record = vouchTasksValue(JSON.parse(plaintext));
       } catch {
         // decrypted, but not JSON — the same dead end as a failed decryption
-        unopened++;
+        incomplete++;
+        continue;
       }
+      // `unreadable` is a document that is not a deadline list at all, so there
+      // is nothing to add; `partial` has rows worth showing and a shortfall
+      // worth counting, and both of those are true at once.
+      if (record.status === 'unreadable') {
+        incomplete++;
+        continue;
+      }
+      if (record.status === 'partial') incomplete++;
+      shards.push({ key: entry.id, tasks: record.data });
     }
     if (shards.length === 0) return { ok: false, reason: 'unreadable' };
-    return { ok: true, value: { shards, unopened } };
+    return { ok: true, value: { shards, incomplete } };
   } catch (error) {
     return { ok: false, reason: reasonFor(error) };
   }
@@ -1064,10 +1113,11 @@ export function backupEverything(code: string): Promise<BackupRun> {
  * How the deadline list fared on the way down, which the months cannot say for
  * it: `none` is a backup that genuinely holds no deadlines and a local list
  * emptied to match, `unreadable` is task documents that would not decrypt and a
- * local list left exactly as it was, and `partial` is some of them opening and
- * some not — which is the same answer as `unreadable` for what was written,
- * and a different sentence, because half a list arriving is not nothing
- * arriving.
+ * local list left exactly as it was, and `partial` is the archive arriving with
+ * a hole in it — a document that would not open, or one that opened and gave
+ * back fewer deadlines than it holds. That is the same answer as `unreadable`
+ * for what was written, and a different sentence, because half a list arriving
+ * is not nothing arriving.
  */
 export type DeadlineRestore = 'restored' | 'none' | 'partial' | 'unreadable';
 
@@ -1144,16 +1194,20 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
    *     Nothing is written locally, since there is nothing to write, and the
    *     run carries on: what is on the server is already lost, and the phone's
    *     own list is the better copy of the two.
-   *   * **Some of them opening and some not** is the same principle, and it
-   *     went the other way for as long as the count did not exist. The phone
+   *   * **The archive arriving with a hole in it** is the same principle, and
+   *     it went the other way for as long as the count did not exist. The phone
    *     keeps one flat list, so the save below is a replacement rather than a
-   *     merge: pouring in the shards that opened deletes every deadline that
-   *     lived in the ones that did not, silently, on the phone that still had
-   *     them. Two phones on one code are enough — the second on a newer build,
-   *     so its records carry a `v` this one does not know and `open` answers
-   *     null — and it costs a whole open list. What is on the server is already
-   *     out of reach either way, and this phone's list is the better copy of
-   *     the two, so it is left exactly as it is and reported.
+   *     merge: pouring in what arrived deletes every deadline that did not,
+   *     silently, on the phone that still had them. Two phones on one code are
+   *     enough — the second on a newer build, so its records carry a `v` this
+   *     one does not know and `open` answers null — and it costs a whole open
+   *     list. A shard that opens and half parses does it more quietly still,
+   *     since what comes back is a well-formed list that is merely shorter than
+   *     the document; that one is counted here too, which is what stops a
+   *     restore reporting a clean success over deadlines it never downloaded.
+   *     What is on the server is already out of reach either way, and this
+   *     phone's list is the better copy of the two, so it is left exactly as it
+   *     is and reported.
    *   * `offline` and `rejected` mean the deadlines are still up there and this
    *     phone simply did not get them. That is a restore that did not happen,
    *     and it is reported as one. Nothing is seeded, so nothing on this phone
@@ -1167,7 +1221,7 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
    */
   const archive = await pullTaskShards(code);
   let deadlines: DeadlineRestore;
-  if (archive.ok && archive.value.unopened > 0) {
+  if (archive.ok && archive.value.incomplete > 0) {
     deadlines = 'partial';
   } else if (archive.ok) {
     const tasks: Task[] = [];
@@ -1207,4 +1261,92 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
   }
 
   return { ok: true, months: restored, skipped, deadlines };
+}
+
+/**
+ * One month, pulled back down over the copy on this phone.
+ *
+ * This is the way out of the one trap the vouched read leaves behind, and it is
+ * worth stating in full, because everything else in this file is built to stop
+ * a write rather than to offer one. A month whose record went bad on disk is
+ * drawn from the parts that survived and never sent, which is right: the server
+ * may well still hold the whole thing. But somebody has to go on using the app,
+ * so a deliberate edit to that month is allowed to save — and the moment it
+ * does, the thinned month is a healthy record with nothing left anywhere to say
+ * what it lost, and the next run carries it over the good copy. The card warns
+ * about that and, until now, warned was all it did.
+ *
+ * So: instead of writing the damaged month outwards, write the good one
+ * inwards. It is the same trade a whole restore makes, made about one document
+ * — this phone's copy is replaced, and whatever was typed into that month since
+ * the damage is replaced with it — which is why nothing here decides to do it.
+ * The screen asks, having said so out loud.
+ *
+ * Three things make it safe, and only the last is new:
+ *
+ *   * **`pullMonth` vouches what arrives.** A document that will not decrypt,
+ *     is not a month, or parses to less than it holds comes back `unreadable`
+ *     and nothing is written. There is no second check here, deliberately: a
+ *     second reading of the same question is a second answer to keep in step,
+ *     and this one is already the answer the whole restore path trusts.
+ *   * **Nothing is written for anything but a complete month.** `missing` is
+ *     the backup not holding that month at all, and it is a perfectly ordinary
+ *     answer — a month written after the last backup, or on a code from another
+ *     phone. It costs nothing and takes nothing away.
+ *   * **The ledger is told what landed.** Without it the restored month is a
+ *     record whose digest disagrees with the recorded one exactly as an edit
+ *     does, so the very next run would seal it and send it straight back over
+ *     the document it was just copied from — a needless write, and a needless
+ *     ciphertext of somebody's month on the wire.
+ *
+ * The dirty flag is deliberately left standing, exactly as `restoreEverything`
+ * leaves it, and here it is load-bearing rather than merely harmless.
+ * `saveMonth` is best-effort and swallows whatever went wrong, so the write
+ * above is a belief and not a fact. With the flag standing the next run reads
+ * the month, finds it matches the digest just recorded, and retires the flag
+ * without sending a byte; if the write silently failed, that read finds the
+ * damaged record still there and parks it again, which is the truth. Clearing
+ * the flag here would instead skip the month unread from then on, and the card
+ * would call a damaged month backed up.
+ */
+export async function restoreMonth(
+  code: string,
+  year: number,
+  month: number
+): Promise<RestoreResult<MonthData>> {
+  const pulled = await pullMonth(code, year, month);
+  if (!pulled.ok) return pulled;
+
+  await saveMonth(year, month, pulled.value);
+
+  const key = monthDocKey(year, month);
+  try {
+    const backupId = deriveBackupId(code);
+    /**
+     * Read through the call that settles which backup this ledger describes, so
+     * a record left over from another code is wiped before its digests are read
+     * back — and merged rather than replaced, which is the one way this differs
+     * from the whole-phone restore. `seedPushed` replaces the digest map because
+     * a whole restore has just accounted for every document there is; one month
+     * accounts for one document, and the rest of the map is still this phone's
+     * belief about the same server. Dropping it would re-send the entire
+     * history to fix a single month.
+     */
+    const ledger = await loadLedgerFor(backupId);
+    const digest = digestOf(JSON.stringify(pulled.value));
+    await seedPushed(backupId, { ...ledger.digests, [key]: digest });
+    /**
+     * And the park comes off. It was put on against bytes that are no longer on
+     * this phone, and leaving it would have the card still calling the month
+     * damaged after the damage had been replaced — the one thing a way out must
+     * not do is fail to say it worked.
+     */
+    await clearBlocked(key);
+  } catch {
+    // bookkeeping, after the month has already landed. A code that will not
+    // derive never got past `pullMonth`, and a lost seed costs one needless
+    // upload rather than anything on this phone.
+  }
+
+  return pulled;
 }

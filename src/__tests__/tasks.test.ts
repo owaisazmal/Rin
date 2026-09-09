@@ -5,6 +5,7 @@ import {
   readTasksForEditing,
   readTasksVouched,
   saveTasks,
+  vouchTasksValue,
 } from '../tasks';
 import type { Task } from '../tasks';
 
@@ -221,6 +222,36 @@ describe('readTasksVouched', () => {
     // a list written by a later build must still back up from this one
     stored([{ ...valid, priority: 'high' }]);
     await expect(readTasksVouched()).resolves.toMatchObject({ status: 'complete' });
+  });
+});
+
+/**
+ * The judgement itself, with no store underneath it.
+ *
+ * A shard of the deadline archive coming down off the wire has to be asked the
+ * same question the disk is asked — did this parse with nothing lost — and it
+ * has to be asked by the same code, or the two answers drift and the weaker one
+ * ends up guarding whichever copy is about to be replaced. `pullTaskShards` in
+ * `sync.ts` is the wire caller; these check the reader is genuinely made of
+ * this rather than merely agreeing with it.
+ */
+describe('vouchTasksValue', () => {
+  it.each([
+    ['a list every row of which survived', [valid]],
+    ['a list somebody emptied on purpose', []],
+    ['a row the parser throws away', [valid, { ...valid, id: undefined }]],
+    ['a list that is not a list', { id: '0' }],
+  ])('answers for %s exactly as a read off the disk does', async (_case, raw) => {
+    stored(raw);
+    await expect(readTasksVouched()).resolves.toEqual(vouchTasksValue(raw));
+  });
+
+  it('has no way of calling a value absent, because a payload never is', () => {
+    // absence is a question about a key in a store. A decrypted document that
+    // holds nothing is a document this phone cannot read, and reading it as an
+    // empty list is how the whole archive gets emptied.
+    expect(vouchTasksValue(null)).toEqual({ status: 'unreadable' });
+    expect(vouchTasksValue(undefined)).toEqual({ status: 'unreadable' });
   });
 });
 

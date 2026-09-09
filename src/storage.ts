@@ -142,28 +142,51 @@ export async function loadMonth(year: number, month: number): Promise<MonthData>
 }
 
 /**
- * What a read of a stored record was able to vouch for.
+ * What a value this app parsed was able to vouch for.
  *
  * Every loader above is deliberately lossy: a month whose habit list is half
  * garbage still has to draw, so the parsers drop what they cannot rebuild and
- * hand back the survivors. That is right for the screen and ruinous for the
- * backup, which replaces the only other copy of the record that exists — the
- * survivors would be sealed and pushed over the complete one on the server.
+ * hand back the survivors. That is right for the screen and ruinous for
+ * anything that then overwrites another copy of the record — the survivors
+ * would be sealed and pushed over the complete one on the server, or written to
+ * disk over the complete one this phone already had.
  *
  * The loaders cannot say so, because `MonthData` has no way to mean "I read
  * something but could not read all of it". This is that way. The rule it
- * exists to enforce: never put a document on the wire that this phone cannot
- * vouch for as whole. `absent` is fine and means empty; `partial` never is.
+ * exists to enforce, in both directions: never write over a copy of somebody's
+ * data with a version this phone cannot vouch for as whole. Only `complete`
+ * ever is.
+ *
+ * Deliberately says nothing about where the bytes came from. A month read off
+ * this phone's disk and a month decrypted off the wire are the same question —
+ * did this parse with nothing lost — and they are answered by the one function
+ * below so the two paths cannot drift into two different standards.
+ */
+export type VouchedValue<T> =
+  /** the value parsed with nothing dropped, truncated or substituted */
+  | { status: 'complete'; data: T }
+  /** it parsed, but the parser discarded something; `lost` names what, briefly */
+  | { status: 'partial'; data: T; lost: string }
+  /** it is not a record of this kind at all */
+  | { status: 'unreadable' };
+
+/**
+ * The same three answers, plus the one only a store can give.
+ *
+ * A read has a fourth outcome a decrypted payload never has: nothing is filed
+ * under the key. That is not a value that failed to parse, it is the absence of
+ * a value, and absence is legitimately empty — which is why it is here rather
+ * than in `VouchedValue`, where a caller holding a payload would have to write
+ * a branch that can never run.
+ *
+ * The three it adds to are the ones above, with `unreadable` covering two more
+ * things a read can hit: a store that would not answer, and bytes that are not
+ * JSON at all.
  */
 export type VouchedRead<T> =
   /** nothing is stored under the key; genuinely empty, safe to treat as such */
   | { status: 'absent' }
-  /** the bytes parsed with nothing dropped, truncated or substituted */
-  | { status: 'complete'; data: T }
-  /** it parsed, but the parser discarded something; `lost` names what, briefly */
-  | { status: 'partial'; data: T; lost: string }
-  /** the store would not answer, or the bytes are not JSON at all */
-  | { status: 'unreadable' };
+  | VouchedValue<T>;
 
 /**
  * How many habits the raw array was actually offering.
@@ -243,7 +266,7 @@ function lostCount(n: number, of: number, noun: string): string | null {
 }
 
 /**
- * Whether a month's stored JSON became the month it was meant to be.
+ * Whether a month's parsed JSON became the month it was meant to be.
  *
  * Each section is compared as the parser's OUTPUT against the raw INPUT, for
  * the specific things that parser is known to discard — nothing here parses
@@ -256,8 +279,15 @@ function lostCount(n: number, of: number, noun: string): string | null {
  * that is *missing* is not loss at all — a month saved before observations
  * existed is complete, and the parser substituting the documented default is
  * the design working rather than data going astray.
+ *
+ * Exported, and pure, because a month arriving from the backup has to be asked
+ * exactly this and nothing weaker. `readMonthVouched` below hands it the JSON
+ * it read off the disk; `pullMonth` in `sync.ts` hands it the JSON it decrypted
+ * off the wire. Two definitions of "did this parse with nothing lost" would be
+ * two standards, and the looser one would be the one guarding whichever copy of
+ * somebody's history was about to be overwritten.
  */
-function vouchMonth(raw: unknown): VouchedRead<MonthData> {
+export function vouchMonthValue(raw: unknown): VouchedValue<MonthData> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { status: 'unreadable' };
   const r = raw as Record<string, unknown>;
   const data = parseMonthData(r);
@@ -363,7 +393,7 @@ export async function readMonthVouched(
   }
   if (raw === null || raw === undefined) return { status: 'absent' };
   try {
-    return vouchMonth(JSON.parse(raw));
+    return vouchMonthValue(JSON.parse(raw));
   } catch {
     return { status: 'unreadable' };
   }
@@ -375,6 +405,18 @@ export interface MonthForEditing {
   data: MonthData;
   /** false when the bytes on disk held more than `data` does */
   complete: boolean;
+  /**
+   * What the voucher could not account for, in its own words — `1 of 2 habits,
+   * 1 grid entry` — and absent whenever there is nothing to say: a month that
+   * was read in full, and a record that could not be read at all, where nothing
+   * survived to be counted against anything.
+   *
+   * Carried through rather than left behind in `readMonthVouched` because the
+   * screen is the only thing that reads a month for editing, and it is the
+   * screen that has to hand this to the ledger — a phrase re-derived somewhere
+   * else would be a second opinion about the same record.
+   */
+  lost?: string;
 }
 
 /**
@@ -405,7 +447,7 @@ export async function readMonthForEditing(
     case 'complete':
       return { data: record.data, complete: true };
     case 'partial':
-      return { data: record.data, complete: false };
+      return { data: record.data, complete: false, lost: record.lost };
     case 'absent':
       // nothing is stored under the key, which is a month nobody has opened
       // yet. An empty month is exactly what is there, so writing one back

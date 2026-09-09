@@ -6,6 +6,7 @@ import {
   parseMonthData,
   readMonthForEditing,
   readMonthVouched,
+  vouchMonthValue,
 } from '../storage';
 import { MAX_HABITS, emptyMonthData } from '../types';
 
@@ -572,6 +573,38 @@ describe('readMonthVouched', () => {
       stored({ ...valid, mood: 'fine', habits: valid.habits.map((h) => ({ ...h, colour: 'red' })) });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
     });
+  });
+});
+
+/**
+ * The judgement itself, with no store underneath it.
+ *
+ * `readMonthVouched` used to be the only way to ask "did this parse with
+ * nothing lost", and it can only ask it of AsyncStorage. A month arriving from
+ * the backup needs the same question asked of a value that never touched a
+ * disk, and asking it a second way would be two standards — the looser of which
+ * would be the one guarding whichever copy of somebody's history was about to
+ * be overwritten. So the rule is one function, and these check that the reader
+ * is genuinely made of it rather than agreeing with it by coincidence.
+ */
+describe('vouchMonthValue', () => {
+  it.each([
+    ['a month with nothing wrong with it', valid],
+    ['a habit that rotted to a number', { habits: [{ id: '0', name: 'Run' }, { id: '1', name: 42 }] }],
+    ['a fourth key goal nobody can keep', { keyGoals: [1, 2, 3, 4].map(() => ({ text: 'a', done: false })) }],
+    ['a habits list that is not a list', { habits: 'nope' }],
+    ['something that is not a month at all', 'a string'],
+  ])('answers for %s exactly as a read off the disk does', async (_case, raw) => {
+    stored(raw);
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual(vouchMonthValue(raw));
+  });
+
+  it('has no way of calling a value absent, because a payload never is', () => {
+    // absence is a question about a key in a store. A decrypted document that
+    // holds nothing is a document this phone cannot read, and treating it as an
+    // empty month is how the empty month gets written over a full one.
+    expect(vouchMonthValue(null)).toEqual({ status: 'unreadable' });
+    expect(vouchMonthValue(undefined)).toEqual({ status: 'unreadable' });
   });
 });
 

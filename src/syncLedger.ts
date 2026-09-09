@@ -36,6 +36,18 @@ import { bytesToHex, utf8ToBytes } from '@noble/ciphers/utils.js';
  * was about would leave the phone with nothing waiting, no run to start, and
  * therefore no way back.
  *
+ * There is a third thing in here now, and it is neither of the two above. A
+ * digest and a dirty flag are both about the *server* — what is up there, and
+ * what has not been offered to it yet. `unvouched` is about this phone: a
+ * document whose own copy on disk could not be read in full. Nothing was sent
+ * and nothing was turned down, so it is not a refusal and it is deliberately
+ * not stored as one; it is also not a reason to send anything, because the only
+ * thing this phone could send for that document is the half of it that survived
+ * the parse. What it is, is the one fact that made a damaged month invisible:
+ * without it the backup only ever looks at documents whose contents changed, a
+ * month damaged on disk changes nothing, and so the card in Settings said
+ * everything on this phone was in the backup over a month that was not.
+ *
  * Best-effort like every other store here, and deliberately lopsided about how
  * it fails: the worst thing a lost or unreadable ledger can do is cause an
  * upload that wasn't needed. Every path through this file is written to fail in
@@ -97,6 +109,30 @@ export interface Ledger {
    * person fixes "too large", and without this the phone would never try again.
    */
   blockedAt: Record<string, number>;
+  /**
+   * doc key -> what this phone could not account for in its own copy of that
+   * document, in the words the voucher used: `2 of 12 habits, 1 grid entry`.
+   *
+   * The empty string is a legitimate value and means the record could not be
+   * read at all, so there is nothing to name. It is not "no damage" — the key
+   * being here at all is the damage — and the two are told apart by whether the
+   * key is present, never by whether the phrase is empty.
+   *
+   * Kept well away from `blocked` and `blockedAt` on purpose. Those two are a
+   * pair, they are about the server, and they are governed by the generation
+   * counter so that an edit expires them. None of that applies here: nothing
+   * was offered, nothing was refused, and an edit does not merely make this
+   * worth another try — an edit that rewrites the record whole is the end of it,
+   * which is a different thing and is why it is cleared rather than expired.
+   *
+   * It does go with the rest of the record when the ledger is re-keyed to
+   * another backup, even though it would still be true: it is a fact about this
+   * phone's disk and not about any server. But the reason anybody is told about
+   * it is that the backup holds a whole copy, and a code pointed at an empty
+   * tree holds nothing — so the honest thing on the other side of NEW CODE is
+   * silence until the next read of the document says it again.
+   */
+  unvouched: Record<string, string>;
   /** when bytes last actually landed on the server, epoch milliseconds */
   lastPushAt: number | null;
 }
@@ -114,6 +150,7 @@ export function emptyLedger(backupId: string | null = null): Ledger {
     dirty: {},
     blocked: [],
     blockedAt: {},
+    unvouched: {},
     lastPushAt: null,
   };
 }
@@ -129,6 +166,17 @@ export function emptyLedger(backupId: string | null = null): Ledger {
  * arriving from a hand-edited record has no business being unbounded.
  */
 const MAX_KEY_LENGTH = 64;
+
+/**
+ * How long a phrase naming what was lost may be.
+ *
+ * The voucher builds these out of counts of things a month can hold, so the
+ * longest one it can produce is a little under sixty characters. Anything past
+ * this came from somewhere else, and rather than shortening it — which would
+ * turn "12 of 12 habits" into a phrase that is not true — the phrase is dropped
+ * and the key kept. See `parseUnvouched`.
+ */
+const MAX_LOST_LENGTH = 120;
 
 function isDocKey(key: string): boolean {
   if (key.length === 0 || key.length > MAX_KEY_LENGTH) return false;
@@ -200,6 +248,30 @@ function parseBlockedAt(raw: unknown, blocked: readonly string[]): Record<string
   return blockedAt;
 }
 
+/**
+ * Read the way dirty flags are read rather than the way digests are: a note
+ * whose phrase cannot be used still keeps its key, because a note nobody can
+ * read is still a note somebody wrote. Dropping the key would leave the phone
+ * describing itself as fully backed up over a document it has already decided
+ * it cannot read, which is the single sentence this whole record exists to
+ * stop.
+ *
+ * What is dropped instead is the phrase, down to the empty string that means
+ * "damaged, and this phone can no longer say what was lost". That costs a line
+ * of detail on a card and it costs it only until the document is next read, at
+ * which point the voucher says it again in its own words.
+ */
+function parseUnvouched(raw: unknown): Record<string, string> {
+  const unvouched: Record<string, string> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return unvouched;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!isDocKey(key)) continue;
+    unvouched[key] =
+      typeof value === 'string' && value.length <= MAX_LOST_LENGTH ? value : '';
+  }
+  return unvouched;
+}
+
 function parseLedger(raw: unknown): Ledger {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return emptyLedger();
   const r = raw as Record<string, unknown>;
@@ -213,6 +285,7 @@ function parseLedger(raw: unknown): Ledger {
     dirty: parseDirty(r.dirty),
     blocked,
     blockedAt: parseBlockedAt(r.blockedAt, blocked),
+    unvouched: parseUnvouched(r.unvouched),
     lastPushAt:
       typeof r.lastPushAt === 'number' && Number.isFinite(r.lastPushAt) ? r.lastPushAt : null,
   };
@@ -256,11 +329,26 @@ async function write(ledger: Ledger): Promise<void> {
  */
 let queue: Promise<void> = Promise.resolve();
 
-function update(change: (ledger: Ledger) => Ledger): Promise<Ledger> {
+/**
+ * A change that found nothing to change, and would like the file left alone.
+ *
+ * Every older caller here runs because something happened — a save, a push, a
+ * refusal — so writing whatever it hands back is exactly right. The damage
+ * notes are the first callers that ask a question on a path where the answer is
+ * almost always "nothing": both hooks check on every read, so opening the
+ * planner and paging through a year would otherwise write the identical record
+ * back a dozen times over on a phone where every month is fine. An idle phone
+ * is supposed to cost nothing, and each of those writes is also one more chance
+ * to land on top of something a run was in the middle of recording.
+ */
+const UNCHANGED = Symbol('nothing to write');
+
+function update(change: (ledger: Ledger) => Ledger | typeof UNCHANGED): Promise<Ledger> {
   const next = queue.then(async () => {
     const before = await read();
     try {
       const after = change(before);
+      if (after === UNCHANGED) return before;
       await write(after);
       return after;
     } catch {
@@ -396,6 +484,91 @@ export async function clearBlocked(key: string): Promise<void> {
   await update((ledger) => {
     ledger.blocked = ledger.blocked.filter((blocked) => blocked !== key);
     delete ledger.blockedAt[key];
+    return ledger;
+  });
+}
+
+// --- what this phone cannot read ---------------------------------------------
+
+/**
+ * What this phone last said it could not account for in its own copy of a
+ * document, null when it has never said anything about it.
+ *
+ * The empty string and null are different answers and the difference is the
+ * whole point: `''` is a damaged document with nothing left to name, `null` is
+ * a document nothing has complained about. A string rather than merely
+ * something, for the reason `generationOf` gives — a document called `toString`
+ * would otherwise find a function waiting on `Object.prototype` and read as a
+ * note this file never wrote.
+ */
+export function unvouchedNote(ledger: Ledger, key: string): string | null {
+  const note = ledger.unvouched[key];
+  return typeof note === 'string' ? note : null;
+}
+
+/** Every document this phone has said it cannot read in full, in a stable order */
+export function unvouchedKeys(ledger: Ledger): string[] {
+  return Object.keys(ledger.unvouched)
+    .filter((key) => unvouchedNote(ledger, key) !== null)
+    .sort();
+}
+
+/**
+ * A screen read this document off this phone and could not understand all of
+ * it. `lost` is how the voucher put it — `2 of 12 habits` — or the empty string
+ * where the record could not be read at all and there is nothing to name.
+ *
+ * Three things this deliberately does not do, and each of them is a bug it
+ * would be if it did:
+ *
+ *   * it does not mark the document dirty. Dirty means the phone is holding
+ *     something the backup should be sent, and what this phone is holding is
+ *     the half of a record that survived a parse. Sending that is the whole
+ *     fault being closed here — it would go up over the complete copy on the
+ *     server as an ordinary edit, and the good version would be gone.
+ *   * it does not park a refusal. Nothing was offered to anybody and nothing
+ *     was turned down, and `blocked` carries a generation so that an edit
+ *     expires it, which would be exactly the wrong shape: the way out of this
+ *     is not "try again", it is a record written whole.
+ *   * and because of both of those, it is not a reason to start a run.
+ *     `isPending` never looks here, so a phone that notes a damaged month and
+ *     is otherwise settled stays settled, and finding out costs no request, no
+ *     sign-in and nothing on the wire. What it changes is what the card is
+ *     allowed to claim, which is decided from the ledger in
+ *     `autoBackupPolicy.statusOf`.
+ *
+ * Repeating the same note is free: the record is left exactly as it was rather
+ * than written back identical, because both hooks call this on every read of a
+ * document they cannot vouch for.
+ */
+export async function recordUnvouched(key: string, lost: string): Promise<void> {
+  await update((ledger) => {
+    if (!isDocKey(key)) return UNCHANGED;
+    const named = lost.length <= MAX_LOST_LENGTH ? lost : '';
+    if (unvouchedNote(ledger, key) === named) return UNCHANGED;
+    ledger.unvouched[key] = named;
+    return ledger;
+  });
+}
+
+/**
+ * A whole record for this document is on the phone again, so nothing here is
+ * true of it any more.
+ *
+ * Two things end a damage note and both of them finish the same way, with a
+ * complete record on disk: somebody edits the month, which rewrites it whole,
+ * and `restoreMonth` replaces it with the copy from the backup. Neither is a
+ * refusal being lifted, so neither goes anywhere near `clearBlocked` — that one
+ * is called for reasons that say nothing whatsoever about this phone's own copy,
+ * such as taking the park off documents an expired token got turned away.
+ *
+ * Silent when there was no note, and free: a document nobody complained about
+ * leaves the record untouched rather than rewritten.
+ */
+export async function clearUnvouched(key: string): Promise<void> {
+  await update((ledger) => {
+    if (unvouchedNote(ledger, key) === null) return UNCHANGED;
+    delete ledger.unvouched[key];
     return ledger;
   });
 }

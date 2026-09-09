@@ -7,6 +7,7 @@ import { loadLedger, markDirty, pendingKeys, recordBlocked } from '../syncLedger
 import { shouldRun, statusOf } from '../hooks/autoBackupPolicy';
 import {
   backupNow,
+  endLaunch,
   forgetLaunch,
   launchMemory,
   launchMoment,
@@ -149,8 +150,10 @@ beforeEach(async () => {
   mockServer.refuseWith = null;
   mockServer.refuseAfter = null;
   mockServer.writes = 0;
-  // a launch is a process, and each of these is a fresh one
-  forgetLaunch();
+  // a launch is a process, and each of these is a fresh one. Only the process
+  // is ended here: what a run writes down is on the disk that was just cleared,
+  // and a test that wiped it twice could never notice it had stopped being written.
+  endLaunch();
 });
 
 const CODE = generateCode();
@@ -181,7 +184,7 @@ async function wouldRunOnOpening(): Promise<boolean> {
   return shouldRun('opened', {
     ledger: await loadLedger(),
     seen: '',
-    ...launchMoment(),
+    ...(await launchMoment()),
     // the throttles are about how recently something was tried; every question
     // here is about the day after, so none of them is what is under test
     since: 24 * 60 * 60_000,
@@ -268,7 +271,7 @@ describe('the first backup this phone ever made, refused', () => {
     const ledger = await loadLedger();
     expect(ledger.digests).toEqual({});
     expect(pendingKeys(ledger)).toEqual([]);
-    expect(launchMoment().accounted).toBe(false);
+    expect((await launchMoment()).accounted).toBe(false);
   });
 
   it('tries again on its own, and the whole phone goes up', async () => {
@@ -364,8 +367,7 @@ describe('the retry that got nowhere', () => {
 
   /** What Settings would put in front of somebody right now */
   async function card() {
-    const memory = launchMemory();
-    return statusOf(await loadLedger(), memory.refusals, memory.accounted);
+    return statusOf(await loadLedger(), await launchMemory());
   }
 
   /**
@@ -390,14 +392,14 @@ describe('the retry that got nowhere', () => {
 
   it('still knows what the server turned away when the run comes back offline', async () => {
     await turnedAwayHalfWay();
-    expect(launchMoment().turnedAway).toBe(2);
+    expect((await launchMoment()).turnedAway).toBe(2);
 
     // The person opens Settings, reads that the phone is not reaching the
     // backup, and taps TRY IT AGAIN NOW — in a lift.
     mockServer.refuseWith = 'firestore/unavailable';
     await retryEverything();
 
-    expect(launchMoment().turnedAway).toBe(2);
+    expect((await launchMoment()).turnedAway).toBe(2);
     expect((await card()).blocked.map((doc) => doc.key)).toEqual(['2026-08', 'current']);
     expect(await wouldRunOnOpening()).toBe(true);
 
@@ -421,7 +423,7 @@ describe('the retry that got nowhere', () => {
 
     await retryEverything();
 
-    expect(launchMoment().turnedAway).toBe(2);
+    expect((await launchMoment()).turnedAway).toBe(2);
     expect((await card()).blocked.map((doc) => doc.key)).toEqual(['2026-08', 'current']);
     expect(await wouldRunOnOpening()).toBe(true);
   });
@@ -515,5 +517,116 @@ describe('what a finished run may leave counted as waiting', () => {
 
     expect(pendingKeys(await loadLedger())).toEqual([]);
     expect(paths()).toContain('backups/<id>/tasks/2024');
+  });
+});
+
+describe('the morning after the phone was closed', () => {
+  /**
+   * The refusal nothing on this phone writes down, and then somebody closes the
+   * app.
+   *
+   * September lands and the token expires behind it, so August and the deadline
+   * list come back refused. Neither was ever dirty — a first run has no flags at
+   * all — and the park comes off a refusal about the *install* the moment the
+   * run is accounted for, on purpose, because a park that stays on is a phone
+   * that never backs up again after one bad token. What the ledger holds
+   * afterwards is a binding, a date and nothing waiting: character for character
+   * a phone that has sent everything it has.
+   *
+   * All of that was already true and already covered, and it worked, for
+   * exactly as long as the process lived. The refusal was held in this launch
+   * and nowhere else, so closing the app took the last record of it: nothing
+   * waiting, nothing stuck, no trigger with a reason to start, and a card in
+   * front of somebody saying their history was in the backup while two
+   * documents of it had never left the phone. It recovered only if nobody shut
+   * the app, which is not how anybody uses a phone.
+   */
+  async function refusedHalfWayAndClosed() {
+    await saveCode(CODE);
+    await saveMonth(2026, 7, month);
+    await saveMonth(2026, 8, month);
+    await saveTasks(tasks);
+
+    mockServer.refuseWith = 'firestore/permission-denied';
+    mockServer.refuseAfter = 1;
+    await backupNow(CODE);
+    mockServer.refuseAfter = null;
+    mockServer.refuseWith = null;
+
+    // and the app is closed. Whatever is on the disk is all there is.
+    endLaunch();
+  }
+
+  /** What Settings would put in front of somebody right now */
+  async function card() {
+    return statusOf(await loadLedger(), await launchMemory());
+  }
+
+  /** The real question the phone asks itself on opening, throttles and all */
+  async function opening(): Promise<boolean> {
+    return shouldRun('opened', {
+      ledger: await loadLedger(),
+      seen: '',
+      ...(await launchMoment()),
+    });
+  }
+
+  it('knows it is behind, and does not tell anybody otherwise', async () => {
+    await refusedHalfWayAndClosed();
+
+    // the ledger has nothing to say about either document, which is the whole
+    // of the difficulty: this is what a backed-up phone looks like
+    const ledger = await loadLedger();
+    expect(pendingKeys(ledger)).toEqual([]);
+    expect(ledger.blocked).toEqual([]);
+    expect(ledger.lastPushAt).not.toBeNull();
+
+    expect((await launchMoment()).turnedAway).toBe(2);
+    // so the card may say it has not checked this phone, and may not say the
+    // backup holds everything on it
+    expect((await card()).reconciled).toBe(false);
+  });
+
+  it('starts a run of its own, with nobody having touched anything', async () => {
+    await refusedHalfWayAndClosed();
+
+    // asked the way the app asks it: nothing edited, nothing tapped, and the
+    // throttles reading whatever they really read on the first look of a launch
+    expect(await opening()).toBe(true);
+    await runAndSettle();
+
+    expect(paths()).toEqual([
+      'backups/<id>/months/2026-08',
+      'backups/<id>/months/2026-09',
+      'backups/<id>/tasks/current',
+    ]);
+  });
+
+  it('goes quiet again once a run has been refused nothing', async () => {
+    // The half that keeps this from becoming the thing it replaced. A status
+    // that could only climb would be the per-document park under another name,
+    // so one good morning has to take it to nothing — on the disk as well, or
+    // the phone would open every day afterwards insisting it was behind.
+    await refusedHalfWayAndClosed();
+    await runAndSettle();
+    endLaunch();
+
+    expect((await launchMoment()).turnedAway).toBe(0);
+    expect((await card()).reconciled).toBe(true);
+    expect(await opening()).toBe(false);
+  });
+
+  it('does not describe the next backup with what the last one refused', async () => {
+    // A restore, or NEW CODE. The count was about a server this phone has left,
+    // and every other thing a launch knows is dropped at that point for exactly
+    // this reason; the one thing that survives being closed has to be dropped
+    // there too, or it would be describing somebody else's backup.
+    await refusedHalfWayAndClosed();
+    await forgetLaunch();
+
+    // and the app is closed again, so the answer comes off the disk rather than
+    // out of the assignment `forgetLaunch` just made
+    endLaunch();
+    expect((await launchMoment()).turnedAway).toBe(0);
   });
 });

@@ -1,5 +1,5 @@
 import type { BackupRun, BlockedDoc, RestoreRun } from '../sync';
-import type { BackupStatus } from '../hooks/autoBackupPolicy';
+import type { BackupStatus, Damage } from '../hooks/autoBackupPolicy';
 
 /**
  * What the two backup screens are allowed to say, and the words for saying it.
@@ -29,6 +29,16 @@ import type { BackupStatus } from '../hooks/autoBackupPolicy';
  *     not go up is only half of it; the other half is that writing in January
  *     again is what sends it, which is true of every refusal here and was said
  *     nowhere.
+ *   * **A month damaged on the disk was never mentioned at all.** Everything
+ *     above is about a document a *run* looked at, and a run only looks at
+ *     months whose contents have changed. A September that went bad where it
+ *     lay is therefore never offered, never refused, and never named — so the
+ *     card said "Everything on this phone is in the backup" over a month it
+ *     could not read, while the planner was telling the same person that
+ *     writing in it lets go of the part that did not survive. The ledger now
+ *     carries what the screens found when they read those records, and
+ *     `damagedCard` is where that is said out loud and where the way out is
+ *     offered while there is still a whole copy to offer.
  */
 
 // --- the names people use for their own data --------------------------------
@@ -52,6 +62,21 @@ export function nameOf(key: string): string {
   if (key === 'current') return 'Your open deadlines';
   if (/^20\d{2}$/.test(key)) return `Deadlines you finished in ${key}`;
   return monthName(key);
+}
+
+/**
+ * The same name where it lands part-way through a sentence.
+ *
+ * Two of the three names above are prose rather than a proper noun — "Your open
+ * deadlines" reads as a heading and is written as one — and every sentence that
+ * puts one after a verb had it in mid-air: "Rin could not read Your open
+ * deadlines on this phone". A month is a proper noun and keeps its capital
+ * wherever it falls, which is why this turns on the key rather than on the
+ * letter.
+ */
+function nameWithin(key: string): string {
+  const name = nameOf(key);
+  return TASK_KEY.test(key) ? name.charAt(0).toLowerCase() + name.slice(1) : name;
 }
 
 /** Which part of a month `sync` blamed, in the words the app uses for it */
@@ -144,6 +169,39 @@ function revive(key: string): string {
 }
 
 /**
+ * The way out of a damaged month that does not cost the good copy.
+ *
+ * `revive` above is the other one, and it is the trap this exists to open. A
+ * month this phone could not read in full is drawn from the survivors and never
+ * sent, which keeps the whole copy safe on the server — right up until somebody
+ * takes the card's advice and writes in the month, at which point the thinned
+ * version is an ordinary healthy record and the next run carries it over the
+ * better one. Pulling the month back down is the same repair made in the
+ * direction that keeps the data.
+ *
+ * It says what it costs in the same breath as what it does. A restore is a
+ * replacement — that is the whole of what a restore is — so anything typed into
+ * that month since the record went bad goes with the record, and somebody
+ * choosing between the two ways out has to be told that before they choose.
+ */
+function pullBack(): string {
+  return "Restoring that month puts the backup's copy on this phone in place of the damaged one, and anything written in it since the damage goes with it.";
+}
+
+/**
+ * The same month when there is nothing to pull back.
+ *
+ * A backup that has never held that month cannot repair it, and offering a
+ * restore that would answer `missing` is worse than offering nothing. What is
+ * true instead is bleaker and has to be said anyway: the damaged copy is the
+ * only copy there is, so the write the planner allows is not a risk to weigh
+ * against a better option — it is the only way forward.
+ */
+function onlyCopy(): string {
+  return "The backup does not hold that month, so this phone's copy is the only one there is. Writing in it again is the only way forward: that saves what is on screen and lets go of the rest.";
+}
+
+/**
  * What a record this phone could not vouch for actually lost, named.
  *
  * `detail` arrives from the vouched read already in the words somebody would
@@ -172,20 +230,39 @@ export type DamagedRecord = 'month' | 'deadlines';
  * The cost is that typing into that month does nothing, and the one thing an
  * app may not do is take what somebody writes and quietly drop it.
  *
- * Nothing here mentions the backup. The damage is on this phone whether or not
- * there is one, the planner has no way of knowing, and the card in Settings is
- * where the state of the backup is described.
+ * Nothing here mentions the backup unless there is something to be done about
+ * it. The damage is on this phone whether or not a backup exists, so the
+ * default says nothing about one — but a caller that knows the backup holds
+ * this month knows the one thing that changes what the sentence below is advice
+ * to do, and staying quiet would leave somebody typing over a record they could
+ * have had back whole. `restorable` is that knowledge, and it is a parameter
+ * rather than something read here because the planner is the screen that has
+ * it.
+ *
+ * One clause and no more when it is set. This notice sits over somebody's
+ * month, above the grid they opened the app to look at; the case for pulling
+ * the month back, and the price of doing it, belong on the card in Settings
+ * where there is room to make them properly.
  */
-export function damagedNotice(record: DamagedRecord): string {
+export function damagedNotice(record: DamagedRecord, restorable = false): string {
   const subject = record === 'month' ? 'all of this month' : 'all of your deadlines';
   const it = record === 'month' ? 'this month' : 'this list';
+  /**
+   * Months alone. There is no way to pull one deadline list down over another —
+   * the archive travels as several documents and arrives as one flat list — so
+   * a deadline notice carrying this would point at a door that is not there.
+   */
+  const back =
+    record === 'month' && restorable
+      ? " Settings can put the backup's copy of this month back instead."
+      : '';
   // Says what the app actually does, which changed when the write guard moved
   // from "is this record damaged" to "did a person ask for this write". Merely
   // opening the record leaves the disk alone; typing in it saves, because a
   // record nobody can edit is a record nobody can rescue, and the backup card
   // sends people here to do exactly that. What it must not do is let someone
   // type over the rest of it without knowing that is what they are doing.
-  return `Rin could not read ${subject} on this phone, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.`;
+  return `Rin could not read ${subject} on this phone, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.${back}`;
 }
 
 // --- the card in Settings ----------------------------------------------------
@@ -211,6 +288,50 @@ export interface Card {
    * either was to type something into a month for the sake of typing it.
    */
   retry: boolean;
+  /**
+   * The month to offer to pull back down from the backup, by its document name,
+   * or null when there is nothing to offer.
+   *
+   * Only ever set for a month this phone could not read in full *and* that the
+   * backup is known to hold, which is exactly the state in which the advice
+   * beside it — write in the month again — costs somebody the better copy. It
+   * is a key rather than a flag because whoever draws the card has to name the
+   * document when they ask for it.
+   */
+  restore: string | null;
+}
+
+/**
+ * The document names the backup is known to hold, or null when nothing has
+ * looked.
+ *
+ * The three cases are three different sentences on the card, and the difference
+ * between the last two is the whole reason this is not simply a list. A name
+ * that is missing from a list somebody actually compiled means the backup does
+ * not hold that month, and the card says so out loud and withdraws the offer; a
+ * name missing because nothing has checked means nothing at all, and a card
+ * that treated the two alike would tell somebody their month exists nowhere but
+ * this phone on the strength of never having asked.
+ *
+ * So null is the answer for a caller that has not looked, and an empty list is
+ * a claim that the backup holds nothing. Any caller passing a list is asserting
+ * it is complete.
+ */
+export type BackupHolds = readonly string[] | null;
+
+/**
+ * Whether the stuck document can be pulled back down instead of written over.
+ *
+ * `unknown` is the state everything was in before this existed, and it is what
+ * a deadline list gets in every case: the archive travels as several documents
+ * and lands as one flat list, so there is no such thing as restoring one of
+ * them over the copy on this phone, and the way out stays the edit.
+ */
+type WayOut = 'restore' | 'only-copy' | 'unknown';
+
+function wayOut(key: string, holds: BackupHolds): WayOut {
+  if (holds === null || !MONTH_KEY.test(key)) return 'unknown';
+  return holds.includes(key) ? 'restore' : 'only-copy';
 }
 
 /**
@@ -248,10 +369,13 @@ export function whenBackedUp(at: number): string {
  * simply false. Every sentence below is about the named document or about this
  * phone, which are the two things the card can actually see.
  */
-function blockedCard(blocked: readonly Refused[]): Card {
+function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
   const lead = leading(blocked);
   const name = nameOf(lead.key);
+  // the same name for the titles that put it after a verb rather than first
+  const within = nameWithin(lead.key);
   const also = alsoStuck(blocked.length - 1);
+  const out = wayOut(lead.key, holds);
 
   if (lead.reason === 'too-large') {
     return {
@@ -259,6 +383,10 @@ function blockedCard(blocked: readonly Refused[]): Card {
       body: `${shorten(lead.key, lead.detail, 'that month')} Nothing on this phone has been lost.${also}`,
       attention: true,
       retry: true,
+      // A month the server would not take is not a damaged one. Everything on
+      // this phone is intact and readable, so pulling the backup's copy down
+      // over it would delete perfectly good data to fix nothing.
+      restore: null,
     };
   }
 
@@ -284,11 +412,25 @@ function blockedCard(blocked: readonly Refused[]): Card {
    * `incomplete` one it could only half read, and the other two are the server.
    */
   if (lead.reason === 'unreadable') {
+    /**
+     * Three endings, and they are three different situations rather than three
+     * ways of putting one. With a copy in the backup there is a repair that
+     * keeps the data and it is offered; with the backup known not to hold the
+     * month there is no repair at all and pretending otherwise would send
+     * somebody looking for a button that must not exist; and with nothing
+     * having looked, the edit is still the honest advice it always was.
+     */
+    const ending =
+      out === 'restore' ? pullBack() : out === 'only-copy' ? onlyCopy() : revive(lead.key);
     return {
-      title: `Rin could not read ${name} on this phone`,
-      body: `This phone's copy looks damaged, so nothing was sent and the copy in the backup is untouched — Rin is holding on to the good one rather than writing over it with this. ${revive(lead.key)}${also}`,
+      title: `Rin could not read ${within} on this phone`,
+      body:
+        out === 'only-copy'
+          ? `This phone's copy looks damaged, so nothing was sent. ${ending}${also}`
+          : `This phone's copy looks damaged, so nothing was sent and the copy in the backup is untouched — Rin is holding on to the good one rather than writing over it with this. ${ending}${also}`,
       attention: true,
       retry: true,
+      restore: out === 'restore' ? lead.key : null,
     };
   }
 
@@ -299,10 +441,20 @@ function blockedCard(blocked: readonly Refused[]): Card {
   // sentence rather than an aside.
   if (lead.reason === 'incomplete') {
     return {
-      title: `Rin could only read part of ${name}`,
-      body: `Reading it here, ${lost(lead.detail)} — so nothing was sent and the copy in the backup is untouched. Sending what was left would have dropped the rest from the backup too, without a word. ${revive(lead.key)}${also}`,
+      title: `Rin could only read part of ${within}`,
+      body:
+        out === 'only-copy'
+          ? // The sentence about the backup losing the rest is dropped here
+            // rather than reworded, because with no copy up there it is simply
+            // not what would have happened: sending the survivors would have
+            // put a thin month on a server that held nothing, not deleted a
+            // whole one. Still not sent, and for the same reason — a backup
+            // made from this would hold no more than this phone can read.
+            `Reading it here, ${lost(lead.detail)} — so nothing was sent. ${onlyCopy()}${also}`
+          : `Reading it here, ${lost(lead.detail)} — so nothing was sent and the copy in the backup is untouched. Sending what was left would have dropped the rest from the backup too, without a word. ${out === 'restore' ? pullBack() : revive(lead.key)}${also}`,
       attention: true,
       retry: true,
+      restore: out === 'restore' ? lead.key : null,
     };
   }
 
@@ -312,6 +464,9 @@ function blockedCard(blocked: readonly Refused[]): Card {
       body: `The server turned it down, which is a fault at my end rather than anything you did. Everything is still here on this phone, Rin will keep trying this on its own, and backing up again will try it again now.${also}`,
       attention: true,
       retry: true,
+      // Nothing on this phone is damaged; the server declined to take a
+      // perfectly readable month. There is nothing here to repair.
+      restore: null,
     };
   }
 
@@ -323,6 +478,111 @@ function blockedCard(blocked: readonly Refused[]): Card {
     body: `Everything is still here on this phone. Backing up now will say what stopped it.${also}`,
     attention: true,
     retry: true,
+    // Whether this is damage or a refusal is the question a run answers, and
+    // until one has, offering to overwrite the month would be offering to
+    // delete a good one on a guess.
+    restore: null,
+  };
+}
+
+// --- the card for a record this phone cannot read off its own disk -----------
+
+/**
+ * Which damaged document to lead with when more than one is.
+ *
+ * The one with a way out comes first, for the same reason `RANK` puts the
+ * oversized month ahead of the rejection: the card has room for one document,
+ * and leading with the one nothing can be done about buries the only offer on
+ * the screen. Stable otherwise, so the ledger's own order — which is sorted,
+ * so oldest month first — decides between two that are equally answerable.
+ */
+function leadDamaged(damaged: readonly Damage[], holds: BackupHolds): Damage {
+  return [...damaged].sort(
+    (a, b) =>
+      (wayOut(a.key, holds) === 'restore' ? 0 : 1) - (wayOut(b.key, holds) === 'restore' ? 0 : 1)
+  )[0];
+}
+
+/**
+ * This phone is holding a record it cannot read in full, and no run said so.
+ *
+ * Deliberately its own card rather than a fifth reason on `blockedCard`, and
+ * the difference is what the card is allowed to offer. A refusal is something
+ * the server and this phone are still working out, and every one of them ends
+ * with "try it again" being worth a press. This is the phone's own copy being
+ * short, which no run can mend and no retry can touch: the next run reads the
+ * same damaged record and declines to send it for the same reason it declined
+ * last time. Offering a retry here would be offering a remedy that cannot work.
+ *
+ * What it says is the one thing this state actually knows, and it is more
+ * reassuring than it sounds. Nothing damaged is ever put on the wire, so
+ * whatever the backup holds of that month, it did not come from this. That is
+ * not a claim that the copy up there is better — it may be a month older, and
+ * nothing here has opened it — only that it is not the copy in front of you,
+ * which is exactly the fact that makes pulling it down worth offering.
+ */
+function damagedCard(
+  damaged: readonly Damage[],
+  blocked: readonly Refused[],
+  holds: BackupHolds
+): Card {
+  const lead = leadDamaged(damaged, holds);
+  // both titles put the name after a verb, so both want the mid-sentence form
+  const name = nameWithin(lead.key);
+  const out = wayOut(lead.key, holds);
+  /**
+   * Everything else in trouble, counted by document rather than by entry. The
+   * same September can honestly be on both lists — the planner found it on the
+   * disk and a run found it on the way to the server — and adding the lists
+   * together would tell somebody a second month was in trouble when there is
+   * only the one they are reading about.
+   */
+  const others = new Set([...damaged, ...blocked].map((doc) => doc.key));
+  others.delete(lead.key);
+  const also = alsoStuck(others.size);
+
+  /**
+   * A phrase or no phrase, and they are two different findings rather than one
+   * with a gap in it. A note that names what went is a record that parsed and
+   * came back short; a note with nothing in it is a record that could not be
+   * read at all, or one whose account of itself was too long to keep. Inventing
+   * "part of it" for the second would be describing damage nobody measured.
+   */
+  const opening = lead.lost
+    ? `This phone's copy is damaged — ${lead.lost} did not survive.`
+    : "This phone's copy is damaged.";
+
+  return {
+    title: lead.lost
+      ? `Rin could only read part of ${name}`
+      : `Rin could not read ${name} on this phone`,
+    /**
+     * Three endings, and what changes with them is how much the card is
+     * entitled to say about the backup. With a listing in hand there is a copy
+     * up there and it may say so outright. With nothing having looked it may
+     * not, so it says the half that is true either way: whatever the backup
+     * holds, it did not come from this. With a listing that came back without
+     * the month, there is no copy to talk about at all and the sentence goes.
+     *
+     * None of the three claims the copy up there is better. It may be a month
+     * older, and nothing here has opened it. What makes it worth pulling down
+     * is only that it is not this one.
+     */
+    body:
+      out === 'restore'
+        ? `${opening} The backup is holding a copy of its own, and it did not come from this one — Rin has never sent a record it could not read. ${pullBack()}${also}`
+        : out === 'only-copy'
+          ? `${opening} ${onlyCopy()}${also}`
+          : `${opening} Rin has never sent a record it could not read, so nothing in the backup came from this damaged copy. ${revive(lead.key)}${also}`,
+    attention: true,
+    /**
+     * Not for the damage, which is what the note above is about — but the
+     * button takes the park off everything at once, and if something else on
+     * this phone is genuinely stuck then there is something here a retry can
+     * still do. The sentence counting it is in the body directly above.
+     */
+    retry: blocked.length > 0,
+    restore: out === 'restore' ? lead.key : null,
   };
 }
 
@@ -340,9 +600,23 @@ function blockedCard(blocked: readonly Refused[]): Card {
  * other only needs a minute. The state nobody had thought about comes last —
  * a ledger that knows nothing is not the same as a phone with nothing to send,
  * and until something has checked, the card says so instead of guessing.
+ *
+ * Damage leads over all of it, and that is the newest of these decisions. Every
+ * refusal below ends by saying everything is still here on this phone, which is
+ * true of a refusal and is the one thing that is not true of this; and the
+ * advice the refusals give — write in that month again — is what destroys the
+ * only remedy a damaged month has. A phone with a rejected August and an
+ * unreadable September led with August, counted September nowhere, and so never
+ * offered the rescue at all. The document somebody can lose data over comes
+ * first.
  */
-export function backupCard(status: BackupStatus, lastBackupAt: number | null): Card {
-  if (status.blocked.length > 0) return blockedCard(status.blocked);
+export function backupCard(
+  status: BackupStatus,
+  lastBackupAt: number | null,
+  holds: BackupHolds = null
+): Card {
+  if (status.damaged.length > 0) return damagedCard(status.damaged, status.blocked, holds);
+  if (status.blocked.length > 0) return blockedCard(status.blocked, holds);
 
   const sent = lastBackupAt ? ` Last sent ${whenBackedUp(lastBackupAt)}.` : '';
 
@@ -358,6 +632,7 @@ export function backupCard(status: BackupStatus, lastBackupAt: number | null): C
       body: `Rin sends changes when you open it.${sent}`,
       attention: true,
       retry: false,
+      restore: null,
     };
   }
 
@@ -375,6 +650,7 @@ export function backupCard(status: BackupStatus, lastBackupAt: number | null): C
       body: `Rin has not checked this phone against the backup yet. It does that when you open the app.${sent}`,
       attention: false,
       retry: false,
+      restore: null,
     };
   }
 
@@ -387,7 +663,52 @@ export function backupCard(status: BackupStatus, lastBackupAt: number | null): C
         'Everything on this phone matches the backup.',
     attention: false,
     retry: false,
+    restore: null,
   };
+}
+
+// --- what the card needs to be asked before it can be drawn ------------------
+
+/**
+ * Is what the backup holds worth a question?
+ *
+ * Finding out costs a listing — one read, an anonymous sign-in, and the code
+ * out of the Keychain — and the rule this app has held to every round is that a
+ * phone that is opened and not edited costs none of those. So the answer is
+ * fetched for the states whose wording actually turns on it and for no others,
+ * and this is the one place that decision is written down: the root effect that
+ * does the fetching reads this rather than a condition of its own, because the
+ * last time those were two conditions they drifted.
+ *
+ * Two states qualify, and they are the two ways this phone finds out it cannot
+ * read one of its own records — a run that read it on the way to the server,
+ * and a screen that read it on the way to the grid. It is deliberately no
+ * narrower than "something is stuck": the refusals whose wording ignores the
+ * answer are a handful of extra reads on a phone that already has a problem,
+ * and a condition that enumerated reasons would be a fourth thing to keep in
+ * step with `blockedCard`. It is deliberately no wider either. Nothing waiting,
+ * nothing stuck and nothing damaged is the ordinary phone, and it asks nothing.
+ */
+export function needsHolds(status: BackupStatus): boolean {
+  return status.damaged.length > 0 || status.blocked.length > 0;
+}
+
+/**
+ * The document the card is offering to pull back down, or null when it is
+ * offering nothing.
+ *
+ * Asked of the card itself rather than worked out again beside it, and the
+ * throwaway strings are the price of that. Two functions answering "is there a
+ * way out of this one" is exactly the shape of every bug in the header above —
+ * one of them learns about a case and the other does not — and this one is read
+ * on a different screen entirely, so a disagreement would show up as a planner
+ * pointing at a button Settings is not drawing.
+ *
+ * `lastBackupAt` is nothing to do with it: every branch that dates itself is a
+ * branch with nothing to restore.
+ */
+export function restoreOffer(status: BackupStatus, holds: BackupHolds = null): string | null {
+  return backupCard(status, null, holds).restore;
 }
 
 // --- what the backup screen says after a run ---------------------------------
@@ -422,6 +743,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
 
   const lead = leading(blocked);
   const name = nameOf(lead.key);
+  const within = nameWithin(lead.key);
   const also = alsoStuck(blocked.length - 1);
   const bulk = SECTION[lead.detail ?? ''];
 
@@ -431,12 +753,12 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
     return `${name} is too large to back up${bulk ? `, and most of it is ${bulk}` : ''}. ${shorten(lead.key, lead.detail)}${also}`;
   }
   if (lead.reason === 'unreadable') {
-    return `Rin could not read ${name} on this phone, so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
+    return `Rin could not read ${within} on this phone, so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
   // Without this the sentence fell through to the line below and told somebody
   // the server had turned down a document the server was never offered.
   if (lead.reason === 'incomplete') {
-    return `Rin could only read part of ${name} on this phone — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
+    return `Rin could only read part of ${within} on this phone — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
   return `${name} was turned down by the server. Backing up again will try it again.${also}`;
 }

@@ -1,7 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadCode } from '../backupState';
 import { BackupRun, backupEverything } from '../sync';
 import { Ledger, clearBlocked, loadLedger } from '../syncLedger';
-import { Moment, NO_RUNS, RunMemory, aftermath, dirtyStamp, turnedAway } from './autoBackupPolicy';
+import { Moment, NO_RUNS, RunMemory, aftermath, dirtyStamp } from './autoBackupPolicy';
 
 /**
  * The runs this launch makes against the one backup this phone has, and what
@@ -49,12 +50,13 @@ let lastAttemptAt = 0;
  * morning of edits was one field being written outside the guard that governed
  * the rest of them.
  *
- * None of it is written to disk. The ledger remembers *which* documents are
- * stuck across launches, because that survives being turned off overnight, but
- * a reason recorded weeks ago could easily be wrong now — and whether a run has
- * finished is a fact about this process, since a phone updated from a version
- * that had no ledger looks on disk exactly like a phone that has sent
- * everything.
+ * One field of it is written to disk and the rest is not. The ledger remembers
+ * *which* documents are stuck across launches, because that survives being
+ * turned off overnight, but a reason recorded weeks ago could easily be wrong
+ * now — and whether a run has finished is a fact about this process, since a
+ * phone updated from a version that had no ledger looks on disk exactly like a
+ * phone that has sent everything. `turnedAway` is the exception, and the
+ * `Turnaway` record below is where it goes and why.
  */
 let memory: RunMemory = NO_RUNS;
 
@@ -70,8 +72,133 @@ let memory: RunMemory = NO_RUNS;
  */
 let accountedFor: BackupRun | null = null;
 
+// --- the one thing a run leaves on disk --------------------------------------
+
+const TURNED_AWAY_KEY = '@monthly-planning/backup-turned-away';
+
+/**
+ * What the last finished run was refused by the server, as it survives the app
+ * being closed.
+ *
+ * The smallest true thing there is to keep, and deliberately not a list of
+ * documents. A refusal about the *install* — an expired App Check token, a rate
+ * limit, a project misconfigured for an afternoon — is parked against no
+ * document on purpose, because parking it is what left a phone unable to back
+ * up ever again after one bad token. But the moment the park is off, a document
+ * that was refused without a dirty flag of its own leaves no trace anywhere on
+ * this phone: the ledger is bound, dated, has nothing waiting and nothing
+ * stuck, and reads exactly like a phone that has sent everything. That was fine
+ * only for as long as the process lived. Closed and opened again, the phone had
+ * no record that anything had ever been refused, started no run, and put a card
+ * in front of somebody saying their history was in the backup when two
+ * documents of it were not.
+ *
+ * So a count goes on disk, and a count is enough: it says the phone is behind
+ * without saying which document is at fault, which is all either the card or
+ * the trigger needs in order to do the right thing. It is also why this cannot
+ * become the permanent silence it replaces. Every finished run writes the whole
+ * record afresh from what that run was refused — up, down, or to nothing — so
+ * there is no number here that can only climb, and nothing an edit or a
+ * successful morning cannot clear.
+ *
+ * `at` is the date on that claim rather than a floor under the next run, and
+ * the distinction matters. Nothing throttles on it: a wait inherited across a
+ * relaunch would have to inherit the stamp the run left behind as well, and
+ * that pair — a floor plus a set it applies to — is exactly the persisted state
+ * that can leave a phone waiting for a moment that never comes. What it is for
+ * is that a bare "two" cannot be told from a "two" written a year ago by anyone
+ * reading this record back, here or in a bug report.
+ */
+interface Turnaway {
+  /** how many documents the last finished run was turned away from */
+  count: number;
+  /** when that run was attempted, epoch milliseconds, 0 when unknown */
+  at: number;
+}
+
+/** Nothing outstanding — a phone no run has been refused anything on */
+const NEVER_TURNED_AWAY: Turnaway = { count: 0, at: 0 };
+
+/**
+ * Read the way every store in this app reads: anything that is not the shape
+ * this file writes is treated as no record at all.
+ *
+ * A dropped record costs one run that was probably unnecessary, which is the
+ * direction everything about backing up fails in. The other direction is a
+ * phone that believes a number it made up about documents it never checked.
+ */
+function parseTurnaway(raw: unknown): Turnaway {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return NEVER_TURNED_AWAY;
+  const record = raw as Record<string, unknown>;
+  const { count, at } = record;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count <= 0) {
+    return NEVER_TURNED_AWAY;
+  }
+  /**
+   * A stamp from the future is a clock that has been put back since, so the
+   * date is dropped and the count kept. The count is the part anything acts on
+   * and it is still true; the date would only be a lie about when.
+   */
+  const dated = typeof at === 'number' && Number.isInteger(at) && at > 0 && at <= Date.now();
+  return { count, at: dated ? at : 0 };
+}
+
+async function readTurnaway(): Promise<Turnaway> {
+  try {
+    const raw = await AsyncStorage.getItem(TURNED_AWAY_KEY);
+    return raw ? parseTurnaway(JSON.parse(raw)) : NEVER_TURNED_AWAY;
+  } catch {
+    return NEVER_TURNED_AWAY;
+  }
+}
+
+/**
+ * Written rather than removed when there is nothing outstanding, because
+ * "refused nothing" is a statement a finished run earned and a missing key is
+ * only an absence. Best-effort like every other store here: a write that never
+ * lands leaves the previous record standing, and the previous record can only
+ * make the next launch try again.
+ */
+async function writeTurnaway(record: Turnaway): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TURNED_AWAY_KEY, JSON.stringify(record));
+  } catch {
+    // best-effort persistence, matching the rest of the app's stores
+  }
+}
+
+/**
+ * The read of that record, done once and waited for by everything that could
+ * act on it.
+ *
+ * It has to be waited for rather than kicked off and hoped about. The first
+ * thing this hook does on a cold start is ask whether the moment is worth a
+ * run, and a phone whose only reason to run is on disk would answer no if the
+ * read had not landed — which is the bug, arriving a few milliseconds later.
+ *
+ * Memoised, so the disk is read once per launch and every caller after the
+ * first waits on the same promise. `settle` waits on it too, before it touches
+ * `memory` at all, which is what stops a read in flight from overwriting what a
+ * run has since established.
+ */
+let established: Promise<void> | null = null;
+
+function establish(): Promise<void> {
+  if (established === null) {
+    const reading = readTurnaway().then((record) => {
+      // A launch that ended while this read was in the air — a restore, or the
+      // code being forgotten — is a launch this record describes nothing about,
+      // and letting it land would put the old backup's count back on the new one.
+      if (established === reading) memory = { ...memory, turnedAway: record.count };
+    });
+    established = reading;
+  }
+  return established;
+}
+
 /** What the runs so far have established, for the decisions that read it */
-export function launchMemory(): RunMemory {
+export async function launchMemory(): Promise<RunMemory> {
+  await establish();
   return memory;
 }
 
@@ -84,7 +211,8 @@ export function launchMemory(): RunMemory {
  * the field that decides whether a refused install is ever offered again is
  * exactly the sort of thing that gets left out of one of two copies.
  */
-export function launchMoment(): Omit<Moment, 'ledger' | 'seen'> {
+export async function launchMoment(): Promise<Omit<Moment, 'ledger' | 'seen'>> {
+  await establish();
   return {
     accounted: memory.accounted,
     settled: memory.settled,
@@ -94,30 +222,69 @@ export function launchMoment(): Omit<Moment, 'ledger' | 'seen'> {
      * What the last finished run was refused by the server rather than about
      * the document. The ledger cannot hold it — the park comes off precisely so
      * that one bad afternoon does not become permanent — so for a document that
-     * did not go and has no dirty flag of its own, this launch's memory of the
-     * run is the only place the refusal exists at all.
+     * did not go and has no dirty flag of its own, this count is the only place
+     * the refusal exists at all, which is why it is the one thing here that
+     * comes off disk rather than out of this process.
      */
-    turnedAway: turnedAway([...memory.refusals.values()]).length,
-    // What the throttles count is when a run was last *attempted*, not when one
-    // last worked.
+    turnedAway: memory.turnedAway,
+    /**
+     * What the throttles count is when a run was last *attempted*, not when one
+     * last worked — and a launch has attempted nothing, so the first look of
+     * one is never held back. That is deliberate, and it is the other half of
+     * the record above being kept: a phone that comes back knowing it was
+     * refused has to be allowed to do something about it, and every floor here
+     * is a guess about what the last attempt would say again, which a launch
+     * with no last attempt has no business inheriting.
+     */
     since: Date.now() - lastAttemptAt,
   };
 }
 
 /**
- * Forget this launch's account of itself.
+ * The process ending — nothing more, and nothing written down.
  *
- * For the phone that has just been told to forget its code: the setbacks, the
- * refusals and the claim to have been checked are all statements about a backup
- * this phone no longer has, and carrying them into the next one would describe
- * somebody else's. A test is a launch too, which is the second reason this is
- * exported rather than kept private.
+ * This is what closing the app does, and it is a separate function from
+ * `forgetLaunch` below because they are separate events that used to be one:
+ * being closed, and being pointed at a different backup. Telling them apart is
+ * the whole of this change. Everything above dies with the process on its own,
+ * and the count of what was refused is exactly the thing that must not — so a
+ * test that stages a restart has to be able to ask for this half and only this
+ * half, or it would be proving that a record it had just deleted was missing.
  */
-export function forgetLaunch(): void {
+export function endLaunch(): void {
   inFlight = null;
   lastAttemptAt = 0;
   memory = NO_RUNS;
   accountedFor = null;
+  // read again on the next question asked, since this is a different launch
+  established = null;
+}
+
+/**
+ * Forget this phone's account of itself, on disk as well.
+ *
+ * For the phone that has just been told to forget its code, or been pointed at
+ * somebody else's backup by a restore: the setbacks, the refusals, the claim to
+ * have been checked and the count of what was turned away are all statements
+ * about a backup this phone no longer has, and carrying any of them into the
+ * next one would describe the wrong server. The count especially, since it is
+ * the half that would otherwise survive.
+ *
+ * Fire-and-forget at both call sites, exactly like `forgetCode` beside it, and
+ * safe to leave unawaited because nothing here needs waiting for: the
+ * in-process half is gone before the first `await`, and if the write never
+ * lands the worst it can do is send the next launch to check a backup that is
+ * already fine.
+ */
+export async function forgetLaunch(): Promise<void> {
+  endLaunch();
+  /**
+   * Established as knowing nothing, before the write rather than after it. A
+   * question asked while that write is in the air would otherwise re-read the
+   * record this call exists to destroy and put the old count straight back.
+   */
+  established = Promise.resolve();
+  await writeTurnaway(NEVER_TURNED_AWAY);
 }
 
 // --- one run at a time ------------------------------------------------------
@@ -166,12 +333,32 @@ export interface Settled {
  * twice would climb the setback floor twice for one refusal.
  */
 async function settle(result: BackupRun | null): Promise<Settled> {
+  // Before `memory` is read, let alone written: a launch that has not finished
+  // reading what the last one was refused would otherwise start from a count of
+  // nothing, and an attempt that got nowhere would then carry that nothing
+  // forward as though it were an answer.
+  await establish();
+
   const after = await loadLedger();
   if (result !== null && result === accountedFor) return { dated: false, ledger: after };
   accountedFor = result;
 
   const outcome = aftermath(memory, result, dirtyStamp(after));
   memory = outcome.memory;
+
+  /**
+   * The count goes down on disk here as readily as it goes up, and only a run
+   * that got a real answer may move it at all. A finished run refused nothing
+   * writes the empty record, which is what makes a good morning after a bad one
+   * enough on its own; a run that never got out writes nothing, because it
+   * learned nothing, and erasing the record with its silence is precisely the
+   * mistake `retryEverything` was rewritten to stop making.
+   */
+  if (outcome.answered) {
+    await writeTurnaway(
+      memory.turnedAway === 0 ? NEVER_TURNED_AWAY : { count: memory.turnedAway, at: lastAttemptAt }
+    );
+  }
 
   /**
    * The park comes off every document the server turned away, and `sync` put it

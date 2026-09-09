@@ -9,7 +9,7 @@ import {
   nextHabitId,
 } from '../types';
 import { readMonthForEditing, saveMonth } from '../storage';
-import { markDirty } from '../syncLedger';
+import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 import { monthLength } from '../dates';
 
 /**
@@ -63,7 +63,44 @@ export function useMonthData(year: number, month: number, today: number | null) 
     // a write for this one, so the permission is withdrawn before the read that
     // grants it rather than after.
     vouched.current = false;
-    readMonthForEditing(year, month).then(({ data: read, complete }) => {
+    const key = monthDocKey(year, month);
+    readMonthForEditing(year, month).then(({ data: read, complete, lost }) => {
+      /**
+       * Tell the ledger what this read found, before anything else.
+       *
+       * This is the only place a damaged month is ever noticed. The backup only
+       * looks at documents whose contents changed, and a month that rotted on
+       * disk changed nothing, so nothing on the backup's side of the app was
+       * ever going to examine it — which is how a phone came to say everything
+       * on it was in the backup while a month was missing half its habits. A
+       * screen reading the record is the one moment somebody finds out, so this
+       * is the moment it gets written down.
+       *
+       * A local write and nothing more. It does not mark the month dirty and it
+       * cannot start a run — see `recordUnvouched`, which is emphatic about why:
+       * the only thing this phone could send for this month is the half of it
+       * that survived the parse, and sending that over the whole copy on the
+       * server is the fault being closed rather than the fix.
+       *
+       * The `complete` side is the other half and it matters just as much. A
+       * note that outlived the damage would have the card offering to replace a
+       * month with a copy from the backup that this phone no longer needs and
+       * may well be older, so a read this phone *can* vouch for retires it — a
+       * complete read being the only proof of a whole record there is. That
+       * covers the way out that does not come back through this hook at all:
+       * `restoreMonth` writes the backup's copy straight to disk, and the next
+       * time anybody opens the month, this says so. Both calls leave the record
+       * untouched when there is nothing to change, so an undamaged month costs
+       * a read of the ledger and no write of it.
+       *
+       * Deliberately outside the `cancelled` check below. What was found is a
+       * fact about the file on disk rather than about this screen, and paging
+       * quickly past a damaged month is not a reason for the backup never to
+       * hear about it.
+       */
+      if (complete) clearUnvouched(key);
+      else recordUnvouched(key, lost ?? '');
+
       if (cancelled) return;
       vouched.current = complete;
       setData(read);
@@ -112,11 +149,28 @@ export function useMonthData(year: number, month: number, today: number | null) 
    * the next backup works out from the digest anyway, while the same edit
    * reported twice can outlive the push that answered it and cost a second run.
    */
-  const reportEdit = useCallback(() => {
+  const reportEdit = useCallback((wrote: boolean) => {
     const key = touched.current;
     if (!key) return;
     touched.current = null;
     markDirty(key);
+    /**
+     * And if that edit went to disk, the month is no longer one this phone
+     * cannot read. What a deliberate edit writes is the whole record — that is
+     * what makes it the repair both backup screens tell people to make — so the
+     * note it was written under is finished. Leaving it would have the card
+     * going on calling a month damaged after somebody had fixed it, which is
+     * the one thing a way out must not do.
+     *
+     * `wrote` is the narrow part, and it is why the flag above is not gated on
+     * it. There is one caller that reports an edit without having saved
+     * anything, and the two answers pull apart exactly there: the phone really
+     * is holding something the backup has not seen, so the flag is true, and
+     * the record on disk is still the damaged one, so the note is still true
+     * as well. Clearing it on the strength of an edit that never landed is the
+     * app going quiet about a month it knows it cannot read.
+     */
+    if (wrote) clearUnvouched(key);
   }, []);
 
   /**
@@ -154,7 +208,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveMonth(year, month, data);
-      reportEdit();
+      reportEdit(true);
       pendingSave.current = null;
     }, 400);
     return () => {
@@ -171,6 +225,8 @@ export function useMonthData(year: number, month: number, today: number | null) 
    * then. Somebody typed, nothing was saved, and the flag says the phone holds
    * something the backup has not seen — which is true: the next run reads the
    * same damaged record, blocks the month, and the card in Settings names it.
+   * What is *not* reported in that case is a repair, which is what `p` carries
+   * into `reportEdit`: nothing was written, so nothing was mended.
    */
   const flushSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -179,7 +235,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
       saveMonth(p.year, p.month, p.data);
       pendingSave.current = null;
     }
-    reportEdit();
+    reportEdit(p !== null);
   }, [reportEdit]);
 
   /**

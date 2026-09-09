@@ -1,8 +1,10 @@
 import { createHash } from 'crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Ledger,
   bindingFor,
   clearBlocked,
+  clearUnvouched,
   digestOf,
   emptyLedger,
   generationOf,
@@ -15,8 +17,11 @@ import {
   recordBlocked,
   recordPushed,
   recordSkipped,
+  recordUnvouched,
   resetFor,
   seedPushed,
+  unvouchedKeys,
+  unvouchedNote,
 } from '../syncLedger';
 
 /**
@@ -53,6 +58,9 @@ jest.mock('@react-native-async-storage/async-storage', () => {
     },
   };
 });
+
+/** The mock above, in the shape a test can count calls on */
+const store = AsyncStorage as unknown as { getItem: jest.Mock; setItem: jest.Mock };
 
 /** Two backup ids of the shape `deriveBackupId` produces, without the crypto */
 const ID = 'a'.repeat(64);
@@ -715,5 +723,248 @@ describe('the id it does not write down', () => {
     // whose digests describe a server this phone may never have talked to
     expect((await loadLedger()).binding).toBeNull();
     await expect(loadLedgerFor(ID)).resolves.toEqual(emptyLedger(ID));
+  });
+});
+
+/**
+ * The damage the backup would otherwise never hear about.
+ *
+ * A run only looks at documents whose contents changed, and a month that rotted
+ * on disk changed nothing — so it was never examined, never blocked, and never
+ * offered the copy the backup was holding for it. This is where a screen writes
+ * down what it could not read, and the whole of its value is in what it does
+ * *not* do: it must not mark anything dirty, must not park a refusal, and must
+ * not become a reason to send the half of a month that survived the parse.
+ */
+describe('a document this phone could not read in full', () => {
+  const LOST = '1 of 2 habits, 1 grid entry';
+
+  it('is written down under the document it is about', async () => {
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+
+    const ledger = await loadLedger();
+    expect(unvouchedKeys(ledger)).toEqual([SEPTEMBER]);
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBe(LOST);
+  });
+
+  it('does not mark the document dirty, and does not make it waiting', async () => {
+    // The load-bearing one. Dirty means the phone holds something the backup
+    // should be sent, and what it holds is the part of September that survived
+    // — sending that would put it over the whole copy on the server, which is
+    // the fault this note exists to report rather than to cause.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+
+    const ledger = await loadLedger();
+    expect(ledger.dirty).toEqual({});
+    expect(isPending(ledger, SEPTEMBER)).toBe(false);
+    expect(pendingKeys(ledger)).toEqual([]);
+    expect(pendingCount(ledger)).toBe(0);
+  });
+
+  it('is not recorded as a refusal', async () => {
+    // Nothing was offered to the server and nothing was turned down. Filed as a
+    // refusal it would inherit the generation guard, which expires on an edit —
+    // and an edit does not make this worth another try, it ends it.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+
+    const ledger = await loadLedger();
+    expect(ledger.blocked).toEqual([]);
+    expect(ledger.blockedAt).toEqual({});
+  });
+
+  it('survives being turned off and on again', async () => {
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+
+    // nothing in this process any more: the next launch reads the file back
+    expect(onDisk()).toMatchObject({ unvouched: { [SEPTEMBER]: LOST } });
+    expect(unvouchedNote(await loadLedgerFor(ID), SEPTEMBER)).toBe(LOST);
+  });
+
+  it('says nothing about a document nobody has complained about', async () => {
+    const ledger = await loadLedgerFor(ID);
+    expect(unvouchedNote(ledger, AUGUST)).toBeNull();
+    expect(unvouchedKeys(ledger)).toEqual([]);
+  });
+
+  it('tells a record nothing survived of apart from one nobody has read', async () => {
+    // The empty phrase is a real answer — damaged, with nothing left to name —
+    // and null is the absence of any answer. Reading them as the same thing
+    // would lose a whole month out of the list.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, '');
+
+    const ledger = await loadLedger();
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBe('');
+    expect(unvouchedNote(ledger, AUGUST)).toBeNull();
+    expect(unvouchedKeys(ledger)).toEqual([SEPTEMBER]);
+  });
+
+  it('lists what it holds in a stable order', async () => {
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+    await recordUnvouched(JANUARY, LOST);
+    await recordUnvouched(TASKS, '1 of 2 deadlines');
+    expect(unvouchedKeys(await loadLedger())).toEqual([JANUARY, SEPTEMBER, TASKS]);
+  });
+
+  it('says the newer thing when the same month is read again', async () => {
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, '1 of 2 habits');
+    await recordUnvouched(SEPTEMBER, '2 of 2 habits');
+    expect(unvouchedNote(await loadLedger(), SEPTEMBER)).toBe('2 of 2 habits');
+  });
+
+  it('writes nothing when it has nothing new to say', async () => {
+    // Both hooks call this on every read of a document they cannot vouch for,
+    // and paging through a year of months would otherwise write the identical
+    // record back a dozen times — on a phone that is supposed to cost nothing
+    // when nobody is editing, and racing whatever a run is recording.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+
+    store.setItem.mockClear();
+    await recordUnvouched(SEPTEMBER, LOST);
+    expect(store.setItem).not.toHaveBeenCalled();
+  });
+
+  it('costs no write at all on a phone whose records are all readable', async () => {
+    await resetFor(ID);
+
+    store.setItem.mockClear();
+    await clearUnvouched(SEPTEMBER);
+    await clearUnvouched(TASKS);
+    expect(store.setItem).not.toHaveBeenCalled();
+  });
+
+  it('refuses a key that could not name a document', async () => {
+    await resetFor(ID);
+    for (const key of ['', '..', 'months/2026-09', 'x'.repeat(65)]) {
+      await recordUnvouched(key, LOST);
+    }
+    expect(unvouchedKeys(await loadLedger())).toEqual([]);
+  });
+});
+
+/**
+ * The two ways a month stops being damaged, which are the two ways a whole
+ * record gets back onto the phone.
+ */
+describe('a record written whole again', () => {
+  const LOST = '1 of 2 habits';
+
+  it('is no longer damaged once the note is cleared', async () => {
+    // The repair: somebody edits the month, the hook writes the whole record
+    // out and reports it, and what it reports is that there is nothing left to
+    // rescue.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+    await clearUnvouched(SEPTEMBER);
+
+    const ledger = await loadLedger();
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBeNull();
+    expect(unvouchedKeys(ledger)).toEqual([]);
+  });
+
+  it('clears only the document it is about', async () => {
+    // The rescue puts one month back, not a year of them.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, LOST);
+    await recordUnvouched(JANUARY, LOST);
+    await clearUnvouched(SEPTEMBER);
+    expect(unvouchedKeys(await loadLedger())).toEqual([JANUARY]);
+  });
+
+  it('leaves a refusal exactly where it was', async () => {
+    // A month can be both: too large for the rules and damaged on disk. Mending
+    // the record says nothing about whether the server will take it, and the
+    // card has to go on saying so.
+    await resetFor(ID);
+    await markDirty(SEPTEMBER);
+    await recordBlocked(SEPTEMBER, 1);
+    await recordUnvouched(SEPTEMBER, LOST);
+    await clearUnvouched(SEPTEMBER);
+
+    const ledger = await loadLedger();
+    expect(ledger.blocked).toEqual([SEPTEMBER]);
+    expect(ledger.blockedAt).toEqual({ [SEPTEMBER]: 1 });
+  });
+
+  it('is not cleared by a refusal being lifted', async () => {
+    // The mirror image, and the reason these are two lists rather than one.
+    // `clearBlocked` is called for reasons that say nothing whatever about this
+    // phone's own copy — taking the park off documents an expired token got
+    // turned away, most of all — and a month is no less unreadable for it.
+    await resetFor(ID);
+    await markDirty(SEPTEMBER);
+    await recordBlocked(SEPTEMBER, 1);
+    await recordUnvouched(SEPTEMBER, LOST);
+    await clearBlocked(SEPTEMBER);
+
+    const ledger = await loadLedger();
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBe(LOST);
+    expect(ledger.blocked).toEqual([]);
+  });
+});
+
+/**
+ * A stored record is a file somebody could have edited, and the direction each
+ * field fails in is a decision rather than an accident.
+ */
+describe('damage notes read back off disk', () => {
+  async function stored(unvouched: unknown): Promise<Ledger> {
+    mockStored.set(
+      '@monthly-planning/sync-ledger',
+      JSON.stringify({ ...emptyLedger(ID), unvouched })
+    );
+    return loadLedger();
+  }
+
+  it('keeps the key when the phrase cannot be used', async () => {
+    // Read the way dirty flags are read rather than the way digests are. A note
+    // nobody can read is still a note somebody wrote, and dropping it would put
+    // the phone back to calling itself fully backed up over a document it has
+    // already decided it cannot read.
+    const ledger = await stored({ [SEPTEMBER]: 42, [AUGUST]: null, [JANUARY]: { a: 1 } });
+    expect(unvouchedKeys(ledger)).toEqual([JANUARY, AUGUST, SEPTEMBER].sort());
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBe('');
+  });
+
+  it('drops a phrase far longer than anything the voucher writes', async () => {
+    // Dropped rather than shortened: cutting `12 of 12 habits` in half makes a
+    // sentence that is not true, and the card would print it.
+    const ledger = await stored({ [SEPTEMBER]: 'x'.repeat(500) });
+    expect(unvouchedNote(ledger, SEPTEMBER)).toBe('');
+  });
+
+  it('drops an entry that could not name a document', async () => {
+    const ledger = await stored({ 'months/2026-09': '1 of 2 habits', '..': 'nothing' });
+    expect(unvouchedKeys(ledger)).toEqual([]);
+  });
+
+  it('reads a record from before there were any as having nothing to say', async () => {
+    mockStored.set(
+      '@monthly-planning/sync-ledger',
+      JSON.stringify({ binding: bindingFor(ID), digests: {}, dirty: {}, blocked: [] })
+    );
+    expect(unvouchedKeys(await loadLedger())).toEqual([]);
+  });
+
+  it('is not carried across to another backup', async () => {
+    // It would still be true — the damage is on this phone whichever code it is
+    // holding — but the reason anybody is told is that the backup has a whole
+    // copy, and a code pointed at an empty tree has nothing to offer.
+    await resetFor(ID);
+    await recordUnvouched(SEPTEMBER, '1 of 2 habits');
+    expect(unvouchedKeys(await loadLedgerFor(OTHER_ID))).toEqual([]);
+  });
+
+  it('does not crash when storage itself fails', async () => {
+    mockFailure.write = true;
+    await expect(recordUnvouched(SEPTEMBER, '1 of 2 habits')).resolves.toBeUndefined();
+    await expect(clearUnvouched(SEPTEMBER)).resolves.toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { VouchedRead } from './storage';
+import type { VouchedRead, VouchedValue } from './storage';
 
 /**
  * Tasks that are due by a certain moment.
@@ -70,12 +70,41 @@ export async function loadTasks(): Promise<Task[]> {
 }
 
 /**
- * `VouchedRead` is declared in `storage.ts`, next to the lossy month readers it
- * exists to qualify, and imported here as a type only — nothing about the month
- * store reaches this module at runtime. Re-exported so a caller can take the
- * reader and the shape of its answer from the same place.
+ * `VouchedRead` and `VouchedValue` are declared in `storage.ts`, next to the
+ * lossy month readers they exist to qualify, and imported here as types only —
+ * nothing about the month store reaches this module at runtime. Re-exported so
+ * a caller can take the reader and the shape of its answer from the same place.
  */
-export type { VouchedRead } from './storage';
+export type { VouchedRead, VouchedValue } from './storage';
+
+/**
+ * Whether a parsed deadline list became the list it was meant to be.
+ *
+ * The twin of `vouchMonthValue` in `storage.ts`, and here for the same reason:
+ * a list read off this phone's disk and a shard decrypted off the wire are the
+ * same question, so they get the same answer from the same place rather than
+ * two standards that drift apart. `readTasksVouched` below is the disk caller;
+ * `pullTaskShards` in `sync.ts` is the wire one.
+ *
+ * Rows are all that is counted. `parseTasks` also clears a completion time off
+ * a task that is not done, and that is the parser doing its documented job on a
+ * value nothing should have written — the deadline itself is still there, so it
+ * is a correction rather than a loss, and calling it one would block the backup
+ * of every half-migrated list.
+ */
+export function vouchTasksValue(raw: unknown): VouchedValue<Task[]> {
+  // a list stored as something that is not a list is a record this phone
+  // cannot read, not a list that lost rows
+  if (!Array.isArray(raw)) return { status: 'unreadable' };
+
+  const data = parseTasks(raw);
+  if (data.length === raw.length) return { status: 'complete', data };
+  return {
+    status: 'partial',
+    data,
+    lost: `${raw.length - data.length} of ${raw.length} deadlines`,
+  };
+}
 
 /**
  * The deadline list read the way the backup needs it.
@@ -98,30 +127,11 @@ export async function readTasksVouched(): Promise<VouchedRead<Task[]>> {
   }
   if (raw === null || raw === undefined) return { status: 'absent' };
 
-  let stored: unknown;
   try {
-    stored = JSON.parse(raw);
+    return vouchTasksValue(JSON.parse(raw));
   } catch {
     return { status: 'unreadable' };
   }
-  // a list stored as something that is not a list is a record this phone
-  // cannot read, not a list that lost rows
-  if (!Array.isArray(stored)) return { status: 'unreadable' };
-
-  const data = parseTasks(stored);
-  if (data.length === stored.length) return { status: 'complete', data };
-  /**
-   * Rows are all that is counted. `parseTasks` also clears a completion time
-   * off a task that is not done, and that is the parser doing its documented
-   * job on a value nothing should have written — the deadline itself is still
-   * there, so it is a correction rather than a loss, and calling it one would
-   * block the backup of every half-migrated list.
-   */
-  return {
-    status: 'partial',
-    data,
-    lost: `${stored.length - data.length} of ${stored.length} deadlines`,
-  };
 }
 
 /** A deadline list to draw, and whether the record it came from was whole */
@@ -130,6 +140,14 @@ export interface TasksForEditing {
   data: Task[];
   /** false when the bytes on disk held more rows than `data` does */
   complete: boolean;
+  /**
+   * What the voucher could not account for — `1 of 2 deadlines` — and absent
+   * whenever there is nothing to say: a list read in full, and a record that
+   * could not be read at all, where no row survived to be counted against any
+   * other. The twin of the field on `MonthForEditing`, and there for the same
+   * reason: the screen is what hands this to the ledger.
+   */
+  lost?: string;
 }
 
 /**
@@ -157,7 +175,7 @@ export async function readTasksForEditing(): Promise<TasksForEditing> {
     case 'complete':
       return { data: record.data, complete: true };
     case 'partial':
-      return { data: record.data, complete: false };
+      return { data: record.data, complete: false, lost: record.lost };
     case 'absent':
       // nothing is stored under the key, which is a phone that has never
       // written a deadline. An empty list is exactly what is there, so writing

@@ -15,8 +15,9 @@ import { forgetLaunch } from './src/hooks/backupRuns';
 import { useAutoBackup } from './src/hooks/useAutoBackup';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
+import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
-import { startAppCheck } from './src/sync';
+import { listMonths, restoreMonth, startAppCheck } from './src/sync';
 import {
   useFonts,
   JosefinSans_400Regular,
@@ -79,6 +80,82 @@ export default function App() {
     refresh: refreshBackupStatus,
     retry: retryBackup,
   } = useAutoBackup(hasCode, markSent);
+
+  /**
+   * Which months the backup holds, looked up only when something is wrong.
+   *
+   * The card offers to pull a damaged month back down, and it may only offer
+   * that when the backup actually has the month — a button that fetches nothing
+   * would be worse than the warning it replaced. Null means nobody has looked,
+   * which `backupWording` treats as "say nothing" rather than "not there", so
+   * the quiet path costs no reads at all.
+   *
+   * The condition that decides this used to break for the one case that needed
+   * it most. Only a blocked document brought the lookup to life, and a document
+   * is blocked only by a run that tried to send it — so a month that went bad
+   * where it lay, which no run ever looks at, was never listed, never offered a
+   * restore and never mentioned. `needsHolds` is that condition now: it lives
+   * beside the wording that consumes the answer, so the two cannot drift again,
+   * and it takes in the damage the ledger carries. It is not one state wider
+   * than that. An ordinary phone, opened and not edited, still costs zero reads,
+   * zero writes and no anonymous sign-in.
+   */
+  const [backupHolds, setBackupHolds] = useState<readonly string[] | null>(null);
+  const stuck = needsHolds(backupStatus);
+
+  useEffect(() => {
+    if (!stuck || !hasCode) {
+      setBackupHolds(null);
+      return;
+    }
+    let cancelled = false;
+    loadCode().then((code) => {
+      if (cancelled || !code) return;
+      listMonths(code).then((listed) => {
+        if (!cancelled && listed.ok) setBackupHolds(listed.value);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [stuck, hasCode]);
+
+  /**
+   * The month Settings is offering to put back, by its document name, or null.
+   *
+   * Handed down to the planner so its notice can point at the way out — and a
+   * name is all that goes down there. The planner has no business knowing
+   * whether a backup exists, which of its months are in one, or what a listing
+   * costs; it knows the month it has open, and it can see whether that is the
+   * one being offered. Everything that decided this is above the Navigator,
+   * which is where the answer already had to live.
+   */
+  const restorableMonth = useMemo(
+    () => restoreOffer(backupStatus, backupHolds),
+    [backupStatus, backupHolds]
+  );
+
+  /**
+   * Replace this phone's damaged copy of one month with the backup's.
+   *
+   * Everything below the Navigator is rebuilt afterwards for the same reason a
+   * full restore does it: the month on screen has just been swapped underneath
+   * whatever was holding it, and a screen that kept its own copy would show the
+   * damage it was told had gone.
+   */
+  const restoreOneMonth = useCallback(
+    async (key: string) => {
+      const code = await loadCode();
+      if (!code) return;
+      const [year, month] = key.split('-').map(Number);
+      if (!Number.isInteger(year) || !Number.isInteger(month)) return;
+      const pulled = await restoreMonth(code, year, month - 1);
+      if (!pulled.ok) return;
+      setDataEpoch((n) => n + 1);
+      await refreshBackupStatus();
+    },
+    [refreshBackupStatus]
+  );
 
   useEffect(() => {
     loadSettings().then(setSettings);
@@ -174,6 +251,9 @@ export default function App() {
               refreshBackupStatus();
             }}
             onRetryBackup={retryBackup}
+            backupHolds={backupHolds}
+            restorableMonth={restorableMonth}
+            onRestoreMonth={restoreOneMonth}
             onForgetBackup={() => {
               forgetCode();
               // The refusals and the setbacks were about a backup this phone no

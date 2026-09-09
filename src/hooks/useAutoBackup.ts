@@ -64,7 +64,7 @@ import {
  * React in it can be put in front of a test — which this one cannot.
  */
 
-export type { BackupStatus, Refusal } from './autoBackupPolicy';
+export type { BackupStatus, Damage, Refusal } from './autoBackupPolicy';
 
 // --- the hook ---------------------------------------------------------------
 
@@ -103,9 +103,15 @@ export function useAutoBackup(
    */
   const seen = useRef('');
 
-  const publish = useCallback((ledger: Ledger) => {
-    const memory = launchMemory();
-    const next = statusOf(ledger, memory.refusals, memory.accounted);
+  /**
+   * Asynchronous because one thing the card needs is on disk rather than in
+   * this process: the count of what the last finished run was turned away from.
+   * It is the only record a document refused without a dirty flag of its own
+   * leaves behind, so a card drawn without waiting for it is a card that says
+   * everything is in the backup while two documents are missing from it.
+   */
+  const publish = useCallback(async (ledger: Ledger) => {
+    const next = statusOf(ledger, await launchMemory());
     setStatus((prev) => (stampOf(prev) === stampOf(next) ? prev : next));
   }, []);
 
@@ -117,7 +123,7 @@ export function useAutoBackup(
    * re-publish.
    */
   const account = useCallback(
-    (outcome: Settled | null) => {
+    async (outcome: Settled | null) => {
       if (!outcome) return;
       /**
        * Only bytes on the wire move the date. A run can finish having sent
@@ -126,14 +132,14 @@ export function useAutoBackup(
        * "last sent today" this whole change was written to stop saying.
        */
       if (outcome.dated) sent.current();
-      seen.current = launchMemory().attempted;
-      publish(outcome.ledger);
+      seen.current = (await launchMemory()).attempted;
+      await publish(outcome.ledger);
     },
     [publish]
   );
 
   const start = useCallback(async () => {
-    account(await runAndSettle());
+    await account(await runAndSettle());
   }, [account]);
 
   /**
@@ -147,7 +153,7 @@ export function useAutoBackup(
   const look = useCallback(
     async (trigger: Trigger) => {
       const ledger = await loadLedger();
-      publish(ledger);
+      await publish(ledger);
 
       const stamp = dirtyStamp(ledger);
       // What the *previous* look saw, which only the idle timer uses: coming
@@ -159,7 +165,7 @@ export function useAutoBackup(
       // Half the question is this moment on this phone and half of it is what
       // the runs so far have established; `launchMoment` is the second half,
       // and it is assembled where those runs live rather than here.
-      if (shouldRun(trigger, { ledger, seen: before, ...launchMoment() })) await start();
+      if (shouldRun(trigger, { ledger, seen: before, ...(await launchMoment()) })) await start();
     },
     [publish, start]
   );
@@ -210,7 +216,7 @@ export function useAutoBackup(
    * the screen, which is the half a module with no React in it cannot do.
    */
   const retry = useCallback(async () => {
-    account(await retryEverything());
+    await account(await retryEverything());
   }, [account]);
 
   return { status, refresh, retry };
