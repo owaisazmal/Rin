@@ -388,6 +388,22 @@ describe('what the backup screen says after a restore', () => {
     expect(report.problem).toMatch(/left as they are/i);
   });
 
+  /**
+   * Some of the deadline documents opened and some did not. The phone keeps one
+   * flat list, so writing the part that arrived would delete the part that did
+   * not — it is left alone for the same reason, and it needs a sentence of its
+   * own, because "the deadline list could not be opened" is false about the
+   * half that plainly was.
+   */
+  it('says so when only part of the deadline list in the backup would open', () => {
+    const report = restoreReport(restore({ months: 3, deadlines: 'partial' }));
+
+    expect(report.problem).toMatch(/only part of the deadline list/i);
+    expect(report.problem).toMatch(/left as they are/i);
+    expect(report.problem).not.toMatch(/could not be opened, so the deadlines/i);
+    expect(report.progress).toBe('3 months are back.');
+  });
+
   it('says nothing at all about deadlines a backup simply does not hold', () => {
     const report = restoreReport(restore({ months: 3, deadlines: 'none' }));
 
@@ -404,22 +420,28 @@ describe('what the backup screen says after a restore', () => {
 });
 
 describe('what the planner says over a record it cannot write back', () => {
-  it('names the record, and says plainly that nothing typed is being kept', () => {
+  it('names the record, and separates opening it from typing in it', () => {
     // The one thing an app may not do is take what somebody writes and quietly
-    // drop it. A month that cannot be saved is not saved — which is right, and
-    // is why it has to be said on the screen where the typing is happening.
+    // drop it — and the other is refuse to save and not say so. Both halves are
+    // here because the write guard turns on intent, not on damage: opening the
+    // month leaves the disk alone, typing in it saves and is how a person
+    // rescues one. Said on the screen where the typing is happening.
     const notice = damagedNotice('month');
 
     expect(notice).toMatch(/could not read all of this month/i);
-    expect(notice).toMatch(/nothing you change here is being saved/i);
-    expect(notice).toMatch(/left exactly as it is/i);
+    expect(notice).toMatch(/only the part that survived/i);
+    expect(notice).toMatch(/opening this month changes nothing/i);
+    expect(notice).toMatch(/writing in it saves/i);
+    // and it does not pretend the loss is recoverable by typing
+    expect(notice).toMatch(/lets go of the part that did not/i);
   });
 
   it('says the same about the deadlines, in their own words', () => {
     const notice = damagedNotice('deadlines');
 
     expect(notice).toMatch(/could not read all of your deadlines/i);
-    expect(notice).toMatch(/writing this list back would drop the rest/i);
+    expect(notice).toMatch(/opening this list changes nothing/i);
+    expect(notice).toMatch(/writing in it saves/i);
   });
 
   it('leaves the backup out of it, which is a different card on a different screen', () => {

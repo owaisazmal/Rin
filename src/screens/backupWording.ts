@@ -179,7 +179,13 @@ export type DamagedRecord = 'month' | 'deadlines';
 export function damagedNotice(record: DamagedRecord): string {
   const subject = record === 'month' ? 'all of this month' : 'all of your deadlines';
   const it = record === 'month' ? 'this month' : 'this list';
-  return `Rin could not read ${subject} on this phone. Nothing you change here is being saved — writing ${it} back would drop the rest of it for good, so the copy on the disk is being left exactly as it is.`;
+  // Says what the app actually does, which changed when the write guard moved
+  // from "is this record damaged" to "did a person ask for this write". Merely
+  // opening the record leaves the disk alone; typing in it saves, because a
+  // record nobody can edit is a record nobody can rescue, and the backup card
+  // sends people here to do exactly that. What it must not do is let someone
+  // type over the rest of it without knowing that is what they are doing.
+  return `Rin could not read ${subject} on this phone, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.`;
 }
 
 // --- the card in Settings ----------------------------------------------------
@@ -268,6 +274,14 @@ function blockedCard(blocked: readonly Refused[]): Card {
    * because this refused to write over it with a damaged one. A card that only
    * reports the damage reads as data already lost, which is the opposite of
    * what has happened.
+   *
+   * It says "damaged" flatly because it is now only ever true. `sync.ts` used
+   * to report a month somebody had deliberately emptied under this same reason,
+   * so the card described intact data as damaged and then advised writing in
+   * the month again — which would have un-emptied it. That month is carried to
+   * the backup now and never arrives here, so the four reasons mean exactly
+   * what they say: `unreadable` is a record this phone could not read at all,
+   * `incomplete` one it could only half read, and the other two are the server.
    */
   if (lead.reason === 'unreadable') {
     return {
@@ -478,6 +492,19 @@ export function restoreReport(run: Extract<RestoreRun, { ok: true }>): RunReport
 
   if (run.deadlines === 'unreadable') {
     notes.push('The deadline list in this backup could not be opened, so the deadlines already on this phone were left as they are.');
+  }
+
+  /**
+   * Half the deadline list arrived, and half of it is the one thing that may
+   * not be written: this phone keeps a single list, so pouring in the part that
+   * opened is a deletion of everything in the part that did not. It is left
+   * alone for the same reason the line above leaves it alone, and it needs its
+   * own sentence because "could not be opened" would be false — some of it
+   * plainly was, and somebody watching the months arrive would rightly wonder
+   * why the deadlines did not follow.
+   */
+  if (run.deadlines === 'partial') {
+    notes.push('Only part of the deadline list in this backup could be opened, so the deadlines already on this phone were left as they are rather than replaced by half a list.');
   }
 
   return {

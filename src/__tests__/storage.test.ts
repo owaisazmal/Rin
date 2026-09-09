@@ -342,6 +342,71 @@ describe('readMonthVouched', () => {
       });
     });
 
+    it('reports a mark on an id no modern habit list has', async () => {
+      // the control for the v1 exemption below: in a record written the modern
+      // way, a mark whose habit is not in the list means the habit went
+      // missing, and that is real loss however ordinary the cell looks
+      stored({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1, '2:1': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports a mark stranded on a v1 slot that still has its name', async () => {
+      // slot 0 was typed into, so nothing about this cell is explained by the
+      // migration: day 40 is damage, and an empty slot elsewhere in the array
+      // does not excuse it
+      stored({ habits: ['Run', ''], grid: { '40:0': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports a v1 mark on a slot index the array never had', async () => {
+      // slot 1 really was emptied, so this record has an exemption to make —
+      // but slot 5 was never there to empty, and a mark on it is loss like any
+      // other. Being a v1 record is not on its own a licence to stop counting
+      // what the grid could not keep.
+      stored({ habits: ['Run', '', 'Read'], grid: { '1:0': 1, '3:5': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports a mark on an empty v1 slot that is also on an impossible day', async () => {
+      // the exemption covers exactly what the parser would have kept had the
+      // slot still held a name. v1 never wrote a fortieth of the month, so this
+      // cell is damaged in its own right and stays counted.
+      stored({ habits: ['Run', ''], grid: { '40:1': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports a v1 cell whose value was never a mark', async () => {
+      stored({ habits: ['Run', ''], grid: { '1:1': 3 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports marks belonging to named v1 slots that fell off the end of the cap', async () => {
+      // those slots were typed into and their names are counted as lost, so
+      // their marks are lost too — the exemption turns on the slot being
+      // *empty*, not merely on its id being absent from the parsed list
+      const names = Array.from({ length: MAX_HABITS + 2 }, (_, i) => `h${i}`);
+      stored({ habits: names, grid: { '1:0': 1, [`2:${MAX_HABITS}`]: 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: `2 of ${MAX_HABITS + 2} habits, 1 grid entry`,
+      });
+    });
+
     it('reports notes that were not strings', async () => {
       stored({ observations: ['keep', 3, null, 'also'] });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
@@ -457,6 +522,28 @@ describe('readMonthVouched', () => {
       expect(read).toMatchObject({ status: 'complete' });
       if (read.status !== 'complete') throw new Error('expected a complete read');
       expect(read.data.habits).toHaveLength(3);
+    });
+
+    it('vouches for a v1 month whose marks all sit on slots that kept their names', async () => {
+      // the control: nothing here is orphaned, and it has to stay complete for
+      // the reason it always was, not because of the exemption below
+      stored({ habits: ['Run', '', 'Read', '', '', '', '', ''], grid: { '1:0': 1, '2:2': 2 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it('vouches for a v1 month whose emptied slot left its marks behind', async () => {
+      // Somebody cleared slot 1's name years ago and its marks stayed on disk
+      // under `${day}:1`, which now names no habit. `parseHabits` has always
+      // treated the blank slot as a slot rather than a lost habit; the marks
+      // it stranded are the same migration and not this phone losing anything,
+      // so an ordinary month like this must still be able to back up.
+      stored({ habits: ['Run', '', '', '', '', '', '', ''], grid: { '1:0': 1, '2:1': 1 } });
+      const read = await readMonthVouched(2026, 8);
+      expect(read).toMatchObject({ status: 'complete' });
+      if (read.status !== 'complete') throw new Error('expected a complete read');
+      // the orphan is still gone from the data — it is unreachable either way;
+      // what changed is that its absence is no longer called damage
+      expect(read.data.grid).toEqual({ '1:0': 1 });
     });
 
     it('vouches for a grid holding a pending cell written as zero', async () => {

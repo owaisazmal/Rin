@@ -24,7 +24,13 @@ import {
 } from './backup';
 import { MonthData } from './types';
 import { Task, loadTasks, parseTasks, readTasksVouched, saveTasks } from './tasks';
-import { listStoredMonths, parseMonthData, readMonthVouched, saveMonth } from './storage';
+import {
+  listStoredMonths,
+  parseMonthData,
+  readMonthVouched,
+  readStoredMonths,
+  saveMonth,
+} from './storage';
 import {
   Ledger,
   clearBlocked,
@@ -117,6 +123,16 @@ const CURRENT = 'current';
 /** The task document ids the rules accept: `current`, or a year in this century */
 const YEAR = /^20[0-9]{2}$/;
 const TASK_SHARD = /^(current|20[0-9]{2})$/;
+
+/**
+ * A month document's name, as `monthDocKey` writes it.
+ *
+ * Only the ledger's own keys are ever tested against this, and it is there to
+ * tell a flag naming a month from a flag naming a task shard — on a record that
+ * has been on disk across upgrades and could have been edited by hand, so the
+ * two sets are separated by what a key looks like rather than by what wrote it.
+ */
+const MONTH_DOC = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function tasksDoc(id: string, key: string) {
   return doc(getFirestore(), 'backups', id, 'tasks', key);
@@ -367,19 +383,38 @@ interface TaskShard {
 }
 
 /**
+ * Every task document the backup holds, and how much of it arrived.
+ *
+ * The count is the whole reason this is a record rather than a bare array. A
+ * shard that will not open is stepped over below, which is right for reading
+ * and catastrophic for writing: `restoreEverything` replaces the phone's one
+ * flat list with whatever came down, so "three documents, two opened" and
+ * "two documents, both opened" produce the same array and one of them is
+ * missing a year of somebody's deadlines. Nothing could tell them apart, so
+ * nothing did.
+ */
+interface TaskArchive {
+  shards: TaskShard[];
+  /** documents that were listed and could not be opened or parsed */
+  unopened: number;
+}
+
+/**
  * Every task document this backup holds, decrypted.
  *
  * The rules allow listing this collection precisely so a restore can find out
  * which years exist rather than probing ids one at a time or guessing a range.
- * A shard that will not decrypt is stepped over: one unreadable year costs that
- * year, not the deadline list.
+ * A shard that will not decrypt is stepped over rather than ending the read —
+ * one unreadable year costs that year, not the deadline list — but it is
+ * counted on the way past, because a caller that overwrites the local list
+ * needs to know it was handed less than the backup holds.
  *
  * Order is fixed here — the open list, then the archive oldest first — so the
  * same backup always reassembles into the same list. Nothing downstream depends
  * on it, since every screen sorts deadlines by their due date, but a stable
  * answer is worth more than an arbitrary one.
  */
-async function pullTaskShards(code: string): Promise<RestoreResult<TaskShard[]>> {
+async function pullTaskShards(code: string): Promise<RestoreResult<TaskArchive>> {
   try {
     await ready();
     const listing = await getDocs(
@@ -390,29 +425,42 @@ async function pullTaskShards(code: string): Promise<RestoreResult<TaskShard[]>>
     const key = deriveKey(code);
     const order = (id: string) => (id === CURRENT ? '' : id);
     const shards: TaskShard[] = [];
+    let unopened = 0;
     for (const entry of [...listing.docs].sort((a, b) =>
       order(a.id).localeCompare(order(b.id))
     )) {
       const plaintext = open(key, entry.data() as Sealed);
-      if (plaintext === null) continue;
+      if (plaintext === null) {
+        unopened++;
+        continue;
+      }
       try {
         shards.push({ key: entry.id, tasks: parseTasks(JSON.parse(plaintext)) });
       } catch {
         // decrypted, but not JSON — the same dead end as a failed decryption
+        unopened++;
       }
     }
     if (shards.length === 0) return { ok: false, reason: 'unreadable' };
-    return { ok: true, value: shards };
+    return { ok: true, value: { shards, unopened } };
   } catch (error) {
     return { ok: false, reason: reasonFor(error) };
   }
 }
 
-/** The deadline list, reassembled from however many documents it arrived in */
+/**
+ * The deadline list, reassembled from however many documents it arrived in.
+ *
+ * Deliberately the lossy view: it answers with the shards that opened and says
+ * nothing about the ones that did not, because reading a backup to look at it
+ * is better served by most of the list than by none of it. Nothing that
+ * *writes* over the phone's own deadlines may use this — `restoreEverything`
+ * reads the archive itself, for the count this one drops.
+ */
 export async function pullTasks(code: string): Promise<RestoreResult<Task[]>> {
-  const shards = await pullTaskShards(code);
-  if (!shards.ok) return shards;
-  return { ok: true, value: shards.value.flatMap((shard) => shard.tasks) };
+  const archive = await pullTaskShards(code);
+  if (!archive.ok) return archive;
+  return { ok: true, value: archive.value.shards.flatMap((shard) => shard.tasks) };
 }
 
 /**
@@ -586,9 +634,24 @@ async function runBackup(code: string): Promise<BackupRun> {
   let unchanged = 0;
   let skipped = 0;
 
-  const stored = await listStoredMonths();
+  /**
+   * Null here means the store would not answer, which is not the same as a
+   * phone with no months — and the sweep below turns that difference into
+   * whether a pending flag is retired or kept. Reading it through the variant
+   * that can say so is what stops one refused listing settling every month on
+   * the phone as though it had been sent.
+   */
+  const listed = await readStoredMonths();
+  const stored = listed ?? [];
+  /**
+   * Which month names this loop actually reached. The sweep after it needs to
+   * tell a month the run considered and left alone from one it never saw at
+   * all, and the listing is the only thing that decides which is which.
+   */
+  const walked = new Set<string>();
   for (const { year, month } of [...stored].reverse()) {
     const key = monthDocKey(year, month);
+    walked.add(key);
     const recorded = ledger.digests[key];
     let generation = generationOf(ledger, key);
 
@@ -672,45 +735,57 @@ async function runBackup(code: string): Promise<BackupRun> {
       continue;
     }
 
-    if (isEmptyMonth(data)) {
+    if (isEmptyMonth(data) && !recorded) {
       // Opening the planner on a month writes it to disk whether or not
       // anything is typed into it, so paging back through last year
       // materialises twelve empty months. None of them has ever been sent and
       // none of them says anything, so nothing goes up and the flag is retired
       // — without a digest, since no bytes moved and this file never claims a
       // document is on the server when it is not.
-      if (!recorded) {
-        if (generation > 0) await recordSkipped(key, generation);
-        skipped++;
-        continue;
-      }
-
-      /**
-       * The backup holds a month with something in it, and this phone holds a
-       * month with nothing in it. Three things used to look exactly like that —
-       * somebody clearing the month out by hand, a stored month that would not
-       * parse, and a store that would not answer — because `loadMonth` gives
-       * back the same empty month for all three. Two of them are now caught
-       * above by the vouched read and never reach here, so this branch is the
-       * first one alone: a record this phone read in full and found empty.
-       *
-       * It is still not sent. Sending is what carries a deletion to the backup,
-       * and carrying the deletion of a whole month is a decision nothing here
-       * has been asked to make; it is also the only one on this path that
-       * cannot be taken back, since the document being overwritten is the last
-       * copy of that month there is. So it is named instead, and the cost is
-       * that a month emptied on purpose reads as stuck until something is
-       * written into it again.
-       *
-       * That is now a wrong thing said out loud about a case this file can
-       * finally identify, which makes it the next thing to fix rather than a
-       * trade — see `BlockedDoc` for the vocabulary a screen would need.
-       */
-      await recordBlocked(key, generation);
-      blocked.push({ key, reason: 'unreadable' });
+      if (generation > 0) await recordSkipped(key, generation);
+      skipped++;
       continue;
     }
 
+    /**
+     * A month that *was* sent and is empty now falls through to the send below,
+     * which carries the deletion. That is a decision rather than an oversight,
+     * and it replaces the one thing this file did that it could prove was
+     * untrue.
+     *
+     * Three things used to look identical here — somebody clearing the month
+     * out by hand, a stored month that would not parse, and a store that would
+     * not answer — because `loadMonth` gives back the same empty month for all
+     * three. The vouched read now catches the last two above and returns before
+     * this line, so what is left is the first one alone: a record this phone
+     * read with nothing dropped, and found empty. The old branch named it
+     * `unreadable` anyway, so Settings said "Rin could not read September 2026
+     * on this phone / this phone's copy looks damaged" about a month nothing
+     * was wrong with, and the way out it offered — write in that month again —
+     * would have un-emptied the month rather than backed it up. Declining to
+     * carry a deletion is defensible; saying that about intact data is not.
+     *
+     * So it goes. Emptying a month in the planner is an ordinary edit that
+     * saves like any other, a restore means "make this phone the other one",
+     * and the deadline archive further down this file already carries exactly
+     * this deletion for a year whose last deadline was deleted. A backup that
+     * keeps resurrecting a month somebody cleared is not a safer backup, it is
+     * a wrong one.
+     *
+     * What makes it safe to send is a pair of gates that were both already
+     * here, and this is why it can be done now and could not be before:
+     *
+     *   * **The vouched read.** `unreadable` and `partial` returned two
+     *     branches up, so the only way to this line is a record read in full.
+     *     A local read failure still never overwrites anything, which is the
+     *     rule the whole file is built on and is untouched.
+     *   * **The dirty flag.** A month with a recorded digest and no reported
+     *     edit is stepped over at the top of this loop without being read at
+     *     all, so arriving here with `recorded` set means the generation is
+     *     above zero — something on this phone said this month changed. An
+     *     empty document goes over a full one on somebody's say-so, never on a
+     *     digest that merely disagrees.
+     */
     const result = await sendMonth(code, year, month, data, plaintext);
     if (result.ok) {
       await recordPushed(key, digest, generation);
@@ -721,6 +796,37 @@ async function runBackup(code: string): Promise<BackupRun> {
     if (result.reason === 'offline') return { ok: false, reason: 'offline' };
     await recordBlocked(key, generation);
     blocked.push(refused(key, result));
+  }
+
+  /**
+   * A month something reported an edit to that this phone has nothing stored
+   * under, which no part of the loop above can reach.
+   *
+   * The loop walks `listStoredMonths`, so a name that is not in that listing is
+   * never visited at all, and the `absent` branch inside it only ever fires for
+   * one that was. Nothing else retires a month flag, so the count of what is
+   * waiting never reaches zero again: the card reads "One month waiting" for
+   * the life of the phone and a run starts every half hour to send a document
+   * that does not exist. A number that cannot go down is not a status, it is a
+   * nag — this is the counterpart of the sweep the task shards already have.
+   *
+   * It is reached without a byte of corruption. `saveMonth` is best-effort and
+   * swallows whatever went wrong, while the call that reports the edit runs on
+   * the next line regardless, so one failed write on a month nobody had stored
+   * before strands a flag naming a month that was never written.
+   *
+   * Absence is empty and there is nothing here to send, exactly as in the
+   * branch above: no digest is recorded, because no bytes moved and this file
+   * never claims a document is on the server when it is not. Guarded by the
+   * generation like every other retirement here, so a month written to disk
+   * while the run was walking keeps its flag and goes next time.
+   */
+  if (listed !== null) {
+    for (const key of Object.keys(ledger.dirty)) {
+      if (!MONTH_DOC.test(key) || walked.has(key)) continue;
+      await recordSkipped(key, generationOf(ledger, key));
+      skipped++;
+    }
   }
 
   /**
@@ -839,6 +945,40 @@ async function runBackup(code: string): Promise<BackupRun> {
     await recordSkipped(key, generationOf(ledger, key));
   }
 
+  /**
+   * A task document parked in the ledger that this run has nothing to send
+   * under and nothing to empty either — and which therefore nothing at all can
+   * take the park off again.
+   *
+   * Both of the ways a park comes off need the document to be in `shards`: a
+   * push lands under its name, or the "already up there" branch below clears a
+   * stale one. The orphan rule above is what puts a vanished year back into
+   * `shards`, and it deliberately will not do that at generation zero, because
+   * emptying a year nobody reported an edit to is how an archive gets wiped by
+   * a list that went thin without anybody touching it.
+   *
+   * A year parked at generation zero satisfies neither, and it is reached by an
+   * ordinary sequence: the deadline list rots, so every document on record is
+   * parked — a finished year at generation zero, since nothing has edited it
+   * for months — and then the list is repaired without that year's deadline in
+   * it. From there the card says "Deadlines you finished in 2024 is not
+   * reaching the backup" for the life of the phone, which is wrong about the
+   * cause and offers a remedy that cannot work. The same thing happens to
+   * `current` on a first run, where it is parked as the only name there was.
+   *
+   * So the park comes off. Not the document: the server keeps whatever it holds
+   * under that name, which is the same trade the orphan rule already makes and
+   * says out loud — a year left standing that could have been emptied, rather
+   * than a year emptied that should have been left standing. What is removed is
+   * only this phone's claim that something is stuck, which nothing on it can
+   * still support. If a deadline is filed under that year again, or anything
+   * reports an edit to it, it is back in `shards` and decided afresh.
+   */
+  for (const key of ledger.blocked) {
+    if (!TASK_SHARD.test(key) || shards.has(key)) continue;
+    await clearBlocked(key);
+  }
+
   for (const [key, group] of shards) {
     const plaintext = JSON.stringify(group);
     const digest = digestOf(plaintext);
@@ -924,9 +1064,12 @@ export function backupEverything(code: string): Promise<BackupRun> {
  * How the deadline list fared on the way down, which the months cannot say for
  * it: `none` is a backup that genuinely holds no deadlines and a local list
  * emptied to match, `unreadable` is task documents that would not decrypt and a
- * local list left exactly as it was.
+ * local list left exactly as it was, and `partial` is some of them opening and
+ * some not — which is the same answer as `unreadable` for what was written,
+ * and a different sentence, because half a list arriving is not nothing
+ * arriving.
  */
-export type DeadlineRestore = 'restored' | 'none' | 'unreadable';
+export type DeadlineRestore = 'restored' | 'none' | 'partial' | 'unreadable';
 
 /**
  * What a restore leaves behind: the months it wrote, the ones it could not read
@@ -985,9 +1128,9 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
   }
 
   /**
-   * The deadline list, and the four different things "no shards came back" can
-   * mean. They used to share one silent branch — no seeds, no save, and a run
-   * that still reported success — which is the worst bug this file has had: the
+   * The deadline list, and the five different things can happen to it. Four of
+   * them used to share one silent branch — no seeds, no save, and a run that
+   * still reported success — which is the worst bug this file has had: the
    * phone was told the restore worked, so the next ordinary backup pushed
    * whatever thin list was on it straight over the deadlines it had failed to
    * download, and the last copy of them was gone.
@@ -1001,28 +1144,46 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
    *     Nothing is written locally, since there is nothing to write, and the
    *     run carries on: what is on the server is already lost, and the phone's
    *     own list is the better copy of the two.
+   *   * **Some of them opening and some not** is the same principle, and it
+   *     went the other way for as long as the count did not exist. The phone
+   *     keeps one flat list, so the save below is a replacement rather than a
+   *     merge: pouring in the shards that opened deletes every deadline that
+   *     lived in the ones that did not, silently, on the phone that still had
+   *     them. Two phones on one code are enough — the second on a newer build,
+   *     so its records carry a `v` this one does not know and `open` answers
+   *     null — and it costs a whole open list. What is on the server is already
+   *     out of reach either way, and this phone's list is the better copy of
+   *     the two, so it is left exactly as it is and reported.
    *   * `offline` and `rejected` mean the deadlines are still up there and this
    *     phone simply did not get them. That is a restore that did not happen,
    *     and it is reported as one. Nothing is seeded, so nothing on this phone
    *     is left claiming to be the backup's copy of anything.
+   *
+   * Nothing is seeded in any of the three that write nothing, which matters as
+   * much as the save does. A seed is this phone saying "the server's copy of
+   * that document is what I hold now", and after a restore that wrote no
+   * deadlines it holds its own list instead. Left unseeded, every local shard
+   * is named to the ledger below and waiting to be sent.
    */
-  const shards = await pullTaskShards(code);
+  const archive = await pullTaskShards(code);
   let deadlines: DeadlineRestore;
-  if (shards.ok) {
+  if (archive.ok && archive.value.unopened > 0) {
+    deadlines = 'partial';
+  } else if (archive.ok) {
     const tasks: Task[] = [];
-    for (const shard of shards.value) {
+    for (const shard of archive.value.shards) {
       tasks.push(...shard.tasks);
       seeds[shard.key] = digestOf(JSON.stringify(shard.tasks));
     }
     await saveTasks(tasks);
     deadlines = 'restored';
-  } else if (shards.reason === 'missing') {
+  } else if (archive.reason === 'missing') {
     await saveTasks([]);
     deadlines = 'none';
-  } else if (shards.reason === 'unreadable') {
+  } else if (archive.reason === 'unreadable') {
     deadlines = 'unreadable';
   } else {
-    return { ok: false, reason: shards.reason };
+    return { ok: false, reason: archive.reason };
   }
 
   try {

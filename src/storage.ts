@@ -59,6 +59,23 @@ function parseHabits(raw: unknown): Habit[] {
 }
 
 /**
+ * A stored `${day}:${habitId}` split into its halves, or null when the string
+ * is not one at all — no separator, or a day no month ever had.
+ *
+ * `vouchMonth` needs to ask the same question of a raw key that `parseGrid`
+ * asks, so the two share this rather than each carrying their own copy of it:
+ * a key the parser would keep but the voucher thought malformed would go
+ * straight back to reporting loss that never happened.
+ */
+function splitCellKey(key: string): { day: number; id: string } | null {
+  const sep = key.indexOf(':');
+  if (sep <= 0) return null;
+  const day = Number(key.slice(0, sep));
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return { day, id: key.slice(sep + 1) };
+}
+
+/**
  * Only cells that belong to a habit in the list, on a plausible day, holding a
  * real mark. A pending cell is the same as an absent one — the app deletes
  * rather than writes 0 — so those are dropped too, which also keeps
@@ -70,12 +87,9 @@ function parseGrid(raw: unknown, habits: Habit[]): Record<string, CellState> {
   const ids = new Set(habits.map((h) => h.id));
   for (const [key, state] of Object.entries(raw as Record<string, unknown>)) {
     if (state !== 1 && state !== 2) continue;
-    const sep = key.indexOf(':');
-    if (sep <= 0) continue;
-    const day = Number(key.slice(0, sep));
-    const id = key.slice(sep + 1);
-    if (!Number.isInteger(day) || day < 1 || day > 31 || !ids.has(id)) continue;
-    grid[cellKey(day, id)] = state;
+    const cell = splitCellKey(key);
+    if (!cell || !ids.has(cell.id)) continue;
+    grid[cellKey(cell.day, cell.id)] = state;
   }
   return grid;
 }
@@ -161,10 +175,66 @@ export type VouchedRead<T> =
  * uses is applied here. Any other array is counted whole.
  */
 function habitsOffered(raw: unknown[]): number {
-  if (raw.every((h) => typeof h === 'string')) {
-    return (raw as string[]).filter((name) => name.trim() !== '').length;
+  if (isV1HabitArray(raw)) {
+    return raw.filter((name) => name.trim() !== '').length;
   }
   return raw.length;
+}
+
+/**
+ * The v1 fixed-slot shape: an array of nothing but names.
+ *
+ * Both halves of the migration exemption below turn on this one test, and they
+ * have to turn on the *same* one — `parseHabits` reads a habits array this way
+ * or the modern way, never half of each, so the count of what it was offered
+ * and the count of what the grid was offered must agree about which format
+ * they are looking at.
+ */
+function isV1HabitArray(raw: unknown[]): raw is string[] {
+  return raw.every((h) => typeof h === 'string');
+}
+
+/**
+ * Which v1 slots were sitting empty, by the id their marks would carry.
+ *
+ * The other half of the exemption `habitsOffered` makes, and for the same
+ * migration. v1 stored habits as a fixed 8-slot name array with grid keys
+ * shaped `${day}:${slotIndex}`, so clearing a slot's name left that slot's
+ * marks behind under an index that now names no habit. `parseGrid` drops them
+ * and is right to — but they were orphaned by the old format, on the day
+ * somebody emptied the slot, and not by anything wrong with this phone's copy.
+ * Counting them would report an ordinary migrated month as partial and lock it
+ * out of backing up for good, which is exactly the false positive the habits
+ * side already guards against.
+ *
+ * `String(i)` is what `parseHabits` names the slots, so it is what is matched:
+ * a key like `1:01` refers to no slot the migration ever created and stays
+ * counted. Only this shape is exempt — in a modern record a mark on an id that
+ * is not in the list is a habit that went missing, which is real loss and is
+ * still reported as such.
+ */
+function blankV1Slots(rawHabits: unknown): Set<string> {
+  const blank = new Set<string>();
+  if (!Array.isArray(rawHabits) || !isV1HabitArray(rawHabits)) return blank;
+  rawHabits.forEach((name, i) => {
+    if (name.trim() === '') blank.add(String(i));
+  });
+  return blank;
+}
+
+/**
+ * Whether one raw grid entry is a mark the migration orphaned, rather than one
+ * this phone failed to read.
+ *
+ * Deliberately narrow: everything `parseGrid` would have kept had the slot
+ * still held its name, and nothing else. A cell whose value is not a mark, or
+ * whose day belongs to no month, is damaged in its own right — the empty slot
+ * does not excuse it, and it stays counted as loss.
+ */
+function orphanedByMigration(key: string, state: unknown, blankSlots: Set<string>): boolean {
+  if (state !== 1 && state !== 2) return false;
+  const cell = splitCellKey(key);
+  return cell !== null && blankSlots.has(cell.id);
 }
 
 /** `n` of a thing, or nothing at all when none of them went missing */
@@ -206,9 +276,13 @@ function vouchMonth(raw: unknown): VouchedRead<MonthData> {
     // A cell holding 0 is a pending cell, which the app deletes rather than
     // writes; the parser dropping it loses nothing, and counting it would
     // flag any month an older build had written zeroes into. Everything else
-    // present was meant to be a mark, including a value too broken to be one.
-    const offered = Object.values(r.grid as Record<string, unknown>).filter(
-      (state) => state !== 0
+    // present was meant to be a mark, including a value too broken to be one —
+    // except a mark stranded on an empty v1 slot, which the migration orphaned
+    // rather than this phone losing, and which `habitsOffered` already exempts
+    // on the names side of the very same record.
+    const orphans = blankV1Slots(r.habits);
+    const offered = Object.entries(r.grid as Record<string, unknown>).filter(
+      ([key, state]) => state !== 0 && !orphanedByMigration(key, state, orphans)
     ).length;
     const dropped = offered - Object.keys(data.grid).length;
     if (dropped > 0) lost.push(`${dropped} grid ${dropped === 1 ? 'entry' : 'entries'}`);
@@ -395,6 +469,23 @@ export async function loadMonthWindow(
  * and the intro flag, none of which are months.
  */
 export async function listStoredMonths(): Promise<{ year: number; month: number }[]> {
+  return (await readStoredMonths()) ?? [];
+}
+
+/**
+ * The same listing, for the one caller that must know the difference between
+ * "this phone has stored no months" and "the store would not answer".
+ *
+ * `listStoredMonths` answers both with an empty array, which is right for every
+ * screen: there is nothing to show either way. The backup is the exception, and
+ * for the same reason the vouched reads above exist. It retires a month's
+ * pending flag when the listing does not name it, on the grounds that a flag
+ * for a month nothing is stored under can never be cleared by sending it — and
+ * if a failed listing came back as "no months at all", that reasoning would
+ * retire every flag on the phone and quietly settle a backup that never
+ * happened. Null means do not conclude anything.
+ */
+export async function readStoredMonths(): Promise<{ year: number; month: number }[] | null> {
   try {
     const keys = await AsyncStorage.getAllKeys();
     return keys
@@ -404,7 +495,7 @@ export async function listStoredMonths(): Promise<{ year: number; month: number 
       .filter((m) => m.month >= 0 && m.month <= 11)
       .sort((a, b) => a.year - b.year || a.month - b.month);
   } catch {
-    return [];
+    return null;
   }
 }
 

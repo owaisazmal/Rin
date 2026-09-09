@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deriveBackupId, deriveKey, generateCode, open } from '../backup';
 import {
   backupEverything,
@@ -354,6 +355,36 @@ describe('when it cannot work', () => {
   });
 });
 
+
+describe('a store that will not answer', () => {
+  /**
+   * The sweep that retires a flag for a month nothing is stored under rests
+   * entirely on the listing being true. If a refused listing came back looking
+   * like a phone with no months at all, that reasoning would retire every flag
+   * on the device and settle a backup that never happened — the same mistake as
+   * reading a half-parsed record as a deletion, one level up.
+   */
+  it('does not retire a month it merely failed to look for', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);           // settled, nothing waiting
+    await saveMonth(2026, 8, { ...month, observations: ['changed', '', '', ''] });
+    await markDirty('2026-09');
+
+    const keys = AsyncStorage.getAllKeys as jest.Mock;
+    keys.mockRejectedValueOnce(new Error('disk'));
+    await backupEverything(CODE);
+
+    // the month is still waiting, because the run never actually looked
+    expect(pendingKeys(await loadLedger())).toEqual(['2026-09']);
+  });
+
+  it('still retires one it looked for and genuinely did not find', async () => {
+    await markDirty('2026-06');             // flagged, never stored
+    await backupEverything(CODE);
+
+    expect(pendingKeys(await loadLedger())).toEqual([]);
+  });
+});
 
 describe('backing up the whole phone', () => {
   it('sends every stored month and the task list', async () => {
@@ -1066,6 +1097,152 @@ describe('never sending what this phone cannot vouch for', () => {
     expect(pendingCount(await loadLedger())).toBe(0);
   });
 
+  /**
+   * The same nag one step further out, where no loop could reach it at all.
+   *
+   * The run walks `listStoredMonths`, so a flag naming a month with nothing
+   * stored under it is never visited — the `absent` branch inside the loop only
+   * ever fires for a key that was listed. `saveMonth` is best-effort and
+   * swallows a failed write while the call reporting the edit runs on the next
+   * line regardless, so one failure on a month nobody had stored before leaves
+   * the card counting a month waiting for the life of the phone, and a run
+   * starting every half hour to send a document that does not exist.
+   */
+  it('stops counting a month the store never managed to write', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+
+    await markDirty('2026-06');
+
+    const sent = mockState.writes;
+    await expect(backupEverything(CODE)).resolves.toEqual({
+      ok: true,
+      months: 1,
+      pushed: 0,
+      unchanged: 1,
+      skipped: 1,
+      blocked: [],
+    });
+    expect(mockState.writes).toBe(sent);
+    expect(pendingKeys(await loadLedger())).toEqual([]);
+
+    // and it stays down, rather than being retired and found again every run
+    await expect(backupEverything(CODE)).resolves.toMatchObject({ skipped: 0 });
+    expect(pendingKeys(await loadLedger())).toEqual([]);
+  });
+
+  /**
+   * A year parked while the deadline list was unreadable, which nothing could
+   * ever un-park again.
+   *
+   * Both ways a park comes off need the document to be in the run's shards — a
+   * push lands under its name, or the "already up there" branch clears a stale
+   * one — and the orphan rule that puts a vanished year back into the shards
+   * will not do it at generation zero, because emptying a year nobody reported
+   * an edit to is how an archive gets wiped by a list that went thin on its
+   * own. A finished year satisfies neither, so the card said "Deadlines you
+   * finished in 2024 is not reaching the backup" for the life of the phone —
+   * wrong about the cause, and offering a remedy that cannot work.
+   */
+  it('lets go of a year it parked that no longer holds a deadline', async () => {
+    await saveTasks([tasks[0], finishedIn2024]);
+    await backupEverything(CODE);
+
+    // the stored list rots, so every document on record is parked — 2024 at
+    // generation zero, since nothing has edited a finished year for months
+    mockLocal.set(TASKS_BLOB, '[{"id":"0","tex');
+    await markDirty('current');
+    await backupEverything(CODE);
+    expect((await loadLedger()).blocked).toEqual(['2024', 'current']);
+
+    // the list is written again, without the 2024 deadline in it
+    await saveTasks([tasks[0]]);
+    await markDirty('current');
+    await backupEverything(CODE);
+
+    const ledger = await loadLedger();
+    expect(ledger.blocked).toEqual([]);
+    expect(pendingKeys(ledger)).toEqual([]);
+    // the park came off; the document did not. Emptying a year on the strength
+    // of a list that went thin without an edit is exactly the trade the orphan
+    // rule already refuses to make, and this changes none of it.
+    expect(readBack('tasks/2024')).toEqual([finishedIn2024]);
+  });
+
+  it('lets go of the open list it parked on a run that had no other name', async () => {
+    // nothing on record and a list that will not parse, so `current` is parked
+    // at generation zero as the only name there was to report
+    mockLocal.set(TASKS_BLOB, '[{"id":"0","tex');
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    expect((await loadLedger()).blocked).toEqual(['current']);
+
+    // the list is readable again and holds nothing, so no shard is computed
+    // under that name and no push will ever land to say it is fine
+    await saveTasks([]);
+    await backupEverything(CODE);
+    expect((await loadLedger()).blocked).toEqual([]);
+  });
+
+  /**
+   * A month somebody cleared out on purpose, which the run used to name as
+   * `unreadable` and decline to send. The vouched read says `complete`: nothing
+   * is damaged and the phone knows it. So the card read "Rin could not read
+   * September 2026 on this phone / this phone's copy looks damaged" over intact
+   * data, and its advice — write in that month again — would have un-emptied
+   * the month rather than backed it up, leaving the deletion permanently unable
+   * to reach the backup.
+   */
+  it('carries a month somebody emptied on purpose instead of calling it damaged', async () => {
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+    expect(readBack('months/2026-09')).toEqual(twoHabits);
+
+    // both habits deleted in the planner: an ordinary edit, saved like any
+    // other, and a record this phone reads from end to end
+    await saveMonth(2026, 8, emptyMonthData());
+    await markDirty('2026-09');
+    await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+
+    await expect(backupEverything(CODE)).resolves.toEqual({
+      ok: true,
+      months: 1,
+      pushed: 1,
+      unchanged: 0,
+      skipped: 0,
+      blocked: [],
+    });
+    expect(readBack('months/2026-09')).toEqual(emptyMonthData());
+    expect(pendingKeys(await loadLedger())).toEqual([]);
+  });
+
+  /**
+   * The gate that makes the test above safe rather than reckless, which is why
+   * it is asserted separately: an empty document goes over a full one on
+   * somebody's say-so and never on a digest that merely disagrees. This one
+   * passes either way on purpose — it guards the half of the old behaviour that
+   * was kept, not the half that was wrong.
+   */
+  it('will not carry an emptiness nothing on this phone reported', async () => {
+    await saveMonth(2026, 8, twoHabits);
+    await backupEverything(CODE);
+
+    // the blob is emptied by something that is not an edit and reports nothing
+    // — the deadline archive's "leaves a year alone" case, one storey up. A
+    // month with a recorded digest and no flag against it is not even read.
+    await saveMonth(2026, 8, emptyMonthData());
+
+    const sent = mockState.writes;
+    await expect(backupEverything(CODE)).resolves.toMatchObject({
+      ok: true,
+      pushed: 0,
+      unchanged: 1,
+      blocked: [],
+    });
+    expect(mockState.writes).toBe(sent);
+    expect(readBack('months/2026-09')).toEqual(twoHabits);
+  });
+
   it('says how much actually reached the server when part of the run was refused', async () => {
     await saveMonth(2026, 0, month);
     await saveMonth(2026, 7, month);
@@ -1134,6 +1311,44 @@ describe('a restore that could not bring the deadlines down', () => {
       deadlines: 'none',
     });
     await expect(loadTasks()).resolves.toEqual([]);
+  });
+
+  /**
+   * Two phones on one code, the second one on a newer build: its records carry
+   * a version this build does not know, so `open` answers null for those and
+   * not for the others, and the archive comes down half-openable.
+   *
+   * The phone keeps one flat list, so writing what arrived is a replacement
+   * rather than a merge — every deadline that lived in the document that would
+   * not open is deleted from the phone that still had it. The identical failure
+   * for a month is counted in `skipped` and reported; this one had no state to
+   * be in and no sentence to be said, so it happened in silence under "one
+   * month is back".
+   */
+  it('leaves the deadlines alone when only some of the documents would open', async () => {
+    await saveMonth(2026, 8, month);
+    await saveTasks([tasks[0], finishedIn2024]);
+    await backupEverything(CODE);
+
+    // the open list will not open; the 2024 archive still will
+    const openList = `backups/${deriveBackupId(CODE)}/tasks/current`;
+    mockDocs.set(openList, { ...mockDocs.get(openList)!, ct: 'QQQQ' });
+
+    // another phone, holding deadlines that exist nowhere else
+    mockLocal.clear();
+    const mine = [tasks[0], alsoOpen, finishedIn2025];
+    await saveTasks(mine);
+
+    await expect(restoreEverything(CODE)).resolves.toEqual({
+      ok: true,
+      months: 1,
+      skipped: 0,
+      deadlines: 'partial',
+    });
+    await expect(loadTasks()).resolves.toEqual(mine);
+    // and nothing here claims to be the backup's copy of a deadline document,
+    // so this phone's own list is left waiting to be sent rather than orphaned
+    expect(pendingKeys(await loadLedger())).toEqual(['2025', 'current']);
   });
 
   it('leaves a month the restore never covered waiting rather than orphaned', async () => {

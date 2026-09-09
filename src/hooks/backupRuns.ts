@@ -198,11 +198,22 @@ async function settle(result: BackupRun | null): Promise<Settled> {
  * decided before the first `await` and so cannot be decided twice — two
  * triggers landing together would otherwise both stamp the date and both
  * re-publish.
+ *
+ * The run itself comes back alongside what settling it established, because one
+ * caller needs both. `runAndSettle` below is this without the run, which is all
+ * the triggers have ever wanted; `retryEverything` is the caller that has to
+ * know whether anything reported back at all, and what it said.
  */
-export async function runAndSettle(): Promise<Settled | null> {
+async function runSettled(): Promise<{ result: BackupRun | null; settled: Settled } | null> {
   const mine = inFlight === null;
   const result = await run();
-  return mine ? await settle(result) : null;
+  return mine ? { result, settled: await settle(result) } : null;
+}
+
+/** The run this launch is making, settled — the way in for both triggers */
+export async function runAndSettle(): Promise<Settled | null> {
+  const outcome = await runSettled();
+  return outcome === null ? null : outcome.settled;
 }
 
 /**
@@ -231,17 +242,61 @@ export async function backupNow(code: string): Promise<BackupRun> {
  * anything has changed since the last answer, and every one of them is a guess
  * this can see past: a person pressing "try again" knows they have just trimmed
  * the month, or walked out of the tunnel, or that the thing that was wrong at
- * my end has been fixed. So the parks come off — every one of them, whatever
- * put it there — the climbing floor starts again from nothing, and the run goes
- * without asking `shouldRun` a thing.
+ * my end has been fixed. So the climbing floor starts again from nothing, the
+ * run goes without asking `shouldRun` a thing, and the parks come off — every
+ * one of them, whatever put it there.
  *
- * Nothing here can lose anything. Un-parking a document that really is too
- * large costs one refused request, after which the run parks it again and the
- * card says the same thing it said before.
+ * They come off *afterwards*, though, and that is the whole of this function.
+ * They used to come off first, along with this launch's memory of why each
+ * document was refused, and nothing put either back when the run then got
+ * nowhere. A refusal the server made lives in `memory.refusals` and nowhere
+ * else — the park is deliberately lifted so that one expired token is not
+ * permanent — so a tap answered by a dead connection erased the only record
+ * that anything was stuck: an empty blocked list, nothing counted as waiting,
+ * no refusal remembered, no trigger with a reason to start, and a card reading
+ * "everything on this phone is in the backup" over months that had never gone.
+ * That is worse than not tapping at all, and it is the exact state the whole
+ * `turnedAway` mechanism exists to make unreachable. So nothing is forgotten
+ * until a run has come back and said what is still stuck, and a run that never
+ * reports leaves the phone knowing precisely what it knew before the tap.
+ *
+ * Waiting costs nothing, because a park has never held a document back from
+ * being offered: `runBackup` walks every month on disk and every shard the
+ * deadlines make whatever the blocked list says, and it is the card and the
+ * triggers that read that list. What clearing does buy is the park a run steps
+ * over in silence — a document already on the server character for character,
+ * which no push and no skip will ever take one off — and those come off here
+ * the moment a finished run has failed to name them. Anything it was refused
+ * again stays exactly where the run has just put it.
  */
 export async function retryEverything(): Promise<Settled | null> {
-  const ledger = await loadLedger();
-  for (const key of ledger.blocked) await clearBlocked(key);
-  memory = { ...memory, setbacks: 0, refusals: new Map() };
-  return runAndSettle();
+  const parked = (await loadLedger()).blocked;
+  /**
+   * The one thing that is safe to give up before the run, because forgetting it
+   * can only make this phone try sooner: the climbing floor is a guess about how
+   * long there is no point in asking, and somebody asking is better information
+   * than the guess.
+   */
+  memory = { ...memory, setbacks: 0 };
+
+  const outcome = await runSettled();
+  if (outcome === null) return null;
+  const { result, settled } = outcome;
+
+  /**
+   * Nothing came back to say what is still stuck — the connection died, or the
+   * Keychain would not give up the code — so nothing here knows any more than it
+   * did before the tap, and every park stands. `aftermath` leaves this launch's
+   * refusals alone for the same reason, which is what makes the two halves of
+   * the record recover together instead of one of them outliving the other.
+   */
+  if (result === null || !result.ok) return settled;
+
+  const stillStuck = new Set(result.blocked.map((doc) => doc.key));
+  const stale = parked.filter((key) => !stillStuck.has(key));
+  for (const key of stale) await clearBlocked(key);
+
+  // The card is shown the ledger, so it has to see the parks come off — and on
+  // the ordinary retry, where none of them did, there is nothing to re-read.
+  return stale.length === 0 ? settled : { ...settled, ledger: await loadLedger() };
 }
