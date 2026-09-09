@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import SectionHeader from './SectionHeader';
+import { MAX_OBSERVATIONS, MAX_OBSERVATION_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
 
 interface Props {
@@ -104,13 +105,18 @@ export default function Observations({ observations, onChange, onAdd, onRemove }
       <SectionHeader
         title="OBSERVATIONS"
         right={
-          <Pressable
-            hitSlop={8}
-            onPress={onAdd}
-            style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.6 }]}
-          >
-            <PlusGlyph color={palette.accent} />
-          </Pressable>
+          // at the limit the control goes rather than greying out: there is no
+          // room in the header for a reason, and a button that does nothing
+          // when pressed is worse than one that isn't there
+          observations.length < MAX_OBSERVATIONS ? (
+            <Pressable
+              hitSlop={8}
+              onPress={onAdd}
+              style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.6 }]}
+            >
+              <PlusGlyph color={palette.accent} />
+            </Pressable>
+          ) : null
         }
       />
       <View style={styles.divider} />
@@ -121,7 +127,8 @@ export default function Observations({ observations, onChange, onAdd, onRemove }
             <TextInput
               style={styles.input}
               value={o}
-              onChangeText={(t) => onChange(i, t)}
+              maxLength={MAX_OBSERVATION_LEN}
+              onChangeText={(t) => onChange(i, t.slice(0, MAX_OBSERVATION_LEN))}
               placeholder="write it down…"
               placeholderTextColor={palette.inkSoft}
               multiline

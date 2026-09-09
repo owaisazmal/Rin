@@ -37,6 +37,7 @@ import { useYearSummary } from '../hooks/useYearSummary';
 import { MONTH_NAMES } from '../dates';
 import { HistoryFilter } from '../history';
 import { quoteForDate } from '../quotes';
+import { damagedNotice } from './backupWording';
 import { ChartType } from '../settings';
 import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
@@ -94,6 +95,7 @@ export default function PlannerScreen({
   const {
     data,
     loaded,
+    vouched,
     daysInMonth,
     stats,
     flushSave,
@@ -114,6 +116,7 @@ export default function PlannerScreen({
   const {
     tasks,
     loaded: tasksLoaded,
+    vouched: tasksVouched,
     addTask,
     setTaskText,
     setTaskDue,
@@ -243,6 +246,25 @@ export default function PlannerScreen({
             anim={monthAnim}
             enterFrom={enterFrom}
           />
+
+          {/*
+            A record this phone could only half read is drawn but never written
+            back, so anything typed into it goes nowhere. That has to be said
+            out loud and at the top: the alternative is a month that accepts
+            edits all afternoon and keeps none of them. Both notices can be up
+            at once — they are two different records — and each waits for its
+            own load, since nothing is vouched for before it has been read.
+          */}
+          {loaded && !vouched ? (
+            <View style={styles.damaged}>
+              <Text style={styles.damagedText}>{damagedNotice('month')}</Text>
+            </View>
+          ) : null}
+          {tasksLoaded && !tasksVouched ? (
+            <View style={styles.damaged}>
+              <Text style={styles.damagedText}>{damagedNotice('deadlines')}</Text>
+            </View>
+          ) : null}
 
           <TrackerCard
             chart={chart}
@@ -396,6 +418,24 @@ const makeStyles = (p: Palette) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: p.card,
+    },
+    /**
+     * The one card on this screen that is not part of the month. It takes the
+     * accent border the tracker's alerts use rather than the quiet card
+     * surface, because it is the difference between typing that is kept and
+     * typing that is not.
+     */
+    damaged: {
+      ...cardSurface(p),
+      borderColor: p.accent,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    damagedText: {
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      lineHeight: 18,
+      color: p.ink,
     },
     quoteCard: {
       ...cardSurface(p),

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import PlannerScreen from '../screens/PlannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
-import BackupScreen from '../screens/BackupScreen';
+import BackupScreen, { BackupOutcome } from '../screens/BackupScreen';
 import IntroScreen from '../screens/IntroScreen';
 import { ScreenLayer, useScreenTransition } from './ScreenLayer';
 import { useTasks } from '../hooks/useTasks';
+import type { BackupStatus } from '../hooks/useAutoBackup';
 import { HistoryFilter } from '../history';
 import { ChartType } from '../settings';
 
@@ -16,9 +17,11 @@ export default function Navigator({
   initialScreen,
   hasBackup,
   lastBackupAt,
+  backupStatus,
   chart,
   onSetChart,
   onBackedUp,
+  onRetryBackup,
   onForgetBackup,
   onSkipOnboarding,
   onIntroDone,
@@ -26,9 +29,13 @@ export default function Navigator({
   initialScreen: Exclude<Screen, 'settings' | 'history'>;
   hasBackup: boolean;
   lastBackupAt: number | null;
+  /** what is still waiting to go, and what the server would not take */
+  backupStatus: BackupStatus;
   chart: ChartType;
   onSetChart: (c: ChartType) => void;
-  onBackedUp: (code: string, restored: boolean) => void;
+  onBackedUp: (code: string, outcome: BackupOutcome) => void;
+  /** takes the park off everything stuck and offers the lot again, now */
+  onRetryBackup: () => Promise<void>;
   onForgetBackup: () => void;
   onSkipOnboarding: () => void;
   onIntroDone: () => void;
@@ -88,8 +95,8 @@ export default function Navigator({
    * has just shown someone a code they need to write down, and sliding it away
    * under them would be the one moment in this app where haste costs data.
    */
-  const backedUp = (code: string, restored: boolean) => {
-    onBackedUp(code, restored);
+  const backedUp = (code: string, outcome: BackupOutcome) => {
+    onBackedUp(code, outcome);
   };
 
   return (
@@ -146,10 +153,12 @@ export default function Navigator({
         <SettingsScreen
           hasBackup={hasBackup}
           lastBackupAt={lastBackupAt}
+          backupStatus={backupStatus}
           onOpenBackup={() => {
             setBackupVariant('standalone');
             setScreen('backup');
           }}
+          onRetryBackup={onRetryBackup}
           onForgetBackup={onForgetBackup}
           onClose={() => setScreen('planner')}
         />

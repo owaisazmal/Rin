@@ -163,7 +163,7 @@ describe('what a record must look like', () => {
 });
 
 describe('the task list', () => {
-  it('is one record named "current" and nothing else', async () => {
+  it('keeps the open deadlines in one record named "current"', async () => {
     const db = phone();
     await assertSucceeds(setDoc(tasks(db), blob()));
     await assertSucceeds(getDoc(tasks(db)));
@@ -176,6 +176,64 @@ describe('the task list', () => {
     await assertSucceeds(setDoc(tasks(phone()), blob({ ct: 'Q'.repeat(262144) })));
     await assertFails(setDoc(tasks(phone()), blob({ ct: 'Q'.repeat(262145) })));
   });
+});
+
+describe('the archive of completed deadlines', () => {
+  it('takes a whole year of them as a record of its own', async () => {
+    const db = phone();
+    await assertSucceeds(setDoc(tasks(db, ID, '2024'), blob()));
+    await assertSucceeds(getDoc(tasks(db, ID, '2024')));
+    await assertSucceeds(updateDoc(tasks(db, ID, '2024'), blob({ ct: 'R'.repeat(300) })));
+    await assertSucceeds(deleteDoc(tasks(db, ID, '2024')));
+  });
+
+  it('is capped exactly as "current" is, which is what the year has to fit under', async () => {
+    await assertSucceeds(setDoc(tasks(phone(), ID, '2024'), blob({ ct: 'Q'.repeat(262144) })));
+    await assertFails(setDoc(tasks(phone(), ID, '2024'), blob({ ct: 'Q'.repeat(262145) })));
+  });
+
+  it('lets a restore find out which years it has instead of guessing them', async () => {
+    const db = phone();
+    await setDoc(tasks(db), blob());
+    await setDoc(tasks(db, ID, '2024'), blob());
+    await setDoc(tasks(db, ID, '2025'), blob());
+
+    const listed = await assertSucceeds(getDocs(collection(db, 'backups', ID, 'tasks')));
+    expect(listed.docs.map((d) => d.id).sort()).toEqual(['2024', '2025', 'current']);
+
+    // only ever within one backup, though — the same bargain the months make
+    await assertFails(getDocs(collectionGroup(db, 'tasks')));
+  });
+
+  it('belongs to the backup that filed it and to no other', async () => {
+    await setDoc(tasks(phone(), ID, '2024'), blob());
+    // as with a month, a guess at an id is let through and finds nothing
+    const guessed = await assertSucceeds(getDoc(tasks(phone(), OTHER, '2024')));
+    expect(guessed.exists()).toBe(false);
+    const listed = await assertSucceeds(getDocs(collection(phone(), 'backups', OTHER, 'tasks')));
+    expect(listed.empty).toBe(true);
+  });
+
+  /**
+   * A year id is four digits and nothing else, so that the archive cannot
+   * become a place to park documents under invented names. '' is on the list
+   * for completeness even though Firestore refuses to build a path for it long
+   * before a rule is consulted; either way nothing can be filed there.
+   */
+  it.each(['20240', '999', '1999', 'archive', '2024-01', '', 'CURRENT', 'current '])(
+    'refuses %p as a document id',
+    async (id) => {
+      const db = phone();
+      let ref;
+      try {
+        ref = tasks(db, ID, id);
+      } catch {
+        return;
+      }
+      await assertFails(setDoc(ref, blob()));
+      await assertFails(getDoc(ref));
+    }
+  );
 });
 
 describe('anything else', () => {

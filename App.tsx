@@ -11,6 +11,8 @@ import {
   forgetCode,
   saveBackupState,
 } from './src/backupState';
+import { forgetLaunch } from './src/hooks/backupRuns';
+import { useAutoBackup } from './src/hooks/useAutoBackup';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
@@ -54,6 +56,29 @@ export default function App() {
   // Before anything can reach the backup server, and once per launch. It is a
   // no-op for someone who never backs up, which is most people.
   useEffect(startAppCheck, []);
+
+  /**
+   * The date Settings reads, moved only by a run that actually put bytes on the
+   * server. Everything allowed to touch it has to be something a person would
+   * call "backed up" — which a restore, whatever else it is, is not, and
+   * neither is a run that finished having sent nothing.
+   */
+  const markSent = useCallback(
+    () => setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: Date.now() })),
+    []
+  );
+
+  /**
+   * Sends what changed, on its own, whenever the app is opened or put down with
+   * something waiting. Mounted here rather than inside the Navigator because a
+   * restore rebuilds everything below this line, and a run in flight through
+   * that would be cancelled halfway by the remount.
+   */
+  const {
+    status: backupStatus,
+    refresh: refreshBackupStatus,
+    retry: retryBackup,
+  } = useAutoBackup(hasCode, markSent);
 
   useEffect(() => {
     loadSettings().then(setSettings);
@@ -110,15 +135,50 @@ export default function App() {
             initialScreen={start}
             hasBackup={hasCode}
             lastBackupAt={backup.lastBackupAt}
+            backupStatus={backupStatus}
             chart={settings.chart}
             onSetChart={(chart) => updateSettings({ chart })}
-            onBackedUp={(_code, restored) => {
+            onBackedUp={(_code, outcome) => {
               setHasCode(true);
-              setBackup({ onboarded: true, lastBackupAt: Date.now() });
-              if (restored) setDataEpoch((n) => n + 1);
+              /**
+               * Only a run that sent something is dated.
+               *
+               * A restore clears the date instead of setting one, which is the
+               * opposite of what this did before: it stamped `Date.now()` on
+               * the way through, so restoring a January backup in June
+               * announced "last saved today" at the exact moment somebody
+               * discovered it was five months stale. Nothing has left this
+               * phone — the restore seeded the ledger with what came down, so
+               * there is nothing to send — and the honest way to say that is no
+               * date at all. A refused run keeps whatever date it already had,
+               * for the same reason.
+               */
+              setBackup((prev) => ({
+                onboarded: true,
+                lastBackupAt:
+                  outcome === 'sent'
+                    ? Date.now()
+                    : outcome === 'restored'
+                      ? null
+                      : (prev?.lastBackupAt ?? null),
+              }));
+              if (outcome === 'restored') {
+                // Everything this launch had worked out — what was refused, how
+                // many attempts had got nowhere, whether anything had been
+                // checked — was about the backup this phone was pointed at
+                // before. A restore points it at another one, and carrying that
+                // account across would describe somebody else's.
+                forgetLaunch();
+                setDataEpoch((n) => n + 1);
+              }
+              refreshBackupStatus();
             }}
+            onRetryBackup={retryBackup}
             onForgetBackup={() => {
               forgetCode();
+              // The refusals and the setbacks were about a backup this phone no
+              // longer has. Whatever it is pointed at next starts from nothing.
+              forgetLaunch();
               setHasCode(false);
               setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: null }));
             }}

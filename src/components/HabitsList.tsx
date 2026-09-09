@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import SectionHeader from './SectionHeader';
-import { Habit, MAX_HABITS } from '../types';
+import { Habit, MAX_HABITS, MAX_HABIT_NAME } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
 
 interface Props {
@@ -120,7 +120,8 @@ export default function HabitsList({ habits, onRename, onAdd, onRemove }: Props)
           <TextInput
             style={styles.input}
             value={h.name}
-            onChangeText={(t) => onRename(h.id, t)}
+            maxLength={MAX_HABIT_NAME}
+            onChangeText={(t) => onRename(h.id, t.slice(0, MAX_HABIT_NAME))}
             placeholder="habit name…"
             placeholderTextColor={palette.inkSoft}
             autoCapitalize="characters"

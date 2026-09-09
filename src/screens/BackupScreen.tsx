@@ -19,7 +19,10 @@ import SegmentedControl from '../components/SegmentedControl';
 import { authStyles } from './authStyles';
 import { format, generateCode, normalizeCode } from '../backup';
 import { loadCode, saveCode } from '../backupState';
-import { backupEverything, restoreEverything } from '../sync';
+import { restoreEverything } from '../sync';
+import { backupNow } from '../hooks/backupRuns';
+import { sentAnything } from '../hooks/autoBackupPolicy';
+import { restoreReport, runReport } from './backupWording';
 import { FONT, Palette, RADIUS, useTheme } from '../theme';
 
 type Tab = 'create' | 'restore';
@@ -32,18 +35,31 @@ const TABS = [
 /** The two panes are different heights, so the card grows rather than snapping */
 const paneAnimation = LayoutAnimation.create(240, 'easeInEaseOut', 'opacity');
 
+/**
+ * What this screen managed, which is more than "it worked".
+ *
+ * `restored` tells the app above that everything on this phone has just been
+ * replaced and whatever it is holding in memory is now a month out of date.
+ *
+ * `unsent` is a run that finished without putting a single byte on the server,
+ * and it covers two things that look nothing alike and mean the same here: a
+ * document the server would not take, and a phone that had nothing to send. The
+ * date in Settings hangs off this, so both have to fall on the same side of it.
+ * The old gate was "was anything refused", which got the answer wrong in both
+ * directions at once — a run that sent two months and was refused a third went
+ * undated, and a run that opened no connection at all stamped "last sent today"
+ * across the whole phone.
+ */
+export type BackupOutcome = 'sent' | 'restored' | 'unsent';
+
 interface Props {
   /**
    * `onboarding` is the first-open screen and offers a way past it;
    * `standalone` is reached from Settings and offers a way back instead.
    */
   variant: 'onboarding' | 'standalone';
-  /**
-   * Called once a backup has been made or restored. `restored` is what tells
-   * the app above that everything on this phone has just been replaced, and
-   * that whatever it is holding in memory is now a month out of date.
-   */
-  onDone: (code: string, restored: boolean) => void;
+  /** Called once a backup has been made or restored, with which of them it was */
+  onDone: (code: string, outcome: BackupOutcome) => void;
   onDismiss: () => void;
 }
 
@@ -107,24 +123,46 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
     setCopied(true);
   };
 
+  /**
+   * The button, and it goes through the same door the phone's own runs do.
+   *
+   * It used to call `backupEverything` directly, which read as the shorter way
+   * of saying the same thing and was not: everything that decides what a run
+   * *meant* lives on the other side of `backupNow` — whether the install was
+   * turned away, whether anything is still stuck, whether this phone can now be
+   * said to be accounted for. Skipping it left the one run somebody actually
+   * watches as the one run nothing learned from, and a whole-install refusal
+   * pressed by hand parked every document with nothing to take the park off
+   * again. Two paths that disagree about what happened is one path too many.
+   */
   const runBackup = async () => {
     setBusy(true);
     setError(null);
-    const result = await backupEverything(fresh);
+    const result = await backupNow(fresh);
     setBusy(false);
     if (!result.ok) {
-      setError(
-        result.reason === 'rejected'
-          ? 'The backup server turned this app away. That is a setup problem at my end, not yours.'
-          : "Couldn't reach the backup. Check your connection and try again."
-      );
+      // Losing the connection is the only thing that ends a run outright. A
+      // document the server refuses, or one too big to send, is recorded
+      // against that document and stepped over, and comes back in `blocked`.
+      setError("Couldn't reach the backup. Check your connection and try again.");
       return;
     }
+    // The code is worth keeping either way: this phone really does back up
+    // under it now, and a refusal that has to be worked through is easier to
+    // work through from a phone that remembers which backup it belongs to.
     await saveCode(normalizeCode(fresh) ?? fresh);
-    setDone(
-      result.months === 1 ? 'One month is safe.' : `${result.months} months are safe.`
-    );
-    onDone(fresh, false);
+    /**
+     * Both lines come from one place, which is the point: a run that half
+     * worked has something to warn about and something to be pleased about, and
+     * this screen used to print them from two functions that had never been
+     * introduced. One transient rejection was enough to get "nothing was sent"
+     * and "2 months are safe" onto the card together.
+     */
+    const report = runReport(result);
+    setError(report.problem);
+    setDone(report.progress);
+    // Only bytes on the wire are worth a date, whatever else the run decided.
+    onDone(fresh, sentAnything(result) ? 'sent' : 'unsent');
   };
 
   const runRestore = async () => {
@@ -148,10 +186,16 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
       return;
     }
     await saveCode(code);
-    setDone(
-      result.months === 1 ? 'One month is back.' : `${result.months} months are back.`
-    );
-    onDone(code, true);
+    /**
+     * A restore steps over a month it cannot decrypt and leaves the deadline
+     * list alone when the backup's own will not open, both of which are right
+     * and neither of which used to be said: "3 months are back" was printed over
+     * the top of them, and it reads as the whole backup having arrived.
+     */
+    const report = restoreReport(result);
+    setError(report.problem);
+    setDone(report.progress);
+    onDone(code, 'restored');
   };
 
   return (

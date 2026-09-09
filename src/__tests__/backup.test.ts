@@ -1,6 +1,9 @@
 import {
   BACKUP_FORMAT,
+  MAX_MONTH_CT,
+  MAX_TASKS_CT,
   Sealed,
+  ciphertextChars,
   deriveBackupId,
   deriveKey,
   format,
@@ -140,6 +143,55 @@ describe('sealing a record', () => {
     const second = seal(key, plaintext);
     expect(second.ct).not.toBe(first.ct);
     expect(open(key, second)).toBe(plaintext);
+  });
+});
+
+describe('knowing how big a record will be before sending it', () => {
+  const key = deriveKey(CODE);
+
+  it('counts the tag and the base64 padding, so even nothing is 24 characters', () => {
+    expect(ciphertextChars('')).toBe(24);
+    expect(ciphertextChars('a')).toBe(24);
+    expect(ciphertextChars('ab')).toBe(24);
+    expect(ciphertextChars('abc')).toBe(28);
+    expect(ciphertextChars('a'.repeat(1000))).toBe(1356);
+  });
+
+  it('puts the largest month that fits exactly on the limit', () => {
+    expect(ciphertextChars('a'.repeat(49136))).toBe(MAX_MONTH_CT);
+    expect(ciphertextChars('a'.repeat(49137))).toBeGreaterThan(MAX_MONTH_CT);
+    expect(ciphertextChars('a'.repeat(49137))).toBe(65540);
+  });
+
+  it('puts the largest task list that fits exactly on the limit', () => {
+    expect(ciphertextChars('a'.repeat(196592))).toBe(MAX_TASKS_CT);
+    expect(ciphertextChars('a'.repeat(196593))).toBeGreaterThan(MAX_TASKS_CT);
+    expect(ciphertextChars('a'.repeat(196593))).toBe(262148);
+  });
+
+  it('measures UTF-8 bytes, not JavaScript characters', () => {
+    // six characters either way, but three bytes each rather than one
+    const cjk = '走った毎日凛';
+    const ascii = 'abcdef';
+    expect(cjk).toHaveLength(ascii.length);
+    expect(ciphertextChars(cjk)).toBeGreaterThan(ciphertextChars(ascii));
+
+    // an emoji is two characters and four bytes
+    const emoji = '🏃🏃';
+    expect(emoji).toHaveLength('abcd'.length);
+    expect(ciphertextChars(emoji)).toBeGreaterThan(ciphertextChars('abcd'));
+  });
+
+  it.each([
+    ['nothing', ''],
+    ['one character', 'a'],
+    ['two characters', 'ab'],
+    ['three characters', 'abc'],
+    ['a real month', JSON.stringify({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1 } })],
+    ['text that is not ASCII', JSON.stringify({ observations: ['凛 — 走った 🏃'] })],
+    ['a month sitting exactly on the limit', 'a'.repeat(49136)],
+  ])('agrees with what sealing %s actually produces', (_, plaintext) => {
+    expect(ciphertextChars(plaintext)).toBe(seal(key, plaintext).ct.length);
   });
 });
 

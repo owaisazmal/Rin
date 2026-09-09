@@ -41,12 +41,12 @@ Credit is entirely optional, and I mean that. I'll just be here, reading every
 fork's commit history like it's a group chat I wasn't invited to but am
 definitely still in.
 
-### Backups, when they get a backend
+### Backups
 
-Nothing is sent anywhere yet. When it is, there will still be no accounts: no
-name, no email, no password. A backup is encrypted on the phone with a code
-only the phone holds, and the server stores ciphertext under an id derived from
-that code, so neither Google nor I can read it. [`firestore.rules`](firestore.rules)
+A backup is something you turn on, and there are no accounts behind it: no
+name, no email, no password. It is encrypted on the phone with a code only the
+phone holds, and the server stores ciphertext under an id derived from that
+code, so neither Google nor I can read it. [`firestore.rules`](firestore.rules)
 is the entire server side: signed-in installs only, no listing, fixed shapes
 and sizes. The code lives in the Keychain / Keystore through `src/session.ts`;
 Firebase's config files stay out of the repo ([`.env.example`](.env.example));
@@ -66,7 +66,7 @@ and the phone re-validates everything it reads back.
 - **Dark mode**: on by default, switched in Settings. The choice persists, and the home-screen widgets follow it.
 - **Widgets**: eight of them on both platforms (radial, year, streak, today, goals, progress, daily quote, deadlines), plus Lock Screen accessories on iOS.
 - **Reminders**: a few nudges a day, only while something is still unmarked, and a note when the day is done. Habit nudges and deadline reminders are rewritten together, within a budget, because iOS keeps only the 64 soonest pending local notifications.
-- **Backup**: optional, and only for carrying your months to a new phone. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. No account, and no way to recover a lost code — which is the same sentence twice, and why the app says so before you rely on it.
+- **Backup**: optional. Once you make one, Rin sends what changed when you open the app, and after half a minute of it sitting still with something waiting. It never backs up while the app is closed. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. Nothing this phone cannot read is ever sent over a good copy: a month it cannot account for is named on the Settings card instead. No account, and no way to recover a lost code — which is the same sentence twice, and why the app says so before you rely on it.
 - **Month navigation**: every month keeps its own habits, grid, observations, and goals, persisted on-device with AsyncStorage.
 
 ## Run it
@@ -89,8 +89,9 @@ npm test
 ```
 
 Covers the pure logic: how streaks are counted, how close a deadline is, what
-history says happened, what the stores will accept off disk, and whether a
-session survives the keychain. None of it renders, so the suite runs in plain
+history says happened, what the stores will accept off disk, whether a session
+survives the keychain, what the ledger will admit to having sent, and what the
+backup card is allowed to claim. None of it renders, so the suite runs in plain
 Node in well under a second. `npm run test:rules` is the server side: it starts
 the Firestore emulator and checks every way the rules should say no.
 
@@ -121,7 +122,7 @@ they go, locally and for EAS builds.
 ## Structure
 
 ```
-App.tsx                        root: persisted settings, account, font, theme provider
+App.tsx                        root: persisted settings, backup state, font, theme provider
 
 src/theme.ts                   palettes, type scale, radii (the only place colour is defined)
 src/types.ts                   data model (MonthData, Habit, cell states)
@@ -135,6 +136,7 @@ src/streaks.ts                 how consecutive days are counted
 src/backupState.ts             whether this phone has a backup, and where the code is kept
 src/backup.ts                  the backup code, and the id and key derived from it
 src/sync.ts                    the only code here that touches a network
+src/syncLedger.ts              what has already been sent, and what still hasn't
 src/session.ts                 where the code is kept: Keychain / Keystore, never AsyncStorage
 src/onboarding.ts              whether the intro has been shown
 src/quotes.ts                  discipline quotes, one per day
@@ -145,7 +147,8 @@ src/navigation/Navigator       which screens exist and what sits under what
 
 src/screens/IntroScreen        four-page first run
 src/screens/BackupScreen       make a backup, or restore one
-src/screens/SettingsScreen     account + appearance
+src/screens/backupWording      what those two screens are allowed to say about a run
+src/screens/SettingsScreen     backup + appearance
 src/screens/HistoryScreen      the log, read-only
 src/screens/PlannerScreen      the planner, layout and gestures only
 
@@ -156,9 +159,12 @@ src/hooks/useTasks             the deadline list and every way it changes
 src/hooks/useHistory           the history window, and paging further back
 src/hooks/useNow               a coarse clock, for the things that age on their own
 src/hooks/useOutboundSync      pushes to widgets and reminders
+src/hooks/useAutoBackup        sends what has changed, on opening the app and on a short idle timer
+src/hooks/autoBackupPolicy     when that is worth a run, and what the card may claim afterwards
 src/hooks/useChartTransition   how the tracker and the month label arrive
 
-src/__tests__/                 the pure logic: streaks, deadlines, history, storage, settings, tasks, session
+src/__tests__/                 the pure logic: streaks, deadlines, history, storage, settings, tasks,
+                               session, the sync ledger, the backup run, and the words the card uses
 
 src/components/                TrackerCard, MonthNav, RadialTracker, YearChart, DailyCheck,
                                HabitsList, Observations, KeyGoals, Deadlines, DueDatePicker,
@@ -169,7 +175,7 @@ src/widgets/                   snapshot written to the shared container
 targets/widgets/               iOS WidgetKit (SwiftUI)
 targets/android-widgets/       Android home screen (Jetpack Glance)
 plugins/                       Expo config plugin for the Android widgets
-firestore.rules                the entire server side: what a signed-in phone may store (not wired up yet)
+firestore.rules                the entire server side: what a signed-in phone may store
 firebase/                      the rules suite, run against the emulator
 .env.example                   backend config; the real .env is never committed
 docs/                          the website, and the privacy policy the stores ask for

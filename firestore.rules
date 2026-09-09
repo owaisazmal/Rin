@@ -39,6 +39,17 @@ service cloud.firestore {
     return id.matches('^20[0-9]{2}-(0[1-9]|1[0-2])$');
   }
 
+  // The open deadlines live in 'current'; a completed one is archived under the
+  // year it was finished. A year is the shard boundary for two reasons. A past
+  // year never changes again, so it is uploaded once and never rewritten —
+  // which a month would also give, at twelve times the documents. And a single
+  // year holds four completed deadlines a day at 90% of the cap below, so the
+  // ceiling is out of reach for anyone. Keeping every task in one document was
+  // what forced this: it burst the cap after about 1,594 completions.
+  function isTaskId(id) {
+    return id == 'current' || id.matches('^20[0-9]{2}$');
+  }
+
   // An encrypted record. `iv` is the nonce (12 to 24 bytes, base64), `ct` the
   // ciphertext (base64), `v` the format version, `updatedAt` the server's clock —
   // never the phone's, so two phones sharing a code can tell which wrote last.
@@ -63,12 +74,16 @@ service cloud.firestore {
       allow delete: if signedIn() && isBackupId(backup);
     }
 
-    // the deadline list travels as one record
+    // the open deadlines, plus one archive shard per year they were completed in
     match /backups/{backup}/tasks/{doc} {
-      allow get: if signedIn() && isBackupId(backup) && doc == 'current';
-      allow create, update: if signedIn() && isBackupId(backup) && doc == 'current'
+      allow get: if signedIn() && isBackupId(backup) && isTaskId(doc);
+      // A restore has to learn which years this backup has before it can read
+      // them, and guessing is not an option. Listing costs nothing extra: it is
+      // gated on knowing the 64-hex id, exactly as the months collection is.
+      allow list: if signedIn() && isBackupId(backup);
+      allow create, update: if signedIn() && isBackupId(backup) && isTaskId(doc)
         && isBlob(request.resource.data, 262144);
-      allow delete: if signedIn() && isBackupId(backup) && doc == 'current';
+      allow delete: if signedIn() && isBackupId(backup) && isTaskId(doc);
     }
 
     // Everything else — the top-level backups collection, collection-group

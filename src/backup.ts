@@ -45,6 +45,9 @@ const KEY_INFO = utf8ToBytes('key');
 const KEY_LENGTH = 32;
 const NONCE_LENGTH = 24;
 
+/** The Poly1305 tag the cipher appends, which is part of what gets encoded */
+const TAG_LENGTH = 16;
+
 /** The format version travelling with every record, so this can change later */
 export const BACKUP_FORMAT = 1;
 
@@ -186,6 +189,38 @@ export function seal(key: Uint8Array, plaintext: string): Sealed {
   const nonce = getRandomBytes(NONCE_LENGTH);
   const ciphertext = xchacha20poly1305(key, nonce).encrypt(utf8ToBytes(plaintext));
   return { v: BACKUP_FORMAT, iv: toBase64(nonce), ct: toBase64(ciphertext) };
+}
+
+/**
+ * The ceilings `firestore.rules` puts on `ct`, counted the way the rules count
+ * them: base64 characters, not the bytes underneath. They are duplicated here
+ * so nothing has to hard-code a number it got from reading the rules, which
+ * makes the two copies one thing that must be changed together — a limit
+ * raised on the server and not here silently keeps refusing valid writes, and
+ * raised here and not there turns back into the server rejection this exists
+ * to avoid.
+ */
+export const MAX_MONTH_CT = 65536;
+export const MAX_TASKS_CT = 262144;
+
+/**
+ * How many characters `seal` will produce for this plaintext, worked out
+ * without encrypting anything.
+ *
+ * A record one character over the limit comes back from the server as a plain
+ * permission denial, which looks exactly like being offline, unauthenticated,
+ * or blocked by App Check — so the app cannot tell someone what actually went
+ * wrong. Knowing the size first means an oversized month can be refused before
+ * it is sent, and named. That only works if the number is exact rather than an
+ * estimate: Poly1305 appends a 16-byte tag to the ciphertext, and `toBase64`
+ * spends four characters on every three-byte group and pads out the last one.
+ *
+ * Measured in UTF-8 bytes, because bytes are what get encrypted. A habit named
+ * in Japanese, or one emoji in a note, is several bytes that `plaintext.length`
+ * would count as one — and undercounting is the failure this is meant to catch.
+ */
+export function ciphertextChars(plaintext: string): number {
+  return 4 * Math.ceil((utf8ToBytes(plaintext).length + TAG_LENGTH) / 3);
 }
 
 /**

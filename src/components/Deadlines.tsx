@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import SectionHeader from './SectionHeader';
-import { Task } from '../tasks';
+import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
 import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
@@ -153,7 +153,8 @@ export default function Deadlines({
                   <TextInput
                     style={styles.input}
                     value={t.text}
-                    onChangeText={(v) => onChangeText(t.id, v)}
+                    maxLength={MAX_TASK_TEXT}
+                    onChangeText={(v) => onChangeText(t.id, v.slice(0, MAX_TASK_TEXT))}
                     placeholder="what has to be finished…"
                     placeholderTextColor={palette.inkSoft}
                     multiline

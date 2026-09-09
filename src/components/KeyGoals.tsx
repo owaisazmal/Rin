@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import SectionHeader from './SectionHeader';
-import { KeyGoal } from '../types';
+import { KeyGoal, MAX_GOAL_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
 
 interface Props {
@@ -102,7 +102,8 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
             <TextInput
               style={[styles.input, g.done && styles.inputDone]}
               value={g.text}
-              onChangeText={(t) => onChangeText(i, t)}
+              maxLength={MAX_GOAL_LEN}
+              onChangeText={(t) => onChangeText(i, t.slice(0, MAX_GOAL_LEN))}
               placeholder="goal"
               placeholderTextColor={palette.inkSoft}
               multiline

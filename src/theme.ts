@@ -119,9 +119,46 @@ export const darkPalette: Palette = {
 
 export const lightPalette: Palette = {
   bg: BRAND.ivory,
-  blobs: [BRAND.grey, BRAND.grey, BRAND.slate, BRAND.grey, BRAND.slate],
-  blobStrength: 0.3,
-  card: 'rgba(255,255,250,0.88)',
+  /**
+   * A darker grey than `BRAND.grey`, for the three blobs that carry the drift.
+   *
+   * Matching dark's separation is not enough here. Charcoal sits seventeen
+   * levels above `#242424` and grey sits eighteen below ivory — even on paper —
+   * yet the light drift stayed the fainter of the two at every opacity worth
+   * using. A near-white page keeps the eye light-adapted, and a step away from
+   * white costs more to see than the same step away from black. So light is
+   * given the wider gap rather than the equal one.
+   *
+   * Index 3 keeps `BRAND.grey` and stays the quiet one, as `#3a3a3a` is in dark.
+   */
+  blobs: ['#A0A0A0', '#A0A0A0', BRAND.slate, BRAND.grey, BRAND.slate],
+  /**
+   * Well above dark's 0.55, and on purpose. Matching dark by measurement was
+   * tried and rejected by eye twice: at equal spread, and again at 109% of it,
+   * the light drift still read as the fainter of the two. A near-white page
+   * keeps the eye light-adapted and a step away from white costs more to see
+   * than the same step away from black, so light is given the wider gap.
+   *
+   * Not worth pushing much past this, though: the blobs are wider than the
+   * screen and overlap everywhere, so more opacity eventually stops adding
+   * circles and just darkens the page. The other half of the fix is below.
+   */
+  blobStrength: 0.65,
+  /**
+   * Lighter on the page than it looks, and that is the point: 20% of the drift
+   * comes through, against the 12% it used to pass.
+   *
+   * This, not the blobs, is why light mode read as the flatter of the two.
+   * Cards cover most of the screen, and dark's are 22% transparent — measured,
+   * its drift is *stronger* seen through a card (8.6 levels of spread) than in
+   * the bare gutter beside it (5.7). Light's old 0.88 inverted that: 12.1 in
+   * the gutter, 5.8 through the card. The circles were there and the cards
+   * were sitting on them.
+   *
+   * Text stays clear of WCAG AA: charcoal on this surface holds about 7:1 even
+   * over the darkest part of a blob.
+   */
+  card: 'rgba(255,255,250,0.80)',
   chip: '#ececdb',
   ink: BRAND.charcoal,
   // slate darkened to clear 4.5:1 on ivory

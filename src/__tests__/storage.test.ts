@@ -4,6 +4,8 @@ import {
   loadMonthWindow,
   loadYearSummary,
   parseMonthData,
+  readMonthForEditing,
+  readMonthVouched,
 } from '../storage';
 import { MAX_HABITS, emptyMonthData } from '../types';
 
@@ -223,5 +225,319 @@ describe('loadYearSummary', () => {
       tallies: { 1: { done: 1, missed: 1 }, 2: { done: 1, missed: 0 } },
     });
     expect(summary[0]).toEqual({ habitCount: 0, tallies: {} });
+  });
+});
+
+/**
+ * Reading a month for the backup rather than for the screen.
+ *
+ * The planner is right to take whatever survived the parser and draw it. The
+ * backup is not: what it sends replaces the only other copy that exists, so it
+ * has to know the difference between a month that is empty and a month that
+ * arrived thinner than it was written. These check both halves — that a real
+ * loss is named, and, far more importantly, that the ordinary shapes the app
+ * has written over the years still read as complete. A check that cried partial
+ * over a v1 habit list or an absent notes key would quietly stop people backing
+ * up at all.
+ */
+describe('readMonthVouched', () => {
+  it('says absent when the month has never been written', async () => {
+    store.getItem.mockResolvedValue(null);
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual({ status: 'absent' });
+  });
+
+  it('vouches for a well-formed month and hands back what it parsed', async () => {
+    stored(valid);
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual({
+      status: 'complete',
+      data: valid,
+    });
+    expect(store.getItem).toHaveBeenCalledWith('@monthly-planning/2026-09');
+  });
+
+  it('reads the month exactly once', async () => {
+    stored(valid);
+    await readMonthVouched(2026, 8);
+    expect(store.getItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('says unreadable for bytes that are not JSON', async () => {
+    store.getItem.mockResolvedValue('{not json');
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual({ status: 'unreadable' });
+  });
+
+  it('says unreadable when the store itself will not answer', async () => {
+    store.getItem.mockRejectedValue(new Error('disk'));
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual({ status: 'unreadable' });
+  });
+
+  it.each([null, 'a string', 42, [], true])(
+    'says unreadable, not partial, for a month stored as %p',
+    async (raw) => {
+      stored(raw);
+      await expect(readMonthVouched(2026, 8)).resolves.toEqual({ status: 'unreadable' });
+    }
+  );
+
+  it.each([
+    { section: 'habits', month: { habits: 'nope' } },
+    { section: 'grid', month: { grid: [1, 2] } },
+    { section: 'observations', month: { observations: 'text' } },
+    { section: 'keyGoals', month: { keyGoals: 'none' } },
+    { section: 'a nulled habits list', month: { habits: null } },
+  ])('says unreadable when $section is not the shape it should be', async ({ month }) => {
+    stored(month);
+    await expect(readMonthVouched(2026, 8)).resolves.toEqual({ status: 'unreadable' });
+  });
+
+  describe('what it calls partial', () => {
+    it('reports habits lost to the cap', async () => {
+      const habits = Array.from({ length: MAX_HABITS + 2 }, (_, i) => ({
+        id: String(i),
+        name: `h${i}`,
+      }));
+      stored({ habits });
+      const read = await readMonthVouched(2026, 8);
+      expect(read.status).toBe('partial');
+      expect(read).toMatchObject({ lost: `2 of ${MAX_HABITS + 2} habits` });
+    });
+
+    it('reports a habit the parser could not make sense of', async () => {
+      stored({ habits: [{ id: '0', name: 'Run' }, { name: 'no id' }] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 2 habits',
+      });
+    });
+
+    it('reports the loser of two habits sharing an id', async () => {
+      stored({
+        habits: [
+          { id: '0', name: 'First' },
+          { id: '0', name: 'Second' },
+        ],
+      });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 2 habits',
+      });
+    });
+
+    it('reports marks the grid could not keep', async () => {
+      stored({
+        habits: [{ id: '0', name: 'Run' }],
+        grid: { '1:0': 1, '5:9': 1, '40:0': 2, '3:0': '1' },
+      });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '3 grid entries',
+      });
+    });
+
+    it('reports one lost mark in the singular', async () => {
+      stored({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1, '0:0': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 grid entry',
+      });
+    });
+
+    it('reports notes that were not strings', async () => {
+      stored({ observations: ['keep', 3, null, 'also'] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '2 of 4 notes',
+      });
+    });
+
+    it('reports notes even when none of them survived', async () => {
+      // the parser substitutes its four blank lines here, so the answer is
+      // longer than what was on disk and comparing lengths would miss the loss
+      stored({ observations: [1, 2] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '2 of 2 notes',
+      });
+    });
+
+    it('reports goals past the third', async () => {
+      const five = Array.from({ length: 5 }, (_, i) => ({ text: `g${i}`, done: false }));
+      stored({ keyGoals: five });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '2 of 5 goals',
+      });
+    });
+
+    it('reports a goal whose text was blanked on the way out', async () => {
+      stored({
+        keyGoals: [{ text: 123, done: true }, { text: 'ok', done: false }, 'junk'],
+      });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '2 of 3 goals',
+      });
+    });
+
+    it('reports a goal whose tick was blanked on the way out', async () => {
+      // `parseKeyGoals` writes `done === true`, so anything else at all comes
+      // back unticked. Nothing about that looks like a discarded value — the
+      // goal is still there, with its text — and a finished goal going over
+      // the wire unfinished is the same substitution as a blanked one.
+      stored({
+        keyGoals: [
+          { text: 'Ship it', done: 'yes' },
+          { text: '', done: false },
+          { text: '', done: false },
+        ],
+      });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 3 goals',
+      });
+    });
+
+    it('reports a goal slot with no tick at all beside its text', async () => {
+      // a missing `keyGoals` key is the documented default; a goal somebody
+      // wrote, with half of it gone, is not
+      stored({ keyGoals: [{ text: 'Ship it' }, { text: '', done: false }] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 2 goals',
+      });
+    });
+
+    it('counts a goal that lost both its text and its tick only once', async () => {
+      stored({ keyGoals: [{ text: 1, done: 1 }] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 1 goals',
+      });
+    });
+
+    it('names every section that lost something', async () => {
+      stored({
+        habits: [{ id: '0', name: 'Run' }, { name: 'no id' }],
+        grid: { '1:0': 1, '2:5': 1 },
+        observations: ['ok', 7],
+      });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
+        status: 'partial',
+        lost: '1 of 2 habits, 1 grid entry, 1 of 2 notes',
+      });
+    });
+
+    it('still hands back what it did parse, so the caller can show it', async () => {
+      stored({ habits: [{ id: '0', name: 'Run' }, { name: 'no id' }] });
+      const read = await readMonthVouched(2026, 8);
+      expect(read).toMatchObject({ status: 'partial' });
+      if (read.status !== 'partial') throw new Error('expected a partial read');
+      expect(read.data.habits).toEqual([{ id: '0', name: 'Run' }]);
+    });
+  });
+
+  describe('what it refuses to call partial', () => {
+    it('vouches for a month with nothing in it', async () => {
+      stored({});
+      await expect(readMonthVouched(2026, 8)).resolves.toEqual({
+        status: 'complete',
+        data: emptyMonthData(),
+      });
+    });
+
+    it('vouches for a month an older build saved without notes or goals', async () => {
+      stored({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it('vouches for the v1 fixed-slot habit array, empty slots and all', async () => {
+      // eight slots, three of them typed into: the blanks were never habits
+      stored({ habits: ['Run', '', 'Read', '', '', 'Stretch', '', ''] });
+      const read = await readMonthVouched(2026, 8);
+      expect(read).toMatchObject({ status: 'complete' });
+      if (read.status !== 'complete') throw new Error('expected a complete read');
+      expect(read.data.habits).toHaveLength(3);
+    });
+
+    it('vouches for a grid holding a pending cell written as zero', async () => {
+      stored({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1, '2:0': 0 } });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it('vouches for an empty notes array', async () => {
+      stored({ observations: [] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it.each([1, 2, 3])('vouches for a raw goal list of %i', async (length) => {
+      const goals = Array.from({ length }, (_, i) => ({ text: `g${i}`, done: false }));
+      stored({ keyGoals: goals });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it('vouches for a goal list that is missing entirely', async () => {
+      stored({ habits: [] });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+
+    it('ignores properties it has never heard of', async () => {
+      // a month written by a later build must still back up from this one
+      stored({ ...valid, mood: 'fine', habits: valid.habits.map((h) => ({ ...h, colour: 'red' })) });
+      await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
+    });
+  });
+});
+
+/**
+ * The reader a screen that also *writes* has to use.
+ *
+ * `loadMonth` answers a half-readable record with the half it read, which is
+ * right for drawing and ruinous for saving: the survivors go back over the
+ * record they survived, and the loss becomes real. This says the same thing
+ * `readMonthVouched` says, in a shape a screen can render in every case, so
+ * the caller has something to draw and something to refuse to save.
+ */
+describe('readMonthForEditing', () => {
+  it('hands back a whole month and says so', async () => {
+    stored(valid);
+    await expect(readMonthForEditing(2026, 8)).resolves.toEqual({
+      data: parseMonthData(valid),
+      complete: true,
+    });
+  });
+
+  it('calls a month nobody has opened yet complete, because it is', async () => {
+    store.getItem.mockResolvedValue(null);
+    await expect(readMonthForEditing(2026, 8)).resolves.toEqual({
+      data: emptyMonthData(),
+      complete: true,
+    });
+  });
+
+  it('hands back the survivors of a half-read month and refuses to vouch for them', async () => {
+    stored({ habits: [{ id: '0', name: 'Run' }, { name: 'no id' }] });
+    const read = await readMonthForEditing(2026, 8);
+    expect(read.complete).toBe(false);
+    // there is still a month to draw: what a caller must not do is write it back
+    expect(read.data.habits).toEqual([{ id: '0', name: 'Run' }]);
+  });
+
+  it.each([
+    ['bytes that are not JSON', '{not json'],
+    ['a month stored as something else entirely', '"a string"'],
+  ])('gives a blank month for %s, and never vouches for it', async (_case, raw) => {
+    store.getItem.mockResolvedValue(raw);
+    await expect(readMonthForEditing(2026, 8)).resolves.toEqual({
+      data: emptyMonthData(),
+      complete: false,
+    });
+  });
+
+  it('never vouches for a month the store would not answer for', async () => {
+    store.getItem.mockRejectedValue(new Error('disk'));
+    await expect(readMonthForEditing(2026, 8)).resolves.toEqual({
+      data: emptyMonthData(),
+      complete: false,
+    });
   });
 });

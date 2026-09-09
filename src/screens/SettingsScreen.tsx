@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
+import ThemeBackdrop from '../components/ThemeBackdrop';
+import type { BackupStatus } from '../hooks/useAutoBackup';
+import { backupCard } from './backupWording';
 import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
@@ -16,32 +19,82 @@ const REPO_URL = 'https://github.com/owaisazmal/monthly-planning';
 interface Props {
   hasBackup: boolean;
   lastBackupAt: number | null;
+  backupStatus: BackupStatus;
   onOpenBackup: () => void;
+  /**
+   * Take the park off everything the last run was refused and try the lot again.
+   *
+   * Offered only when something is stuck, and it is the half of the recovery
+   * story the card could not tell before. A refusal is remembered against the
+   * version of the document it happened to, so editing that document is what
+   * brings it back — which works for a month somebody trims and works for
+   * nothing else. A server that turned this install away is not fixed by typing
+   * in September, and neither is a month shortened by hand outside the app.
+   */
+  onRetryBackup: () => Promise<void>;
   onForgetBackup: () => void;
   onClose: () => void;
 }
 
-/** "today", "yesterday", or a plain date — precise enough to be reassuring */
-function whenBackedUp(at: number): string {
-  const then = new Date(at);
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  const days = Math.floor((midnight.getTime() - then.getTime()) / 86_400_000) + 1;
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days} days ago`;
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
+/**
+ * Where the backup card's words come from.
+ *
+ * Not from here. `backupWording.ts` decides every sentence on it out of the
+ * ledger's account of this phone, and it is a separate file because the suite
+ * runs in plain Node while this one imports React Native — and because every
+ * bug that card has had was a sentence rather than a layout, which is exactly
+ * the kind of thing a test can hold still and read.
+ */
 export default function SettingsScreen({
   hasBackup,
   lastBackupAt,
+  backupStatus,
   onOpenBackup,
+  onRetryBackup,
   onForgetBackup,
   onClose,
 }: Props) {
   const { mode, palette, setMode } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const card = backupCard(backupStatus, lastBackupAt);
+
+  /**
+   * The retry is the one action here that takes a noticeable moment — it signs
+   * in, re-reads every stuck document and offers it again — so it says so.
+   * Nothing is reported back on the way out: the card is read from the ledger
+   * and re-publishes itself the moment the run is over, which is the same
+   * sentence arriving from the place that actually knows.
+   */
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await onRetryBackup();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  /**
+   * Scrolling is switched off while the page already fits, which is the normal
+   * case: the clip panel takes the leftover space, so the layout sizes itself
+   * to the screen rather than running past it.
+   *
+   * That is not tidiness. The clip's field is dropped out with a blend mode,
+   * and Android abandons the offscreen layer a blend mode needs the moment a
+   * scroll container starts handling a drag, so the raw black field snapped
+   * back for the length of the gesture. Measured on the emulator: the panel
+   * sits 2 levels off the page at rest, fell to 44 levels under a drag, and
+   * holds at 1 with the scroller inert.
+   *
+   * It switches back on the moment the content genuinely overflows, which a
+   * large accessibility font or a short screen can cause. Settings you cannot
+   * reach would be a far worse fault than a decoration that flickers.
+   */
+  const [viewport, setViewport] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const scrollable = contentHeight > viewport + 1;
 
   const confirmForget = () =>
     Alert.alert(
@@ -58,7 +111,12 @@ export default function SettingsScreen({
   // last line sits under Android's gesture pill.
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        scrollEnabled={scrollable}
+        onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_, h) => setContentHeight(h)}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>SETTINGS</Text>
           <Pressable
@@ -74,11 +132,11 @@ export default function SettingsScreen({
         <View style={styles.card}>
           {hasBackup ? (
             <>
-              <Text style={styles.emptyTitle}>This phone has a backup</Text>
-              <Text style={styles.emptyBody}>
-                {lastBackupAt
-                  ? `Last saved ${whenBackedUp(lastBackupAt)}. Encrypted with your code before it left.`
-                  : 'Encrypted with your code before it left.'}
+              <Text style={[styles.emptyTitle, card.attention && styles.alertTitle]}>
+                {card.title}
+              </Text>
+              <Text style={[styles.emptyBody, card.attention && styles.alertBody]}>
+                {card.body}
               </Text>
               <Pressable
                 onPress={onOpenBackup}
@@ -86,6 +144,17 @@ export default function SettingsScreen({
               >
                 <Text style={styles.primaryText}>BACK UP NOW</Text>
               </Pressable>
+              {card.retry ? (
+                <Pressable
+                  disabled={retrying}
+                  onPress={retry}
+                  style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={[styles.ghostText, styles.retryText]}>
+                    {retrying ? 'TRYING…' : 'TRY IT AGAIN NOW'}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={confirmForget}
                 style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
@@ -133,7 +202,9 @@ export default function SettingsScreen({
 
         <Text style={styles.footer}>Your widgets follow this too.</Text>
 
-        <View style={styles.slack} />
+        <View style={styles.clipPanel}>
+          <ThemeBackdrop />
+        </View>
 
         <View style={styles.colophon}>
           <Text style={styles.appName}>Rin</Text>
@@ -207,18 +278,28 @@ const makeStyles = (p: Palette) =>
       marginBottom: 22,
     },
     /**
-     * The screen's slack, and nothing else — the drifting background shows
-     * through it. Taking the leftover space rather than a fixed ratio puts the
-     * colophon on the bottom edge on any screen without the page having to
-     * scroll to reach it.
+     * Home for the theme clip, and the screen's slack. Taking the leftover
+     * space rather than a fixed ratio puts the colophon on the bottom edge on
+     * any screen without the page having to scroll to reach it — and the clip
+     * is drawn with `contain`, so a wide short panel shrinks the drawing
+     * instead of cropping it.
      */
-    slack: {
+    clipPanel: {
       flex: 1,
-      // A floor, not a target: this is breathing room and can give ground when
-      // the screen is tight, rather than pushing the colophon off the bottom.
-      minHeight: 24,
-      marginTop: 10,
-      marginBottom: 16,
+      // A floor, not a target: the panel is decoration and can give ground when
+      // the screen is tight. Every point it refuses to yield is a point the page
+      // overflows by, which turns the scroller back on and costs the clip its
+      // blend under a drag.
+      minHeight: 80,
+      // Clearance for the clip's edge fades, which reach outside the panel —
+      // without it they wash over the caption and the colophon. Only iOS draws
+      // them, and on a short screen this margin is the difference between a
+      // drawing that fills the panel and one that looks like a stamp, so
+      // Android keeps its space instead of paying for a fade it never renders.
+      ...Platform.select({
+        ios: { marginTop: 50, marginBottom: 54 },
+        default: { marginTop: 10, marginBottom: 16 },
+      }),
     },
     ghostBtn: {
       marginTop: 16,
@@ -235,6 +316,13 @@ const makeStyles = (p: Palette) =>
       letterSpacing: 2,
       color: p.inkSoft,
     },
+    /**
+     * The one ghost button that is not a way out of something. "Forget the code"
+     * is quiet because it should be hard to press by accident; this is the
+     * answer to the sentence directly above it, so it takes the accent the
+     * alert title is already wearing and reads as part of the same paragraph.
+     */
+    retryText: { color: p.accent },
     emptyTitle: {
       fontSize: 17,
       fontFamily: FONT.semibold,
@@ -247,6 +335,15 @@ const makeStyles = (p: Palette) =>
       lineHeight: 19,
       color: p.inkSoft,
     },
+    /**
+     * The states that need something done about them. Reassurance is meant to
+     * sit quietly in `inkSoft` and be skimmed past; a month that has not gone
+     * anywhere in three weeks says the same words at the same weight unless the
+     * colour separates them, so the title takes the accent and the line under it
+     * comes up to full ink.
+     */
+    alertTitle: { color: p.accent },
+    alertBody: { color: p.ink },
     primary: {
       marginTop: 16,
       height: 44,
