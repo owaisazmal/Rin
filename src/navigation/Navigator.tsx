@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { BackHandler } from 'react-native';
 import PlannerScreen from '../screens/PlannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
@@ -107,6 +108,29 @@ export default function Navigator({
       setScreen('planner');
     }
   };
+
+  /**
+   * Android's back button and back gesture. With no navigation library to
+   * answer them, every press went straight to the system, which closes the app.
+   *
+   * Back pops the way the on-screen close and back buttons do. The screens with
+   * nothing behind them (the planner, the intro and the first-run welcome)
+   * hand the press to the system, which is what back means there.
+   */
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'settings' || screen === 'history') {
+        setScreen('planner');
+        return true;
+      }
+      if (screen === 'backup' && backupVariant === 'standalone') {
+        setScreen('settings');
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [screen, backupVariant]);
 
   /**
    * Stays on the backup screen rather than leaving the moment it succeeds: it

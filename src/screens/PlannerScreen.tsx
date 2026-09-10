@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -213,10 +212,13 @@ export default function PlannerScreen({
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Padding on Android as well. The app draws edge to edge, so the window
+        no longer shrinks when the keyboard opens: left to itself the keyboard
+        sits over the bottom of the scroll view, and the last cards can't be
+        scrolled up out from under it.
+      */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             {/*

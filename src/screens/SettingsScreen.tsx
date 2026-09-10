@@ -233,6 +233,10 @@ export default function SettingsScreen({
       <ScrollView
         contentContainerStyle={styles.content}
         scrollEnabled={scrollable}
+        // Android's stretch at either end of the scroll draws the page into a
+        // layer of its own, where the clip has nothing behind it to blend with
+        // and its raw field shows. No stretch, no field.
+        overScrollMode="never"
         onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
         onContentSizeChange={(_, h) => setContentHeight(h)}
       >

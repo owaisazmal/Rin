@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.owaiskhan.monthlyplanning",
-      "versionCode": 8,
+      "versionCode": 9,
       "adaptiveIcon": {
         "backgroundColor": "#242424",
         "foregroundImage": "./assets/android-icon-foreground.png",

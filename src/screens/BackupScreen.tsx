@@ -4,7 +4,6 @@ import {
   Clipboard,
   KeyboardAvoidingView,
   LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -204,10 +203,12 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
           {variant === 'standalone' ? <BackButton onPress={onDismiss} /> : null}
         </View>
 
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        {/*
+          Padding on Android as well: the app draws edge to edge, so the window
+          no longer shrinks for the keyboard, and the restore button would sit
+          underneath it while the code is being typed.
+        */}
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"

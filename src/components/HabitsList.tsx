@@ -124,7 +124,7 @@ export default function HabitsList({ habits, onRename, onAdd, onRemove }: Props)
             onChangeText={(t) => onRename(h.id, t.slice(0, MAX_HABIT_NAME))}
             placeholder="habit name…"
             placeholderTextColor={palette.inkSoft}
-            autoCapitalize="characters"
+            autoCapitalize="sentences"
             returnKeyType="done"
           />
           <Pressable
