@@ -1392,9 +1392,14 @@ export async function deleteBackup(
   code: string
 ): Promise<{ ok: true; deleted: number } | { ok: false; reason: 'offline' | 'rejected'; deleted: number }> {
   let deleted = 0;
+  /**
+   * Held outside the try so the catch can still name the ledger it has to
+   * clear. Nothing is removed before this is set.
+   */
+  let id: string | null = null;
   try {
     await ready();
-    const id = deriveBackupId(code);
+    id = deriveBackupId(code);
     const db = getFirestore();
 
     for (const name of ['months', 'tasks'] as const) {
@@ -1413,6 +1418,23 @@ export async function deleteBackup(
     await resetFor(id);
     return { ok: true, deleted };
   } catch (error) {
+    /**
+     * The same reasoning, for the half-finished case that is likelier than the
+     * clean one: whatever was removed before this threw is gone, and the ledger
+     * still vouches for it. Leaving it would have the next run recognise those
+     * digests, step over the very months that are now missing, and report a
+     * backup that is whole — a hole that never heals, in the one direction
+     * nobody checks until their phone is gone.
+     *
+     * Clearing it costs a re-upload of things the server may still hold, which
+     * is the cheap mistake. Believing in a document that is not there is the
+     * expensive one.
+     */
+    if (id !== null && deleted > 0) {
+      // the ledger is local; if it will not clear there is nothing further to
+      // try, and the caller is already being told the delete did not finish
+      await resetFor(id).catch(() => {});
+    }
     return { ok: false, reason: reasonFor(error), deleted };
   }
 }

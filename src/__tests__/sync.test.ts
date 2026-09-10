@@ -1735,6 +1735,28 @@ describe('erasing the backup', () => {
     expect([...mockDocs.keys()].some((k) => k.endsWith('/months/2026-09'))).toBe(true);
   });
 
+  it('does not leave the ledger vouching for months it has already removed', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+
+    // the months go, and the connection drops before the task shards are listed
+    mockState.failTasksWith = 'firestore/unavailable';
+    const result = await deleteBackup(CODE);
+    expect(result.ok).toBe(false);
+    expect(result.deleted).toBeGreaterThan(0);
+    expect([...mockDocs.keys()].some((k) => k.endsWith('/months/2026-09'))).toBe(false);
+
+    /**
+     * The month is off the server, but the ledger was written when it was still
+     * up there. Left alone it recognises the digest, steps over the month, and
+     * the card goes on saying everything is backed up over a hole that never
+     * heals — the same hazard the successful path already guards against.
+     */
+    mockState.failTasksWith = null;
+    await backupEverything(CODE);
+    expect([...mockDocs.keys()].some((k) => k.endsWith('/months/2026-09'))).toBe(true);
+  });
+
   it('says how far it got when the server stops it part way', async () => {
     await saveMonth(2026, 8, month);
     await backupEverything(CODE);
