@@ -1,0 +1,17 @@
+{"out": {"play": "../../../assets/store/google-play", "appstore": "../../../assets/store/app-store"},
+ "slides": [
+  {"name": "radial-tracker", "theme": "dark", "icon": true, "eyebrow": "RADIAL TRACKER", "headline": "One ring per habit,<br>one sector per day",
+   "src": {"play": "CAPTURES/cap-01-radial-dark.png", "appstore": "CAPTURES/cap-01-radial-dark.png"}, "bars": {"play": "ios-17promax", "appstore": "ios-17promax"}},
+  {"name": "daily-check", "theme": "dark", "eyebrow": "DAILY CHECK", "headline": "One tap per habit.<br>That is the whole ritual.",
+   "src": {"play": "CAPTURES/cap-02-daily-dark.png", "appstore": "CAPTURES/cap-02-daily-dark.png"}, "bars": {"play": "ios-17promax", "appstore": "ios-17promax"}},
+  {"name": "year-grid", "theme": "light", "eyebrow": "YEAR AT A GLANCE", "headline": "Every day of the year,<br>in one grid",
+   "src": {"play": "CAPTURES/cap-04-year-light.png", "appstore": "CAPTURES/cap-04-year-light.png"}, "bars": {"play": "ios-17promax", "appstore": "ios-17promax"}},
+  {"name": "history", "theme": "light", "eyebrow": "HISTORY", "headline": "What actually happened,<br>newest first",
+   "src": {"play": "CAPTURES/cap-05-history-light.png", "appstore": "CAPTURES/cap-05-history-light.png"}, "bars": {"play": "ios-17promax", "appstore": "ios-17promax"}},
+  {"name": "goals-and-notes", "theme": "dark", "eyebrow": "HABITS · GOALS · NOTES", "headline": "Ten habits, three goals,<br>and room for the why",
+   "src": {"play": "CAPTURES/cap-03-goals-dark.png", "appstore": "CAPTURES/cap-03-goals-dark.png"}, "bars": {"play": "ios-17promax", "appstore": "ios-17promax"}},
+  {"name": "widgets", "theme": "dark", "eyebrow": "HOME SCREEN WIDGETS", "headline": "Your month on<br>the home screen",
+   "src": {"play": "../../../screenshot-widgets/android-page1-dark.png", "appstore": "CAPTURES/cap-07-widgets-dark.png"}, "bars": {"play": "android", "appstore": "ios-17promax"}},
+  {"name": "themes", "theme": "light", "eyebrow": "DARK OR LIGHT", "headline": "Both themes,<br>widgets included",
+   "src": {"play": "../../../screenshot-widgets/android-page2-light.png", "appstore": "CAPTURES/cap-06-widgets-light.png"}, "bars": {"play": "android", "appstore": "ios-17promax"}}
+ ]}
