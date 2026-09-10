@@ -5,6 +5,7 @@ import HistoryScreen from '../screens/HistoryScreen';
 import BackupScreen, { BackupOutcome } from '../screens/BackupScreen';
 import IntroScreen from '../screens/IntroScreen';
 import { ScreenLayer, useScreenTransition } from './ScreenLayer';
+import type { RestoreFailure } from '../screens/backupWording';
 import { useTasks } from '../hooks/useTasks';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { HistoryFilter } from '../history';
@@ -25,6 +26,7 @@ export default function Navigator({
   backupHolds,
   restorableMonth,
   onRestoreMonth,
+  onDeleteBackup,
   onForgetBackup,
   onSkipOnboarding,
   onIntroDone,
@@ -50,7 +52,8 @@ export default function Navigator({
    * month and where to take it.
    */
   restorableMonth: string | null;
-  onRestoreMonth: (key: string) => Promise<void>;
+  onRestoreMonth: (key: string) => Promise<RestoreFailure | null>;
+  onDeleteBackup: () => Promise<{ ok: boolean; deleted: number }>;
   onForgetBackup: () => void;
   onSkipOnboarding: () => void;
   onIntroDone: () => void;
@@ -177,6 +180,7 @@ export default function Navigator({
           onRetryBackup={onRetryBackup}
           backupHolds={backupHolds}
           onRestoreMonth={onRestoreMonth}
+          onDeleteBackup={onDeleteBackup}
           onForgetBackup={onForgetBackup}
           onClose={() => setScreen('planner')}
         />

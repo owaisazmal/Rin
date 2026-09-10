@@ -1726,6 +1726,9 @@ details.proof[open] summary::after {
 .doc h2 {
   margin-top: 44px;
   font-size: clamp(20px, 2.6vw, 24px);
+  /* the masthead is sticky and 57px tall, so a bare anchor jump parks the
+     heading underneath it. Clear it, with room to read as a heading. */
+  scroll-margin-top: 76px;
 }
 .doc h3 {
   margin: 28px 0 8px;
@@ -1740,9 +1743,14 @@ details.proof[open] summary::after {
   font-size: 15px;
   line-height: 1.65;
 }
-.doc ul {
+.doc ul,
+.doc ol {
   margin: 0 0 14px;
   padding-left: 20px;
+}
+/* the deletion steps: numerals carry the same accent as the bullets */
+.doc ol {
+  margin-bottom: 12px;
 }
 .doc li {
   margin-bottom: 6px;

@@ -1,0 +1,52 @@
+# What the cloud builder does not need.
+#
+# IMPORTANT: this file REPLACES .gitignore for the build upload — it does not
+# add to it. Everything .gitignore excludes has to be repeated here or it gets
+# uploaded, and /ios and /android in particular make EAS treat the project as
+# bare and look for native code that was never sent.
+
+# ---- carried over from .gitignore, because this file replaces it ----
+node_modules/
+/ios
+/android
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+.metro-health-check*
+*.tsbuildinfo
+.DS_Store
+modules/*/android/build/
+modules/*/android/.gradle/
+
+# secrets: these reach the builder as EAS file environment variables instead
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+service-account*.json
+*-service-account.json
+*-firebase-adminsdk-*.json
+# Firebase's two config files: the builder gets them from the EAS file
+# variables GOOGLE_SERVICES_JSON and GOOGLE_SERVICE_INFO_PLIST, which is the
+# whole reason they are kept out of the repo — no need to ship them twice.
+google-services.json
+GoogleService-Info.plist
+
+# ---- and the rest, which only this file excludes ----
+# none of it is compiled, so it is upload time and nothing else
+screenshot-widgets/
+screenshots/
+docs/
+src/__tests__/
+firebase/
+firestore-debug.log
+jest.config.js
+.git/
+.claude/

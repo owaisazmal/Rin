@@ -17,7 +17,7 @@ import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
-import { listMonths, restoreMonth, startAppCheck } from './src/sync';
+import { deleteBackup, listMonths, restoreMonth, startAppCheck } from './src/sync';
 import {
   useFonts,
   JosefinSans_400Regular,
@@ -136,6 +136,27 @@ export default function App() {
   );
 
   /**
+   * Erase the backup, then let go of the code.
+   *
+   * The order matters: the code is what derives the id every delete is aimed
+   * at, so forgetting it first would leave the documents standing with no way
+   * left to reach them. What stays is everything on this phone — the months are
+   * not what is being deleted, and the dialog says so.
+   */
+  const deleteTheBackup = useCallback(async () => {
+    const code = await loadCode();
+    if (!code) return { ok: false, deleted: 0 };
+    const result = await deleteBackup(code);
+    if (result.ok) {
+      await forgetCode();
+      setHasCode(false);
+      setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: null }));
+    }
+    await refreshBackupStatus();
+    return { ok: result.ok, deleted: result.deleted };
+  }, [refreshBackupStatus]);
+
+  /**
    * Replace this phone's damaged copy of one month with the backup's.
    *
    * Everything below the Navigator is rebuilt afterwards for the same reason a
@@ -145,14 +166,22 @@ export default function App() {
    */
   const restoreOneMonth = useCallback(
     async (key: string) => {
+      // Neither guard is reachable from the card, which only offers a restore
+      // when this phone holds a code and the key came from the ledger. Null
+      // rather than a reason because there is nothing true to say about a tap
+      // that cannot happen.
       const code = await loadCode();
-      if (!code) return;
+      if (!code) return null;
       const [year, month] = key.split('-').map(Number);
-      if (!Number.isInteger(year) || !Number.isInteger(month)) return;
+      if (!Number.isInteger(year) || !Number.isInteger(month)) return null;
       const pulled = await restoreMonth(code, year, month - 1);
-      if (!pulled.ok) return;
+      // Handed back rather than swallowed: a restore that did not happen leaves
+      // the ledger as it was, so the card redraws unchanged and the tap would
+      // otherwise read as a button that does nothing.
+      if (!pulled.ok) return pulled.reason;
       setDataEpoch((n) => n + 1);
       await refreshBackupStatus();
+      return null;
     },
     [refreshBackupStatus]
   );
@@ -254,6 +283,7 @@ export default function App() {
             backupHolds={backupHolds}
             restorableMonth={restorableMonth}
             onRestoreMonth={restoreOneMonth}
+            onDeleteBackup={deleteTheBackup}
             onForgetBackup={() => {
               forgetCode();
               // The refusals and the setbacks were about a backup this phone no

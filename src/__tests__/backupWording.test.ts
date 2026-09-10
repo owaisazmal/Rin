@@ -4,6 +4,7 @@ import { monthDocKey } from '../hooks/useMonthData';
 import {
   backupCard,
   damagedNotice,
+  restoreFailure,
   needsHolds,
   restoreOffer,
   restoreReport,
@@ -948,5 +949,64 @@ describe('what the planner says over a record it cannot write back', () => {
         );
       }
     }
+  });
+});
+
+describe('what the card says when the way out does not work', () => {
+  /**
+   * A restore that never landed leaves the ledger exactly as it was, so the
+   * card redraws unchanged and the tap reads as a button that does nothing.
+   * These are the only sentences that get said about it, so each has to say
+   * what happened AND whether trying again is worth anything.
+   */
+  it.each([
+    ['offline', /could not reach/i, /try again/i],
+    ['rejected', /turned this phone away/i, /keep trying/i],
+    ['missing', /does not hold that month/i, /untouched/i],
+    ['unreadable', /could not be read/i, /left your copy alone/i],
+  ] as const)('%s says what happened and what it means', (reason, what, meaning) => {
+    const said = restoreFailure(reason);
+    expect(said).toMatch(what);
+    expect(said).toMatch(meaning);
+  });
+
+  it('never claims the damaged copy was replaced', () => {
+    // The one thing none of these may imply: every failure leaves the phone's
+    // own copy exactly where it was, and saying otherwise would send somebody
+    // looking for data that is still there.
+    for (const reason of ['offline', 'rejected', 'missing', 'unreadable'] as const) {
+      expect(restoreFailure(reason)).not.toMatch(/replaced (it|your copy)\b/i);
+    }
+  });
+});
+
+describe('a name that is plural takes a plural verb', () => {
+  /**
+   * `nameOf` returns prose, and two of its three answers are plural — "Your
+   * open deadlines" and "Deadlines you finished in 2024". Every sentence that
+   * puts one in front of a verb had "is" or "was" written into it, so a stuck
+   * archive read "Deadlines you finished in 2026 is not reaching the backup".
+   * A month is singular and must not be dragged along with them.
+   */
+  const stuck = (key: string, reason: 'rejected' | 'too-large') =>
+    backupCard(
+      { waiting: [], blocked: [{ key, reason }], damaged: [], reconciled: false },
+      Date.now(),
+      null
+    );
+
+  it.each([
+    ['2026', 'Deadlines you finished in 2026'],
+    ['current', 'Your open deadlines'],
+  ])('%s reads as plural', (key, name) => {
+    const card = stuck(key, 'rejected');
+    expect(card.title).toBe(`${name} are not reaching the backup`);
+    expect(card.title).not.toMatch(/\bis not reaching\b/);
+    expect(stuck(key, 'too-large').title).toBe(`${name} are too large to back up`);
+  });
+
+  it('a month stays singular', () => {
+    expect(stuck('2026-09', 'rejected').title).toBe('September 2026 is not reaching the backup');
+    expect(stuck('2026-09', 'too-large').title).toBe('September 2026 is too large to back up');
   });
 });

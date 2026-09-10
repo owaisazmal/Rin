@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.owaiskhan.monthlyplanning",
-      "versionCode": 1,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#242424",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -67,6 +67,29 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.owaiskhan.monthlyplanning.widget",
+                  "targetName": "MonthlyPlanningWidgets",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.owaiskhan.monthlyplanning"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "10adfbe0-d570-4794-90c4-f98e64ad543c"
+      }
+    },
+    "owner": "owaisazmal"
   }
 }

@@ -6,8 +6,8 @@ import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
 import type { BackupStatus } from '../hooks/useAutoBackup';
-import { backupCard, nameOf } from './backupWording';
-import type { BackupHolds } from './backupWording';
+import { backupCard, nameOf, restoreFailure } from './backupWording';
+import type { BackupHolds, RestoreFailure } from './backupWording';
 import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
@@ -54,7 +54,16 @@ interface Props {
    * a restore over a card with no button on it would be worse than the warning
    * it replaced.
    */
-  onRestoreMonth?: (key: string) => Promise<void>;
+  onRestoreMonth?: (key: string) => Promise<RestoreFailure | null>;
+  /**
+   * Erase the backup itself, rather than this phone's copy of the code.
+   *
+   * The other half of leaving. Forgetting the code stops this phone using the
+   * backup and leaves every document standing, which is what somebody changing
+   * phones wants; this is for somebody who wants their data off the server, and
+   * until it existed there was no way to do that at all.
+   */
+  onDeleteBackup: () => Promise<{ ok: boolean; deleted: number }>;
   onForgetBackup: () => void;
   onClose: () => void;
 }
@@ -74,6 +83,7 @@ export default function SettingsScreen({
   backupStatus,
   onOpenBackup,
   onRetryBackup,
+  onDeleteBackup,
   backupHolds,
   onRestoreMonth,
   onForgetBackup,
@@ -132,7 +142,12 @@ export default function SettingsScreen({
           onPress: async () => {
             setRestoring(true);
             try {
-              await onRestoreMonth(key);
+              // Only a failure is announced. A restore that worked retires the
+              // damage note, so the card redraws saying so from the place that
+              // actually knows — and a second dialog agreeing with it would be
+              // one more thing to dismiss.
+              const failed = await onRestoreMonth(key);
+              if (failed) Alert.alert(`${nameOf(key)} was not restored`, restoreFailure(failed));
             } finally {
               setRestoring(false);
             }
@@ -162,6 +177,43 @@ export default function SettingsScreen({
   const [viewport, setViewport] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const scrollable = contentHeight > viewport + 1;
+
+  const [deleting, setDeleting] = useState(false);
+  /**
+   * The destructive one, and the only thing in the app that reaches across and
+   * removes somebody's data from the server. It says what goes and what stays,
+   * because the two are easy to confuse: the backup is erased, the months on
+   * this phone are not.
+   */
+  const confirmDelete = () =>
+    Alert.alert(
+      'Delete the backup?',
+      "Everything in the backup is erased for good, and no code can bring it back — not yours and not mine. What is on this phone stays exactly as it is.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              const done = await onDeleteBackup();
+              if (!done.ok) {
+                Alert.alert(
+                  'The backup was not fully deleted',
+                  done.deleted > 0
+                    ? `${done.deleted} of its records were removed before Rin lost the connection. Deleting again will finish the job.`
+                    : 'Rin could not reach the backup, so nothing was removed. Try again when you have a connection.'
+                );
+              }
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
 
   const confirmForget = () =>
     Alert.alert(
@@ -246,6 +298,20 @@ export default function SettingsScreen({
                 style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
               >
                 <Text style={styles.ghostText}>FORGET THE CODE</Text>
+              </Pressable>
+              {/*
+                Last, and worded as the heavier thing it is. Forgetting the code
+                is reversible by anyone who wrote it down; this is not reversible
+                by anybody.
+              */}
+              <Pressable
+                disabled={deleting}
+                onPress={confirmDelete}
+                style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={[styles.ghostText, styles.dangerText]}>
+                  {deleting ? 'DELETING…' : 'DELETE THE BACKUP'}
+                </Text>
               </Pressable>
             </>
           ) : (
@@ -395,6 +461,9 @@ const makeStyles = (p: Palette) =>
       borderColor: p.line,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    dangerText: {
+      color: p.missed,
     },
     ghostText: {
       fontSize: 11,

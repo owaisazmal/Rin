@@ -49,7 +49,7 @@
 
     <span class="eyebrow">Privacy policy</span>
     <h1>What Rin stores,<br>and what it sends.</h1>
-    <p class="updated">Last updated 7 September 2026 · applies to Rin for iOS and Android</p>
+    <p class="updated">Last updated 9 September 2026 · applies to Rin for iOS and Android</p>
 
     <p class="lede" style="max-width:none">Rin is a habit planner made by Owais Khan. It is free
       and open-source, and this policy describes it as it is actually built. Every claim below
@@ -171,7 +171,7 @@
           <tr>
             <td>Can users request deletion?</td>
             <td><span class="yes">Yes</span></td>
-            <td>See “Deleting your data” below.</td>
+            <td>In the app: Settings → Backup → Delete the backup. <a href="#delete">Steps below</a>.</td>
           </tr>
           <tr>
             <td>Data used for tracking or advertising?</td>
@@ -210,23 +210,63 @@
       push notifications, no server is involved, and no notification token is registered or sent
       anywhere.</p>
 
-    <h2>Retention, and deleting your data</h2>
+    <h2 id="delete">Retention, and deleting your data</h2>
     <p>Local data lives until you delete it in the app or uninstall the app.</p>
-    <p>An encrypted backup is kept until it is overwritten by a newer one from a device holding
-      the same code. Two separate things you can do, and it is worth being clear about which is
-      which:</p>
+    <p>An encrypted backup is kept until you delete it, or until it is overwritten by a newer one
+      from a device holding the same code. Nothing expires on a schedule, and nothing is kept
+      back once you have deleted it.</p>
+
+    <div class="card" style="margin:26px 0">
+      <div class="shead"><h2 class="shead-title" style="margin:0">Deleting your backup, in the app</h2></div>
+      <ol>
+        <li>Open Rin and tap the settings control at the top right of the main screen.</li>
+        <li>Scroll down to <strong>Backup</strong>.</li>
+        <li>Tap <strong>Delete the backup</strong>.</li>
+        <li>Read the confirmation and tap <strong>Delete</strong>.</li>
+      </ol>
+      <p style="margin-bottom:0">Every encrypted record filed under your backup id is removed as
+        you watch — each stored month and each stored list of deadlines. It is not recoverable
+        afterwards, by you or by the developer, and no code will bring it back. If the connection
+        drops part way the app tells you how many records went and offers to finish the job.</p>
+    </div>
+
+    <p>What is deleted, and what is not:</p>
     <ul>
-      <li><strong>Forget the code</strong>, in the app's Settings, removes the code from your
-        phone. Your local data is untouched, but the stored backup becomes permanently
-        unreadable, by you as much as by anyone else, and is left as ciphertext nobody holds a
-        key for.</li>
-      <li><strong>Deleting the stored record</strong> is a separate request. Send an
-        <a href="mailto:owais.develops@gmail.com">email</a>, or open a
-        <a href="https://github.com/owaisazmal/Rin/issues">GitHub issue</a>, asking
-        for the backup under your id to be removed. You will need to supply that id, because it
-        is the only thing that identifies the record. Nothing else links it to you, which is the
-        point of the design and also its one inconvenience.</li>
+      <li><strong>Deleted:</strong> every encrypted month and every encrypted deadline list
+        stored under your backup id, which is the whole of what the backup consists of.</li>
+      <li><strong>Kept:</strong> everything on your phone. Your habits, marks, deadlines,
+        observations and settings are untouched — deleting the backup is not deleting your
+        months. To remove those, delete them in the app or uninstall it.</li>
+      <li><strong>Also kept:</strong> the anonymous sign-in identifier for the install, which has
+        nothing filed under it once the records are gone and is discarded when you uninstall.</li>
     </ul>
+    <p class="caption">Deletion is immediate and is not staged or queued. Google may hold
+      operational copies inside its own infrastructure for a short period under its own terms, as
+      it does for any Firebase deletion; neither those copies nor the originals are readable
+      without the code, which never left your phone.</p>
+
+    <p>Two other things are worth separating from the above, because they are easy to confuse
+      with it:</p>
+    <ul>
+      <li><strong>Forget the code</strong>, in the same Settings screen, removes the code from
+        your phone and stops this device backing up. Your local data is untouched and the stored
+        backup stays where it is — anyone with the code written down can still restore it. This
+        is the reversible one.</li>
+      <li><strong>Uninstalling</strong> removes everything local, and leaves any backup standing.
+        Delete the backup first if you want it gone.</li>
+    </ul>
+    <p>If you uninstalled without deleting first, reinstall Rin, enter your backup code on the
+      backup screen, and the steps above become available again. That is the whole of the route,
+      and it is deliberately the only one: the record is filed under an id derived from your code
+      by a one-way function, the app never displays that id, and nothing stored alongside it names
+      a person. There is no lookup the developer can run on your behalf.</p>
+    <p class="caption"><strong>Never send anyone your backup code</strong>, including the
+      developer, and including in an email or issue asking for a deletion. The code is the
+      decryption key; handing it over hands over the ability to read the backup. No genuine
+      request for support will ever ask you for it. If you have lost the code, the record stays as
+      ciphertext that nobody — you, Google, or the developer — can read, which is the intended
+      end state rather than a gap in it. You are welcome to
+      <a href="mailto:owais.develops@gmail.com">get in touch</a> with any question about this.</p>
 
     <h2>Children</h2>
     <p>Rin is not directed at children and collects no personal information from anyone, of any

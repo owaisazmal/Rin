@@ -11,20 +11,24 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "node": "24.9.0"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "node": "24.9.0"
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
-      }
-    }
+      },
+      "node": "24.9.0"
+    },
+    "base": {}
   },
   "submit": {
     "production": {}

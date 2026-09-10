@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deriveBackupId, deriveKey, generateCode, open } from '../backup';
 import {
   backupEverything,
+  deleteBackup,
   listMonths,
   pullMonth,
   pullTasks,
@@ -128,6 +129,10 @@ jest.mock('@react-native-firebase/firestore', () => {
       fail();
       const data = mockDocs.get(ref.path);
       return { exists: () => data !== undefined, data: () => data };
+    }),
+    deleteDoc: jest.fn(async (ref: { path: string }) => {
+      fail();
+      mockDocs.delete(ref.path);
     }),
     getDocs: jest.fn(async (ref: { path: string }) => {
       fail();
@@ -1673,5 +1678,70 @@ describe('pulling one damaged month back', () => {
       blocked: [{ key: '2026-09', reason: 'incomplete', detail: '1 of 2 habits, 1 grid entry' }],
     });
     expect(readBack('months/2026-09')).toEqual(twoHabits);
+  });
+});
+
+
+describe('erasing the backup', () => {
+  /**
+   * The way out for somebody who wants their data off the server. Until this
+   * existed there was none: "forget the code" clears the keychain and leaves
+   * every document standing, which is right for changing phones and wrong for
+   * leaving.
+   */
+  const other = generateCode();
+
+  it('removes every month and every task document under that code', async () => {
+    await saveMonth(2026, 0, month);
+    await saveMonth(2026, 8, month);
+    await saveTasks(tasks);
+    await backupEverything(CODE);
+    expect(mockDocs.size).toBeGreaterThan(0);
+
+    await expect(deleteBackup(CODE)).resolves.toEqual({ ok: true, deleted: mockDocs.size });
+    expect([...mockDocs.keys()]).toEqual([]);
+  });
+
+  it("leaves this phone's own data exactly where it is", async () => {
+    await saveMonth(2026, 8, month);
+    await saveTasks(tasks);
+    await backupEverything(CODE);
+    await deleteBackup(CODE);
+
+    // deleting the backup is not deleting your months
+    await expect(loadMonth(2026, 8)).resolves.toEqual(month);
+    await expect(loadTasks()).resolves.toEqual(tasks);
+  });
+
+  it('cannot reach a backup filed under another code', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    const mine = [...mockDocs.keys()];
+
+    await deleteBackup(other);
+
+    // the other code derives a different id, so it found nothing of ours
+    expect([...mockDocs.keys()]).toEqual(mine);
+  });
+
+  it('forgets what it believed the server held, so the next run does not skip', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    await deleteBackup(CODE);
+
+    // without clearing the ledger the digests would still match and this would
+    // send nothing at all, leaving the person with no backup and no warning
+    await backupEverything(CODE);
+    expect([...mockDocs.keys()].some((k) => k.endsWith('/months/2026-09'))).toBe(true);
+  });
+
+  it('says how far it got when the server stops it part way', async () => {
+    await saveMonth(2026, 8, month);
+    await backupEverything(CODE);
+    mockState.failWith = 'firestore/unavailable';
+
+    const result = await deleteBackup(CODE);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('offline');
   });
 });

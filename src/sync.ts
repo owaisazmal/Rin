@@ -1,6 +1,7 @@
 import { getAuth, signInAnonymously } from '@react-native-firebase/auth';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -35,6 +36,7 @@ import {
 import {
   Ledger,
   clearBlocked,
+  clearUnvouched,
   digestOf,
   generationOf,
   loadLedger,
@@ -42,6 +44,7 @@ import {
   recordBlocked,
   recordPushed,
   recordSkipped,
+  resetFor,
   seedPushed,
 } from './syncLedger';
 import { monthDocKey } from './hooks/useMonthData';
@@ -1254,6 +1257,14 @@ export async function restoreEverything(code: string): Promise<RestoreRun> {
       ...shardTasks(await loadTasks()).keys(),
     ];
     await seedPushed(deriveBackupId(code), seeds, local);
+    /**
+     * Every month that came down was written whole, so whatever this phone had
+     * previously failed to read of it is gone along with the record it was
+     * about. Restoring the same code onto the same phone is the existing way
+     * out of a damaged month, and a note left standing here would have the card
+     * still calling a month damaged that the restore had just replaced.
+     */
+    for (const key of Object.keys(seeds)) await clearUnvouched(key);
   } catch {
     // bookkeeping, after the data has already landed: a code that will not
     // derive never got past the listing above, and a lost seed costs one
@@ -1336,12 +1347,18 @@ export async function restoreMonth(
     const digest = digestOf(JSON.stringify(pulled.value));
     await seedPushed(backupId, { ...ledger.digests, [key]: digest });
     /**
-     * And the park comes off. It was put on against bytes that are no longer on
-     * this phone, and leaving it would have the card still calling the month
-     * damaged after the damage had been replaced — the one thing a way out must
-     * not do is fail to say it worked.
+     * And both marks come off. They were put on against bytes that are no
+     * longer on this phone, and leaving either would have the card still
+     * calling the month damaged after the damage had been replaced — the one
+     * thing a way out must not do is fail to say it worked.
+     *
+     * The park and the damage note are separate on purpose, because a refusal
+     * and an unreadable local copy are different problems with different
+     * remedies. A restore is the one act that ends both at once, so it is the
+     * one place that has to remember to say so twice.
      */
     await clearBlocked(key);
+    await clearUnvouched(key);
   } catch {
     // bookkeeping, after the month has already landed. A code that will not
     // derive never got past `pullMonth`, and a lost seed costs one needless
@@ -1349,4 +1366,53 @@ export async function restoreMonth(
   }
 
   return pulled;
+}
+
+
+/**
+ * Erase the backup itself, not just this phone's copy of the code.
+ *
+ * "Forget the code" was never this. It clears the keychain and leaves every
+ * document standing, which is right for someone changing phones and wrong for
+ * someone who wants out — until now there was no way to get data off the server
+ * at all, which sits badly beside a promise this strong.
+ *
+ * What it removes is every month and every task document filed under the id the
+ * code derives, and nothing else: no other backup is reachable, because the id
+ * is the only way in and it is derived rather than listed. What stays is this
+ * phone's own data, which is untouched. Deleting the backup is not deleting
+ * your months.
+ *
+ * It is deliberately not "best effort, report success". A partial delete that
+ * claimed to have finished would be the worst possible answer here, so the
+ * count of what actually went is handed back and anything refused leaves the
+ * whole thing reported as unfinished.
+ */
+export async function deleteBackup(
+  code: string
+): Promise<{ ok: true; deleted: number } | { ok: false; reason: 'offline' | 'rejected'; deleted: number }> {
+  let deleted = 0;
+  try {
+    await ready();
+    const id = deriveBackupId(code);
+    const db = getFirestore();
+
+    for (const name of ['months', 'tasks'] as const) {
+      const listing = await getDocs(collection(db, 'backups', id, name));
+      for (const entry of listing.docs) {
+        await deleteDoc(doc(db, 'backups', id, name, entry.id));
+        deleted++;
+      }
+    }
+
+    /**
+     * The ledger goes too. It is this phone's account of what the server holds,
+     * and every word of it is now wrong — leaving it would have the next run
+     * skip months whose digests it still recognises and quietly upload nothing.
+     */
+    await resetFor(id);
+    return { ok: true, deleted };
+  } catch (error) {
+    return { ok: false, reason: reasonFor(error), deleted };
+  }
 }

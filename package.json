@@ -21,6 +21,7 @@
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
+    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0",
@@ -34,7 +35,6 @@
     "babel-preset-expo": "^57.0.10",
     "firebase": "^12.18.0",
     "jest": "~29.7.0",
-    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -46,5 +46,16 @@
     "test": "jest",
     "test:rules": "npx --yes firebase-tools emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\""
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "install": {
+      "exclude": [
+        "expo",
+        "expo-notifications",
+        "expo-secure-store",
+        "expo-video",
+        "react-native"
+      ]
+    }
+  }
 }

@@ -65,6 +65,29 @@ export function nameOf(key: string): string {
 }
 
 /**
+ * "is" or "are" for a name from `nameOf`.
+ *
+ * Two of the three names it can return are plural — "Your open deadlines" and
+ * "Deadlines you finished in 2024" — and a month is not. Every sentence here
+ * that puts a name in front of a verb had "is" written into it, so a stuck
+ * archive read "Deadlines you finished in 2026 is not reaching the backup".
+ * The agreement follows the key rather than the words, because the key is what
+ * decides which of the three names came back.
+ */
+function verbFor(key: string): string {
+  return plural(key) ? 'are' : 'is';
+}
+
+/** The same agreement in the past tense, for a document the server turned down */
+function pastVerbFor(key: string): string {
+  return plural(key) ? 'were' : 'was';
+}
+
+function plural(key: string): boolean {
+  return key === 'current' || /^20\d{2}$/.test(key);
+}
+
+/**
  * The same name where it lands part-way through a sentence.
  *
  * Two of the three names above are prose rather than a proper noun — "Your open
@@ -379,7 +402,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
 
   if (lead.reason === 'too-large') {
     return {
-      title: `${name} is too large to back up`,
+      title: `${name} ${verbFor(lead.key)} too large to back up`,
       body: `${shorten(lead.key, lead.detail, 'that month')} Nothing on this phone has been lost.${also}`,
       attention: true,
       retry: true,
@@ -460,7 +483,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
 
   if (lead.reason === 'rejected') {
     return {
-      title: `${name} is not reaching the backup`,
+      title: `${name} ${verbFor(lead.key)} not reaching the backup`,
       body: `The server turned it down, which is a fault at my end rather than anything you did. Everything is still here on this phone, Rin will keep trying this on its own, and backing up again will try it again now.${also}`,
       attention: true,
       retry: true,
@@ -474,7 +497,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
   // all there is. It is worth showing — it outlives the process, which is the
   // point of writing it down — but the reason is a question only a run answers.
   return {
-    title: `${name} is not reaching the backup`,
+    title: `${name} ${verbFor(lead.key)} not reaching the backup`,
     body: `Everything is still here on this phone. Backing up now will say what stopped it.${also}`,
     attention: true,
     retry: true,
@@ -707,6 +730,31 @@ export function needsHolds(status: BackupStatus): boolean {
  * `lastBackupAt` is nothing to do with it: every branch that dates itself is a
  * branch with nothing to restore.
  */
+/** Why a single-month restore did not happen, in the words the caller gets back */
+export type RestoreFailure = 'offline' | 'rejected' | 'missing' | 'unreadable';
+
+/**
+ * What to say when the way out did not work.
+ *
+ * The card cannot answer this itself: it is read from the ledger, and a restore
+ * that never landed leaves the ledger exactly as it was, so the screen redraws
+ * unchanged and the tap reads as a button that does nothing. Each of these says
+ * what happened and whether waiting will help, because "it failed" on its own
+ * would leave somebody pressing it again at a wall.
+ */
+export function restoreFailure(reason: RestoreFailure): string {
+  switch (reason) {
+    case 'offline':
+      return 'Rin could not reach the backup. Your damaged copy is untouched, so this is safe to try again when you have a connection.';
+    case 'rejected':
+      return 'The backup server turned this phone away, so nothing was replaced. Rin will keep trying on its own.';
+    case 'missing':
+      return 'The backup does not hold that month after all, so there was nothing to put back. Your copy is untouched.';
+    case 'unreadable':
+      return 'The copy in the backup could not be read in full either, so Rin left your copy alone rather than replacing it with less.';
+  }
+}
+
 export function restoreOffer(status: BackupStatus, holds: BackupHolds = null): string | null {
   return backupCard(status, null, holds).restore;
 }
@@ -750,7 +798,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
   if (lead.reason === 'too-large') {
     // "most of it is the notes" rather than "the notes is most of it", which is
     // what the sentence used to say for two of the four sections it names
-    return `${name} is too large to back up${bulk ? `, and most of it is ${bulk}` : ''}. ${shorten(lead.key, lead.detail)}${also}`;
+    return `${name} ${verbFor(lead.key)} too large to back up${bulk ? `, and most of it is ${bulk}` : ''}. ${shorten(lead.key, lead.detail)}${also}`;
   }
   if (lead.reason === 'unreadable') {
     return `Rin could not read ${within} on this phone, so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
@@ -760,7 +808,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
   if (lead.reason === 'incomplete') {
     return `Rin could only read part of ${within} on this phone — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
-  return `${name} was turned down by the server. Backing up again will try it again.${also}`;
+  return `${name} ${pastVerbFor(lead.key)} turned down by the server. Backing up again will try it again.${also}`;
 }
 
 /**
