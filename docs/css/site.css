@@ -1478,13 +1478,13 @@ p {
 .frame picture {
   display: block;
 }
-/* the Android capture is 279px wide against the others' 285, which otherwise
-   makes its frame 11px taller and knocks its caption out of the row */
+/* every capture is exported at the same 570 x 1238, so one ratio holds the
+   frames level whether or not the image has arrived yet */
 .frame img {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 285 / 620;
+  aspect-ratio: 570 / 1238;
   object-fit: cover;
 }
 .rail figcaption {
@@ -1494,6 +1494,102 @@ p {
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- showcase */
+/* Only ever present once site.js has mounted it, which it does not under
+   reduced motion. The page scroll drives the rail: the wrapper is as tall as the
+   scrolling it takes, and the pin holds the rail in view the whole way down.
+   Nothing here declares an animation. site.js builds the keyframes and, where
+   the browser can, hands them to the compositor on a view timeline, so a
+   browser without one can never run them off the wrong clock. */
+
+.showcase {
+  position: relative;
+  margin-top: 20px;
+  /* one screen for the pin, then half a screen more per capture after the first */
+  height: calc(100svh - 57px + (var(--slides, 1) - 1) * 50svh);
+}
+.showcase-pin {
+  position: sticky;
+  top: 57px;
+  height: calc(100svh - 57px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  /* not overflow: hidden, which would make the pin its own scroller and unstick it */
+  overflow-x: clip;
+  /* the neighbours dissolve into the page instead of stopping at the column edge.
+     No filter or backdrop-filter here or on anything above the figures: either
+     would pull their scroll-driven animation back onto the main thread. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+.rail.scrolly {
+  /* sized by the screen's height too, so a short window still fits a whole frame.
+     One expression for the width and for the padding that centres capture 0, so
+     position j is exactly j steps to the left and nothing is measured to centre it. */
+  --fig-w: min(62vw, 260px, calc((100svh - 57px - 110px) * 0.4604));
+  overflow: visible;
+  scroll-snap-type: none;
+  margin-top: 0;
+  padding-bottom: 0;
+  padding-inline-start: calc(50% - var(--fig-w) / 2);
+}
+.rail.scrolly:focus-visible {
+  outline: none;
+}
+.rail.scrolly figure {
+  width: var(--fig-w);
+  /* the neighbours shrink toward their baseline, so the smaller one reads as
+     further back with no shadow to say so */
+  transform-origin: 50% 100%;
+}
+.rail.scrolly figcaption {
+  text-align: center;
+}
+/* Promoted only while the stage is within a screen — site.js sets `.live` the
+   way initGround() sets will-change on the blobs, and clears it the same way.
+   Opacity lives on the frame and on the caption, never on the figure, so a
+   fading capture is two flat layers rather than a group that has to be
+   composited on its own first. */
+.rail.scrolly.live figure {
+  will-change: transform;
+}
+.rail.scrolly.live .frame {
+  will-change: opacity;
+}
+.rail.scrolly.live figcaption {
+  will-change: transform, opacity;
+}
+.showcase-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.showcase-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  /* the hairline colour vanishes against the ground in both themes */
+  background: color-mix(in srgb, var(--ink-soft) 40%, transparent);
+  cursor: pointer;
+  transition: transform 200ms var(--ease-out), background-color 200ms var(--ease-out);
+}
+.showcase-dots button[aria-current='true'] {
+  background: var(--accent);
+  transform: scale(1.35);
+}
+.showcase-dots button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.showcase-pin:has(.rail.scrolly:focus-visible) .showcase-dots button[aria-current='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 /* ---------------------------------------------------------------- code */

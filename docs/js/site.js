@@ -1339,6 +1339,300 @@ function initColophon() {
 
 /* ==================================================================== boot */
 
+/* ================================================================ showcase */
+
+/**
+ * The screenshot rail, driven by the page's own scroll.
+ *
+ * The rail pins under the masthead and each stretch of scrolling carries the
+ * next capture into the middle, where it holds for a moment before the next one
+ * takes over. The choreography is a set of keyframes, not per-frame arithmetic:
+ * where the browser has scroll-driven animations the compositor runs them from
+ * the same scroll sample that places the sticky pin, so nothing here runs on the
+ * main thread while scrolling and the captures cannot trail the pin by a frame;
+ * elsewhere the same keyframes are scrubbed from a scroll listener that reads
+ * one number and lays out nothing. Transform and opacity only, like everything
+ * else here. Under reduced motion, or with no JS at all, the rail stays the
+ * plain swipeable strip it is in the markup, so nothing depends on this running.
+ */
+function initShowcase() {
+  const rail = $('#widgets .rail');
+  if (!rail) return;
+  const figures = $$('figure', rail);
+  const n = figures.length;
+  if (n < 2) return;
+
+  /** px the masthead covers: 56 tall plus its hairline */
+  const PIN_TOP = 57;
+  /** each capture sits still for this share of its step at either end; the glide is the middle half */
+  const HOLD = 0.25;
+  /**
+   * Smoothstep, as a bezier: control points at a third and two thirds make it
+   * t²(3 − 2t) exactly, which is the app's inOut(ease) to within half a percent
+   * and leaves and arrives at rest, so a hold hands over to a glide with no
+   * kick. The sampled --rn-inout table does not: its first segment sets off at
+   * a slope of 0.27, which reads as a nudge at the start of every step.
+   */
+  const GLIDE = 'cubic-bezier(0.33, 0, 0.67, 1)';
+  /**
+   * By distance from the held capture. Scale never passes 1, because a composited
+   * layer is rastered at the largest scale it will ever show and the held capture
+   * would blur. Two away is already gone, so nothing reaches the column edge with
+   * any weight behind it; the pin's mask takes the rest.
+   */
+  const DEPTH = [
+    { s: 1, o: 1 },
+    { s: 0.88, o: 0.5 },
+    { s: 0.82, o: 0 },
+  ];
+  const depth = (d) => DEPTH[Math.min(d, DEPTH.length - 1)];
+  /** the caption's landing move: the reveal recipe's rise, at two thirds its distance */
+  const CAPTION_RISE = 8;
+  /** scroll-driven animations: Chrome 115+, Safari 26+; Firefox stable still keeps them behind a flag */
+  const canCompose = typeof ViewTimeline === 'function' && CSS.supports('animation-timeline: view()');
+  let mounted = null;
+
+  /** `el` builds SVG nodes; this rail needs ordinary HTML ones. */
+  const html = (tag, attrs = {}) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    return node;
+  };
+
+  /**
+   * One property track across the whole pinned stretch: at every whole step the
+   * value for that capture, the same value a quarter of the way in, then a
+   * smoothstep glide to the next capture's value that lands three quarters in.
+   * Every hand-over starts and ends at rest, and holds for half of every step.
+   */
+  function track(valueAt) {
+    const kf = [];
+    for (let j = 0; j < n; j++) {
+      kf.push({ offset: j / (n - 1), ...valueAt(j), easing: 'linear' });
+      if (j === n - 1) break;
+      kf.push({ offset: (j + HOLD) / (n - 1), ...valueAt(j), easing: GLIDE });
+      kf.push({ offset: (j + 1 - HOLD) / (n - 1), ...valueAt(j + 1), easing: 'linear' });
+    }
+    return kf;
+  }
+  /** capture 0 sits in the middle at rest (the rail's padding puts it there), so position j is j steps left */
+  const figureTrack = (i, step) =>
+    track((j) => ({ translate: `${-j * step}px 0px`, scale: String(depth(Math.abs(i - j)).s) }));
+  const frameTrack = (i) => track((j) => ({ opacity: String(depth(Math.abs(i - j)).o) }));
+  /** only the held capture is named, and its name lands the way a reveal does */
+  const captionTrack = (i) =>
+    track((j) =>
+      i === j ? { opacity: '1', translate: '0px 0px' } : { opacity: '0', translate: `0px ${CAPTION_RISE}px` }
+    );
+
+  function mount() {
+    const showcase = html('div', { class: 'showcase' });
+    const pin = html('div', { class: 'showcase-pin' });
+    const dots = html('div', { class: 'showcase-dots', role: 'group', 'aria-label': 'Choose a screenshot' });
+    rail.before(showcase);
+    pin.append(rail, dots);
+    showcase.append(pin);
+    showcase.style.setProperty('--slides', String(n));
+    rail.classList.add('scrolly');
+    const label = rail.getAttribute('aria-label');
+    rail.setAttribute('aria-label', 'App screenshots');
+
+    const buttons = figures.map((fig, i) => {
+      const name = fig.querySelector('figcaption')?.textContent.split('·')[0].trim() || `Screenshot ${i + 1}`;
+      const b = html('button', { type: 'button', 'aria-label': `Show screenshot ${i + 1} of ${n}: ${name}` });
+      b.addEventListener('click', () => go(i));
+      dots.append(b);
+      return b;
+    });
+
+    /** measured on resize only, never per frame */
+    const geo = { top: 0, range: 1, step: 0 };
+    /** three per capture, in order: figure (translate, scale), frame (opacity), caption (opacity, rise) */
+    let anims = [];
+    let composed = false;
+    let ro = null;
+    let near = null;
+    let frame = 0;
+    /** where the scroll was at the last paint, in captures; NaN forces the next paint through */
+    let lastPos = NaN;
+    let active = -1;
+    /** the capture a dot or key is carrying the page to, or -1 */
+    let target = -1;
+
+    // Defined before anything that can throw, so a browser with the API in a
+    // shape this does not expect gets the plain strip back rather than a rail
+    // stranded in a pin that never moves.
+    mounted = () => {
+      window.removeEventListener('scroll', request);
+      rail.removeEventListener('keydown', onKey);
+      ro?.disconnect();
+      near?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+      // nothing was ever written inline, so cancelling is the whole clean-up
+      anims.forEach((a) => a.cancel());
+      rail.classList.remove('scrolly', 'live');
+      if (label) rail.setAttribute('aria-label', label);
+      showcase.before(rail);
+      showcase.remove();
+      mounted = null;
+    };
+
+    /**
+     * The same keyframes either way; only the clock differs. Composed, the
+     * subject is .showcase (static in flow, never the sticky pin) seen through a
+     * scrollport shortened by the masthead, so 'contain 0%' is the pin engaging
+     * and 'contain 100%' is it letting go — the stretch the height formula in
+     * site.css lays out. Scrubbed, it is a paused second that paint() winds.
+     */
+    function build(compose) {
+      const timing = compose
+        ? {
+            timeline: new ViewTimeline({ subject: showcase, axis: 'block', inset: [CSS.px(PIN_TOP), CSS.px(0)] }),
+            rangeStart: 'contain 0%',
+            rangeEnd: 'contain 100%',
+            fill: 'both',
+          }
+        : { duration: 1000, fill: 'both' };
+      figures.forEach((fig, i) => {
+        anims.push(
+          fig.animate(figureTrack(i, geo.step), timing),
+          $('.frame', fig).animate(frameTrack(i), timing),
+          $('figcaption', fig).animate(captionTrack(i), timing)
+        );
+      });
+      if (!compose) anims.forEach((a) => a.pause());
+    }
+
+    /**
+     * Runs inside the ResizeObserver, after layout, so these reads force nothing;
+     * and once at mount, so the first frame is already right. offsetLeft ignores
+     * transforms, so the step is the laid-out one however far the rail has moved.
+     */
+    function measure() {
+      const r = showcase.getBoundingClientRect();
+      geo.top = window.scrollY + r.top - PIN_TOP;
+      geo.range = Math.max(1, r.height - pin.offsetHeight);
+      const step = figures[1].offsetLeft - figures[0].offsetLeft;
+      if (step !== geo.step) {
+        geo.step = step;
+        for (let i = 0; i < n; i++) anims[i * 3]?.effect.setKeyframes(figureTrack(i, step));
+      }
+      lastPos = NaN;
+    }
+
+    function paint() {
+      // the one read per frame; scrollY flushes no layout
+      const t = Math.min(1, Math.max(0, (window.scrollY - geo.top) / geo.range));
+      const pos = t * (n - 1);
+      if (pos === lastPos) return;
+      if (!composed) for (const a of anims) a.currentTime = t * 1000;
+      const now = Math.round(pos);
+      // a jump is in flight until it lands, or until the scroll turns away from it
+      if (target >= 0 && (now === target || Math.abs(pos - target) > Math.abs(lastPos - target))) target = -1;
+      lastPos = pos;
+      if (now !== active) {
+        if (active >= 0) buttons[active].removeAttribute('aria-current');
+        buttons[now].setAttribute('aria-current', 'true');
+        active = now;
+      }
+    }
+
+    function request() {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        paint();
+      });
+    }
+
+    /** Scroll the window to where capture `i` sits dead centre. */
+    function go(i) {
+      const k = Math.min(n - 1, Math.max(0, i));
+      target = k;
+      window.scrollTo({ top: geo.top + (geo.range * k) / (n - 1), behavior: lessMotion() ? 'auto' : 'smooth' });
+    }
+
+    function onKey(e) {
+      const moves = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+      // step from where a jump in flight will land, not from the dot, so a second press mid-glide is one more
+      const from = target >= 0 ? target : active;
+      if (e.key in moves) go(from + moves[e.key]);
+      else if (e.key === 'Home') go(0);
+      else if (e.key === 'End') go(n - 1);
+      else return;
+      e.preventDefault();
+    }
+
+    measure();
+    if (canCompose) {
+      try {
+        build(true);
+        composed = true;
+      } catch (err) {
+        // the API is there but not in the shape expected: scrub the same keyframes instead
+        anims.forEach((a) => a.cancel());
+        anims = [];
+      }
+    }
+    if (!composed) build(false);
+    paint();
+    rail.addEventListener('keydown', onKey);
+
+    // documentElement too: anything above the section changing height (the
+    // proof panel opening, a late font) moves the stage's document offset
+    ro = new ResizeObserver(() => {
+      measure();
+      paint();
+    });
+    ro.observe(showcase);
+    ro.observe(figures[0]);
+    ro.observe(document.documentElement);
+
+    // The scroll listener and the promoted layers exist only while the stage is
+    // within a screen, as the blobs are only promoted while they drift. The first
+    // time it comes near, every capture is fetched and decoded, so none pops in
+    // half-way through a glide.
+    let primed = false;
+    near = new IntersectionObserver(
+      (entries) => {
+        const close = entries[entries.length - 1].isIntersecting;
+        rail.classList.toggle('live', close);
+        window.removeEventListener('scroll', request);
+        if (close) window.addEventListener('scroll', request, { passive: true });
+        if (close && !primed) {
+          primed = true;
+          $$('img', rail).forEach((img) => {
+            img.loading = 'eager';
+            img.decode?.().catch(() => {
+              /* not decodable yet, or never; it still paints when it arrives */
+            });
+          });
+        }
+        request();
+      },
+      { rootMargin: '100% 0px' }
+    );
+    near.observe(showcase);
+  }
+
+  const sync = () => {
+    if (lessMotion()) {
+      mounted?.();
+      return;
+    }
+    if (mounted) return;
+    try {
+      mount();
+    } catch (err) {
+      // the rail has already been moved into the pin; put the plain strip back
+      mounted?.();
+      throw err;
+    }
+  };
+  sync();
+  reduced.addEventListener('change', sync);
+}
+
 /**
  * Each piece is enhancement, so each one fails alone. The reveal styles only
  * apply once `.js` is set, and `.js` is only set once the observer is armed —
@@ -1370,6 +1664,7 @@ function boot() {
   attempt('diagram', initDiagram);
   attempt('views', initViews);
   attempt('deadlines', initDeadlines);
+  attempt('showcase', initShowcase);
   attempt('backup', initBackup);
   attempt('copy buttons', initCopyButtons);
   attempt('colophon', initColophon);
