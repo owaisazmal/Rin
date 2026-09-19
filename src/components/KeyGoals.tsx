@@ -106,6 +106,12 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
               onChangeText={(t) => onChangeText(i, t.slice(0, MAX_GOAL_LEN))}
               placeholder="goal"
               placeholderTextColor={palette.inkSoft}
+              returnKeyType="done"
+              // `multiline` here is for wrapping, not for paragraphs — these
+              // fields hold one short line. Left on the default, Return types a
+              // newline into them and nothing on screen dismisses the keyboard,
+              // so Android's back button was the only way out of an edit.
+              submitBehavior="blurAndSubmit"
               multiline
               textAlign="center"
             />

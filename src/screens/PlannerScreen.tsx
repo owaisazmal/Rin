@@ -17,6 +17,7 @@ import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
 import HabitsList from '../components/HabitsList';
 import HistoryIcon from '../components/HistoryIcon';
+import KeyboardDoneBar from '../components/KeyboardDoneBar';
 import KeyGoals from '../components/KeyGoals';
 import LogoMark from '../components/LogoMark';
 import MonthNav from '../components/MonthNav';
@@ -219,7 +220,15 @@ export default function PlannerScreen({
         scrolled up out from under it.
       */}
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          // explicit, now that it shares the column with the done bar: without
+          // it the bar's height comes out of nowhere and the page jumps
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          // the other way out of an edit: scroll the page and the keyboard goes
+          keyboardDismissMode="on-drag"
+        >
           <View style={styles.header}>
             {/*
               The mark shares the eyebrow line rather than sitting beside the
@@ -374,6 +383,9 @@ export default function PlannerScreen({
             <Text style={styles.quote}>“{quoteForDate(now)}”</Text>
           </View>
         </ScrollView>
+
+        {/* Last child of the avoiding view on purpose — see the note in the component */}
+        <KeyboardDoneBar />
       </KeyboardAvoidingView>
 
       <DueDatePicker

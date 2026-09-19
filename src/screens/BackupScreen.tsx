@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import KeyboardDoneBar from '../components/KeyboardDoneBar';
 import BackButton from '../components/BackButton';
 import LogoMark from '../components/LogoMark';
 import SegmentedControl from '../components/SegmentedControl';
@@ -210,8 +211,13 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
         */}
         <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView
+            // explicit, now that it shares the column with the done bar
+            style={styles.flex}
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
+            // the second safe way out, beside the done bar: the field's own
+            // return key is GO and runs the restore, so it is not one
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.brand}>
@@ -326,6 +332,14 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
               </Pressable>
             ) : null}
           </ScrollView>
+
+          {/*
+            Dismiss only. The code field's own return key is GO and runs the
+            restore, which replaces everything on this phone — so the one
+            control that is always safe to press has to be the one that just
+            puts the keyboard away.
+          */}
+          <KeyboardDoneBar />
         </KeyboardAvoidingView>
     </SafeAreaView>
   );

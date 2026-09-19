@@ -131,6 +131,12 @@ export default function Observations({ observations, onChange, onAdd, onRemove }
               onChangeText={(t) => onChange(i, t.slice(0, MAX_OBSERVATION_LEN))}
               placeholder="write it down…"
               placeholderTextColor={palette.inkSoft}
+              returnKeyType="done"
+              // `multiline` here is for wrapping, not for paragraphs — these
+              // fields hold one short line. Left on the default, Return types a
+              // newline into them and nothing on screen dismisses the keyboard,
+              // so Android's back button was the only way out of an edit.
+              submitBehavior="blurAndSubmit"
               multiline
             />
             {observations.length > 1 && (
