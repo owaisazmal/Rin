@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { Platform } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
 export type ThemeMode = 'dark' | 'light';
@@ -191,18 +192,53 @@ export const RADIUS = {
   pill: 999,
 } as const;
 
-/** Shared surface every card on the planner screen sits on */
+/**
+ * The shadow as one CSS colour. iOS wants the tint and the strength as two
+ * props, CSS wants them as one; both palettes keep `shadow` as `#rrggbb`, so a
+ * six-digit parse covers it.
+ */
+function shadowRgba(p: Palette): string {
+  const n = parseInt(p.shadow.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${p.shadowOpacity})`;
+}
+
+/**
+ * Shared surface every card on the planner screen sits on.
+ *
+ * The two platforms draw the same shadow from different props, and they have
+ * to. Android's `elevation` paints under the *whole* view, and these cards are
+ * translucent on purpose, so the shadow came back up through the card: a soft
+ * dark band inside every edge, stopping dead about 16dp in. Four of those read
+ * as a faded rectangle sitting inside each card, which is what the cards
+ * looked like on Android and never did on iOS.
+ *
+ * `boxShadow` is the fix. RN clips the view's own rounded rect out of the
+ * shadow before drawing it, so none of it lands under the card and the
+ * translucency stays honest. CSS states blur as twice the Gaussian sigma where
+ * iOS states it as sigma, hence 40 against iOS's 20 — the same shadow in the
+ * other unit. iOS keeps `shadow*` because it already looked right, and Android
+ * below API 28 has no `boxShadow` to fall back on, so it gets the border and
+ * no shadow, which is the quieter of the two failures.
+ */
 export function cardSurface(p: Palette): ViewStyle {
   return {
     backgroundColor: p.card,
     borderRadius: RADIUS.card,
     borderWidth: 1,
     borderColor: p.lineFaint,
-    shadowColor: p.shadow,
-    shadowOpacity: p.shadowOpacity,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
+    ...Platform.select<ViewStyle>({
+      ios: {
+        shadowColor: p.shadow,
+        shadowOpacity: p.shadowOpacity,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 12 },
+      },
+      default: {
+        boxShadow: [
+          { offsetX: 0, offsetY: 12, blurRadius: 40, color: shadowRgba(p) },
+        ],
+      },
+    }),
   };
 }
 
