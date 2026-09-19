@@ -468,7 +468,11 @@ private fun GoalsContent() {
   val theme = WidgetTheme.of(context, snap)
   val size = LocalSize.current
   val availH = size.height.value - PAD * 2
-  val doneCount = snap.goals.count { it.done }
+  // A goal nobody has written is not a goal, so it cannot be a goal that is
+  // done. The app's own card counts it that way (`KeyGoals.tsx`), and a widget
+  // that disagreed with the screen it mirrors read as a bug: marking an empty
+  // box done showed 1/3 here and 0/3 in the app.
+  val doneCount = snap.goals.count { it.done && it.text.isNotEmpty() }
 
   WidgetScaffold(theme) {
     Column(modifier = GlanceModifier.fillMaxSize()) {

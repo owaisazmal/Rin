@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Apostrophes must be escaped in Android string resources, or aapt rejects them. -->
 <resources>
+    <string name="widget_radial_label">Radial Tracker</string>
+    <string name="widget_year_label">Year Tracker</string>
+    <string name="widget_progress_label">Month Progress</string>
+    <string name="widget_streak_label">Streak</string>
+    <string name="widget_today_label">Today\'s Check</string>
+    <string name="widget_goals_label">Key Goals</string>
+    <string name="widget_quote_label">Daily Quote</string>
+    <string name="widget_deadlines_label">Deadlines</string>
+
     <string name="widget_radial_description">This month as rings, one per habit</string>
     <string name="widget_year_description">The last 17 weeks of check-ins</string>
     <string name="widget_progress_description">How much of the month you\'ve done</string>

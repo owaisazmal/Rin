@@ -18,14 +18,21 @@ import { Settings, loadSettings, saveSettings } from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
 import { deleteBackup, listMonths, restoreMonth, startAppCheck } from './src/sync';
-import {
-  useFonts,
-  JosefinSans_400Regular,
-  JosefinSans_400Regular_Italic,
-  JosefinSans_500Medium,
-  JosefinSans_600SemiBold,
-  JosefinSans_700Bold,
-} from '@expo-google-fonts/josefin-sans';
+import { useFonts } from 'expo-font';
+/**
+ * One import per weight rather than the package root.
+ *
+ * The root module requires every variant Josefin Sans ships, so importing the
+ * five faces from there put all fourteen into the app — thin, extralight,
+ * light and every italic among them, half a megabyte of type nothing renders.
+ * Each weight is its own module, and naming them individually is what keeps
+ * the other nine out.
+ */
+import { JosefinSans_400Regular } from '@expo-google-fonts/josefin-sans/400Regular';
+import { JosefinSans_400Regular_Italic } from '@expo-google-fonts/josefin-sans/400Regular_Italic';
+import { JosefinSans_500Medium } from '@expo-google-fonts/josefin-sans/500Medium';
+import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
+import { JosefinSans_700Bold } from '@expo-google-fonts/josefin-sans/700Bold';
 
 /**
  * The root: persisted settings, the backup state, the font, and the theme every

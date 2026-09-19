@@ -28,6 +28,11 @@
     },
     "android": {
       "package": "com.owaiskhan.monthlyplanning",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "versionCode": 10,
       "adaptiveIcon": {
         "backgroundColor": "#242424",
@@ -43,6 +48,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#242424",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
+      ],
       "expo-font",
       "@bacons/apple-targets",
       "./plugins/withAndroidWidgets",
@@ -62,6 +75,10 @@
       [
         "expo-build-properties",
         {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          },
           "ios": {
             "useFrameworks": "static"
           }

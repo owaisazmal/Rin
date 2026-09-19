@@ -1378,7 +1378,7 @@ function initShowcase() {
    * By distance from the held capture. Scale never passes 1, because a composited
    * layer is rastered at the largest scale it will ever show and the held capture
    * would blur. Two away is already gone, so nothing reaches the column edge with
-   * any weight behind it; the pin's mask takes the rest.
+   * any weight behind it, and the pin needs no mask to hide it.
    */
   const DEPTH = [
     { s: 1, o: 1 },
@@ -1505,15 +1505,20 @@ function initShowcase() {
 
     /**
      * Runs inside the ResizeObserver, after layout, so these reads force nothing;
-     * and once at mount, so the first frame is already right. offsetLeft ignores
-     * transforms, so the step is the laid-out one however far the rail has moved.
+     * and once at mount, so the first frame is already right.
      */
     function measure() {
       const r = showcase.getBoundingClientRect();
       geo.top = window.scrollY + r.top - PIN_TOP;
       geo.range = Math.max(1, r.height - pin.offsetHeight);
-      const step = figures[1].offsetLeft - figures[0].offsetLeft;
-      if (step !== geo.step) {
+      // offsetLeft rounds to whole pixels and the figure width is fractional on a
+      // short window, so the error would add up across six steps. Both figures
+      // carry the same translate and scale about their own centre line, so the
+      // gap between their centres is the laid-out step, unrounded.
+      const a = figures[0].getBoundingClientRect();
+      const b = figures[1].getBoundingClientRect();
+      const step = b.left + b.width / 2 - (a.left + a.width / 2);
+      if (Math.abs(step - geo.step) > 0.01) {
         geo.step = step;
         for (let i = 0; i < n; i++) anims[i * 3]?.effect.setKeyframes(figureTrack(i, step));
       }

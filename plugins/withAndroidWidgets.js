@@ -19,16 +19,23 @@ const {
 const SOURCE_DIR = 'targets/android-widgets';
 const PACKAGE = 'com.owaiskhan.monthlyplanning';
 
-/** receiver class -> provider descriptor in res/xml */
+/**
+ * receiver class -> provider descriptor in res/xml -> name in the widget picker
+ *
+ * The name matters more than it looks. Every receiver used to be labelled with
+ * the app name, so the picker offered eight entries all called "Rin" and left
+ * somebody to tell them apart by their descriptions. These are the names the
+ * iOS widgets already carry, so the two platforms agree.
+ */
 const WIDGETS = [
-  ['RadialReceiver', 'widget_radial'],
-  ['YearReceiver', 'widget_year'],
-  ['ProgressReceiver', 'widget_progress'],
-  ['StreakReceiver', 'widget_streak'],
-  ['TodayReceiver', 'widget_today'],
-  ['GoalsReceiver', 'widget_goals'],
-  ['QuoteReceiver', 'widget_quote'],
-  ['DeadlinesReceiver', 'widget_deadlines'],
+  ['RadialReceiver', 'widget_radial', 'widget_radial_label'],
+  ['YearReceiver', 'widget_year', 'widget_year_label'],
+  ['ProgressReceiver', 'widget_progress', 'widget_progress_label'],
+  ['StreakReceiver', 'widget_streak', 'widget_streak_label'],
+  ['TodayReceiver', 'widget_today', 'widget_today_label'],
+  ['GoalsReceiver', 'widget_goals', 'widget_goals_label'],
+  ['QuoteReceiver', 'widget_quote', 'widget_quote_label'],
+  ['DeadlinesReceiver', 'widget_deadlines', 'widget_deadlines_label'],
 ];
 
 function copyDir(from, to) {
@@ -66,12 +73,12 @@ const withWidgetReceivers = (config) =>
       (r) => !(r.$?.['android:name'] ?? '').startsWith(`${PACKAGE}.widgets.`)
     );
 
-    for (const [receiver, info] of WIDGETS) {
+    for (const [receiver, info, label] of WIDGETS) {
       application.receiver.push({
         $: {
           'android:name': `${PACKAGE}.widgets.${receiver}`,
           'android:exported': 'true',
-          'android:label': '@string/app_name',
+          'android:label': `@string/${label}`,
         },
         'intent-filter': [
           { action: [{ $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } }] },

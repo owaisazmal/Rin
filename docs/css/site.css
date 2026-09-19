@@ -414,7 +414,11 @@ p {
   align-items: center;
   justify-content: center;
   height: 44px;
-  padding-inline: 20px;
+  /* Optical centring, measured rather than guessed. Josefin Sans sets its
+     capitals high in the line box, so a centred line leaves them 3.5px nearer
+     the top; and letter-spacing adds its 2px after the last letter too, which
+     pushes the word 1px left. The uneven padding puts the ink in the middle. */
+  padding: 5px 19px 0 21px;
   border: 0;
   border-radius: var(--r-control);
   background: var(--accent);
@@ -1520,11 +1524,10 @@ p {
   gap: 18px;
   /* not overflow: hidden, which would make the pin its own scroller and unstick it */
   overflow-x: clip;
-  /* the neighbours dissolve into the page instead of stopping at the column edge.
-     No filter or backdrop-filter here or on anything above the figures: either
-     would pull their scroll-driven animation back onto the main thread. */
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  /* No mask, filter or backdrop-filter here or on anything above the figures. A
+     mask is a screen-sized texture redrawn every scroll frame, and a filter
+     would pull the scroll-driven animation back onto the main thread. The
+     depth table fades a capture out before it reaches the edge instead. */
 }
 .rail.scrolly {
   /* sized by the screen's height too, so a short window still fits a whole frame.

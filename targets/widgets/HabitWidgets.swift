@@ -234,7 +234,9 @@ struct GoalsWidgetView: View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
     let goals = snap.goals
-    let doneCount = goals.filter { $0.done }.count
+    // Empty goals are not counted, matching the app's card: a box marked done
+    // before anything was written in it is not a goal anyone finished.
+    let doneCount = goals.filter { $0.done && !$0.text.isEmpty }.count
 
     VStack(alignment: .leading, spacing: 8) {
       WidgetHeading(
