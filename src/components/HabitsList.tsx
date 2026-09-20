@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { useRevealOnFocus } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { Habit, MAX_HABITS, MAX_HABIT_NAME } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
@@ -13,6 +14,7 @@ interface Props {
 
 export default function HabitsList({ habits, onRename, onAdd, onRemove }: Props) {
   const { palette } = useTheme();
+  const revealOnFocus = useRevealOnFocus();
 
   const styles = useMemo(
     () =>
@@ -125,6 +127,8 @@ export default function HabitsList({ habits, onRename, onAdd, onRemove }: Props)
             placeholder="habit name…"
             placeholderTextColor={palette.inkSoft}
             autoCapitalize="sentences"
+            // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
+            onFocus={revealOnFocus}
             returnKeyType="done"
           />
           <Pressable

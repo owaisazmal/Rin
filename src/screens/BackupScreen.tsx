@@ -2,17 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Clipboard,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KeyboardDoneBar from '../components/KeyboardDoneBar';
+import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import BackButton from '../components/BackButton';
 import LogoMark from '../components/LogoMark';
 import SegmentedControl from '../components/SegmentedControl';
@@ -205,142 +203,128 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
         </View>
 
         {/*
-          Padding on Android as well: the app draws edge to edge, so the window
-          no longer shrinks for the keyboard, and the restore button would sit
-          underneath it while the code is being typed.
+          The keyboard handling all lives in the wrapper, including the done
+          bar. It matters more here than on the planner: this field's own
+          return key is GO and runs the restore, which replaces everything on
+          this phone, so the one control that is always safe to press has to be
+          the one that only puts the keyboard away.
         */}
-        <KeyboardAvoidingView style={styles.flex} behavior="padding">
-          <ScrollView
-            // explicit, now that it shares the column with the done bar
-            style={styles.flex}
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            // the second safe way out, beside the done bar: the field's own
-            // return key is GO and runs the restore, so it is not one
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.brand}>
-              <View style={styles.brandMark}>
-                <LogoMark size={76} />
-              </View>
-              <Text style={styles.brandSub}>RIN</Text>
-              <Text style={styles.brandTitle}>BACKUP</Text>
-              <Text style={styles.tagline}>
-                {creating
-                  ? 'One code carries your months to your next phone.'
-                  : 'Type the code and this phone becomes the other one.'}
-              </Text>
+        <KeyboardSafeScroll
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brand}>
+            <View style={styles.brandMark}>
+              <LogoMark size={76} />
             </View>
+            <Text style={styles.brandSub}>RIN</Text>
+            <Text style={styles.brandTitle}>BACKUP</Text>
+            <Text style={styles.tagline}>
+              {creating
+                ? 'One code carries your months to your next phone.'
+                : 'Type the code and this phone becomes the other one.'}
+            </Text>
+          </View>
 
-            <View style={styles.card}>
-              <SegmentedControl
-                options={TABS}
-                value={tab}
-                onChange={switchTab}
-                style={styles.segment}
-              />
+          <View style={styles.card}>
+            <SegmentedControl
+              options={TABS}
+              value={tab}
+              onChange={switchTab}
+              style={styles.segment}
+            />
 
-              {creating ? (
-                <>
-                  <Text style={styles.label}>YOUR CODE</Text>
-                  <Pressable onPress={copy} style={styles.codeBox}>
-                    <Text style={styles.code} selectable>
-                      {fresh}
-                    </Text>
+            {creating ? (
+              <>
+                <Text style={styles.label}>YOUR CODE</Text>
+                <Pressable onPress={copy} style={styles.codeBox}>
+                  <Text style={styles.code} selectable>
+                    {fresh}
+                  </Text>
+                </Pressable>
+
+                <View style={styles.codeActions}>
+                  <Pressable hitSlop={8} onPress={copy}>
+                    <Text style={styles.quietAction}>{copied ? 'COPIED' : 'COPY'}</Text>
                   </Pressable>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => {
+                      setFresh(generateCode());
+                      setCopied(false);
+                      setDone(null);
+                    }}
+                  >
+                    <Text style={styles.quietAction}>NEW CODE</Text>
+                  </Pressable>
+                </View>
 
-                  <View style={styles.codeActions}>
-                    <Pressable hitSlop={8} onPress={copy}>
-                      <Text style={styles.quietAction}>{copied ? 'COPIED' : 'COPY'}</Text>
-                    </Pressable>
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => {
-                        setFresh(generateCode());
-                        setCopied(false);
-                        setDone(null);
-                      }}
-                    >
-                      <Text style={styles.quietAction}>NEW CODE</Text>
-                    </Pressable>
-                  </View>
+                <Text style={styles.warning}>
+                  Write it down. Nobody can look it up for you — not me, not Google.
+                  Without it the backup stays encrypted forever.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>BACKUP CODE</Text>
+                <TextInput
+                  style={[styles.input, styles.codeInput, focused && styles.inputFocused]}
+                  value={typed}
+                  onChangeText={(text) => setTyped(format(
+                    text.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 24)
+                  ))}
+                  placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                  placeholderTextColor={palette.inkSoft}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  returnKeyType="go"
+                  onSubmitEditing={runRestore}
+                />
+                <Text style={styles.warning}>
+                  This replaces what is on this phone with what is in the backup.
+                </Text>
+              </>
+            )}
 
-                  <Text style={styles.warning}>
-                    Write it down. Nobody can look it up for you — not me, not Google.
-                    Without it the backup stays encrypted forever.
-                  </Text>
-                </>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {done ? <Text style={styles.done}>{done}</Text> : null}
+
+            <Pressable
+              disabled={busy || (creating && loadingCode)}
+              onPress={creating ? runBackup : runRestore}
+              style={({ pressed }) => [
+                styles.primary,
+                (pressed || busy) && { opacity: 0.85 },
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator color={palette.onAccent} />
               ) : (
-                <>
-                  <Text style={styles.label}>BACKUP CODE</Text>
-                  <TextInput
-                    style={[styles.input, styles.codeInput, focused && styles.inputFocused]}
-                    value={typed}
-                    onChangeText={(text) => setTyped(format(
-                      text.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 24)
-                    ))}
-                    placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
-                    placeholderTextColor={palette.inkSoft}
-                    onFocus={() => setFocused(true)}
-                    onBlur={() => setFocused(false)}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    autoComplete="off"
-                    returnKeyType="go"
-                    onSubmitEditing={runRestore}
-                  />
-                  <Text style={styles.warning}>
-                    This replaces what is on this phone with what is in the backup.
-                  </Text>
-                </>
+                <Text style={styles.primaryText}>
+                  {creating ? 'BACK UP NOW' : 'RESTORE'}
+                </Text>
               )}
+            </Pressable>
 
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              {done ? <Text style={styles.done}>{done}</Text> : null}
+            <Text style={styles.fine}>
+              Everything is encrypted on this phone before it leaves. The server
+              stores what it cannot read.
+            </Text>
+          </View>
 
-              <Pressable
-                disabled={busy || (creating && loadingCode)}
-                onPress={creating ? runBackup : runRestore}
-                style={({ pressed }) => [
-                  styles.primary,
-                  (pressed || busy) && { opacity: 0.85 },
-                ]}
-              >
-                {busy ? (
-                  <ActivityIndicator color={palette.onAccent} />
-                ) : (
-                  <Text style={styles.primaryText}>
-                    {creating ? 'BACK UP NOW' : 'RESTORE'}
-                  </Text>
-                )}
-              </Pressable>
-
-              <Text style={styles.fine}>
-                Everything is encrypted on this phone before it leaves. The server
-                stores what it cannot read.
-              </Text>
-            </View>
-
-            {variant === 'onboarding' ? (
-              <Pressable
-                hitSlop={10}
-                onPress={onDismiss}
-                style={({ pressed }) => [styles.skip, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={styles.skipText}>Not now</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
-
-          {/*
-            Dismiss only. The code field's own return key is GO and runs the
-            restore, which replaces everything on this phone — so the one
-            control that is always safe to press has to be the one that just
-            puts the keyboard away.
-          */}
-          <KeyboardDoneBar />
-        </KeyboardAvoidingView>
+          {variant === 'onboarding' ? (
+            <Pressable
+              hitSlop={10}
+              onPress={onDismiss}
+              style={({ pressed }) => [styles.skip, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.skipText}>Not now</Text>
+            </Pressable>
+          ) : null}
+        </KeyboardSafeScroll>
     </SafeAreaView>
   );
 }

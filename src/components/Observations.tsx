@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useRevealOnFocus } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_OBSERVATIONS, MAX_OBSERVATION_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
@@ -42,6 +43,7 @@ function CloseGlyph({ color }: { color: string }) {
 
 export default function Observations({ observations, onChange, onAdd, onRemove }: Props) {
   const { palette } = useTheme();
+  const revealOnFocus = useRevealOnFocus();
 
   const styles = useMemo(
     () =>
@@ -131,6 +133,8 @@ export default function Observations({ observations, onChange, onAdd, onRemove }
               onChangeText={(t) => onChange(i, t.slice(0, MAX_OBSERVATION_LEN))}
               placeholder="write it down…"
               placeholderTextColor={palette.inkSoft}
+              // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
+              onFocus={revealOnFocus}
               returnKeyType="done"
               // `multiline` here is for wrapping, not for paragraphs — these
               // fields hold one short line. Left on the default, Return types a

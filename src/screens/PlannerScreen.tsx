@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +15,7 @@ import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
 import HabitsList from '../components/HabitsList';
 import HistoryIcon from '../components/HistoryIcon';
-import KeyboardDoneBar from '../components/KeyboardDoneBar';
+import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import KeyGoals from '../components/KeyGoals';
 import LogoMark from '../components/LogoMark';
 import MonthNav from '../components/MonthNav';
@@ -214,179 +212,167 @@ export default function PlannerScreen({
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       {/*
-        Padding on Android as well. The app draws edge to edge, so the window
-        no longer shrinks when the keyboard opens: left to itself the keyboard
-        sits over the bottom of the scroll view, and the last cards can't be
-        scrolled up out from under it.
+        The keyboard handling — getting out of its way, putting the focused
+        field where it can be seen, and what does and does not dismiss it —
+        all lives in the wrapper. Padding on Android as well as iOS, for the
+        reason set out there: the app draws edge to edge, so the window no
+        longer shrinks when the keyboard opens.
       */}
-      <KeyboardAvoidingView style={styles.flex} behavior="padding">
-        <ScrollView
-          // explicit, now that it shares the column with the done bar: without
-          // it the bar's height comes out of nowhere and the page jumps
-          style={styles.flex}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          // the other way out of an edit: scroll the page and the keyboard goes
-          keyboardDismissMode="on-drag"
-        >
-          <View style={styles.header}>
-            {/*
-              The mark shares the eyebrow line rather than sitting beside the
-              whole wordmark: PLANNING at full size plus the three actions
-              already fills a 400pt screen, so anything to its left would push
-              the settings button off the edge.
-            */}
-            <View>
-              <View style={styles.brand}>
-                <LogoMark size={28} />
-                <Text style={styles.headerSub}>MONTHLY</Text>
-              </View>
-              <Text style={styles.headerTitle}>PLANNING</Text>
-            </View>
-            <View style={styles.headerActions}>
-              <StreakBadge days={streakDays} palette={palette} />
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="History"
-                onPress={() => onOpenHistory()}
-                style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-              >
-                <HistoryIcon color={palette.ink} />
-              </Pressable>
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Settings"
-                onPress={onOpenSettings}
-                style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-              >
-                <SettingsIcon color={palette.ink} />
-              </Pressable>
-            </View>
-          </View>
-
-          <MonthNav
-            year={year}
-            month={month}
-            onShift={shiftMonth}
-            anim={monthAnim}
-            enterFrom={enterFrom}
-          />
-
+      <KeyboardSafeScroll contentContainerStyle={styles.content}>
+        <View style={styles.header}>
           {/*
-            A record this phone could only half read is drawn but never written
-            back, so anything typed into it goes nowhere. That has to be said
-            out loud and at the top: the alternative is a month that accepts
-            edits all afternoon and keeps none of them. Both notices can be up
-            at once — they are two different records — and each waits for its
-            own load, since nothing is vouched for before it has been read.
+            The mark shares the eyebrow line rather than sitting beside the
+            whole wordmark: PLANNING at full size plus the three actions
+            already fills a 400pt screen, so anything to its left would push
+            the settings button off the edge.
           */}
-          {loaded && !vouched ? (
-            <View style={styles.damaged}>
-              <Text style={styles.damagedText}>
-                {/*
-                  The clause about Settings appears for the month it is
-                  actually about and for no other. Comparing the names rather
-                  than taking a bare flag is what keeps that exact: the card
-                  offers one document at a time, and a phone with two damaged
-                  months would otherwise carry the promise into the one that
-                  has no copy waiting for it.
-                */}
-                {damagedNotice('month', restorableMonth === monthDocKey(year, month))}
-              </Text>
+          <View>
+            <View style={styles.brand}>
+              <LogoMark size={28} />
+              <Text style={styles.headerSub}>MONTHLY</Text>
             </View>
-          ) : null}
-          {tasksLoaded && !tasksVouched ? (
-            <View style={styles.damaged}>
-              <Text style={styles.damagedText}>{damagedNotice('deadlines')}</Text>
-            </View>
-          ) : null}
-
-          <TrackerCard
-            chart={chart}
-            onSetChart={onSetChart}
-            anim={chartAnim}
-            enterFrom={enterFrom}
-            stats={stats}
-            hasHabits={data.habits.length > 0}
-          >
-            {chart === 'radial' ? (
-              <RadialTracker
-                size={chartSize}
-                daysInMonth={daysInMonth}
-                habits={data.habits}
-                grid={data.grid}
-                today={today}
-                selectedDay={selectedDay}
-                onToggle={cycleCell}
-                onSelectDay={setSelectedDay}
-              />
-            ) : yearMonths ? (
-              <YearChart
-                year={year}
-                months={yearMonths}
-                focusMonth={month}
-                now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
-                selected={{ month, day: selectedDay }}
-                onSelectDate={gotoDate}
-              />
-            ) : null}
-          </TrackerCard>
-
-          <DailyCheck
-            day={selectedDay}
-            daysInMonth={daysInMonth}
-            monthName={MONTH_NAMES[month]}
-            isToday={selectedDay === today}
-            todayDay={today}
-            habits={data.habits}
-            grid={data.grid}
-            onSet={setCell}
-            onShiftDay={(d) =>
-              setSelectedDay((prev) => Math.min(Math.max(prev + d, 1), daysInMonth))
-            }
-          />
-
-          <Deadlines
-            tasks={tasks}
-            now={nowMs}
-            onAdd={animateRows(addTask)}
-            onChangeText={setTaskText}
-            onEditDue={setEditingDue}
-            onToggleDone={animateRows(toggleTaskDone)}
-            onRemove={animateRows(removeTask)}
-            onShowHistory={() => onOpenHistory('deadlines')}
-          />
-
-          <HabitsList
-            habits={data.habits}
-            onRename={renameHabit}
-            onAdd={addHabit}
-            onRemove={removeHabit}
-          />
-
-          <KeyGoals goals={data.keyGoals} onChangeText={setGoalText} onToggleDone={toggleGoalDone} />
-
-          <Observations
-            observations={data.observations}
-            onChange={setObservation}
-            onAdd={animateRows(addObservation)}
-            onRemove={animateRows(removeObservation)}
-          />
-
-          <View style={styles.quoteCard}>
-            <View style={styles.quoteHead}>
-              <View style={styles.accent} />
-              <Text style={styles.quoteLabel}>DISCIPLINE.</Text>
-            </View>
-            <Text style={styles.quote}>“{quoteForDate(now)}”</Text>
+            <Text style={styles.headerTitle}>PLANNING</Text>
           </View>
-        </ScrollView>
+          <View style={styles.headerActions}>
+            <StreakBadge days={streakDays} palette={palette} />
+            <Pressable
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="History"
+              onPress={() => onOpenHistory()}
+              style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            >
+              <HistoryIcon color={palette.ink} />
+            </Pressable>
+            <Pressable
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              onPress={onOpenSettings}
+              style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            >
+              <SettingsIcon color={palette.ink} />
+            </Pressable>
+          </View>
+        </View>
 
-        {/* Last child of the avoiding view on purpose — see the note in the component */}
-        <KeyboardDoneBar />
-      </KeyboardAvoidingView>
+        <MonthNav
+          year={year}
+          month={month}
+          onShift={shiftMonth}
+          anim={monthAnim}
+          enterFrom={enterFrom}
+        />
+
+        {/*
+          A record this phone could only half read is drawn but never written
+          back, so anything typed into it goes nowhere. That has to be said
+          out loud and at the top: the alternative is a month that accepts
+          edits all afternoon and keeps none of them. Both notices can be up
+          at once — they are two different records — and each waits for its
+          own load, since nothing is vouched for before it has been read.
+        */}
+        {loaded && !vouched ? (
+          <View style={styles.damaged}>
+            <Text style={styles.damagedText}>
+              {/*
+                The clause about Settings appears for the month it is
+                actually about and for no other. Comparing the names rather
+                than taking a bare flag is what keeps that exact: the card
+                offers one document at a time, and a phone with two damaged
+                months would otherwise carry the promise into the one that
+                has no copy waiting for it.
+              */}
+              {damagedNotice('month', restorableMonth === monthDocKey(year, month))}
+            </Text>
+          </View>
+        ) : null}
+        {tasksLoaded && !tasksVouched ? (
+          <View style={styles.damaged}>
+            <Text style={styles.damagedText}>{damagedNotice('deadlines')}</Text>
+          </View>
+        ) : null}
+
+        <TrackerCard
+          chart={chart}
+          onSetChart={onSetChart}
+          anim={chartAnim}
+          enterFrom={enterFrom}
+          stats={stats}
+          hasHabits={data.habits.length > 0}
+        >
+          {chart === 'radial' ? (
+            <RadialTracker
+              size={chartSize}
+              daysInMonth={daysInMonth}
+              habits={data.habits}
+              grid={data.grid}
+              today={today}
+              selectedDay={selectedDay}
+              onToggle={cycleCell}
+              onSelectDay={setSelectedDay}
+            />
+          ) : yearMonths ? (
+            <YearChart
+              year={year}
+              months={yearMonths}
+              focusMonth={month}
+              now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
+              selected={{ month, day: selectedDay }}
+              onSelectDate={gotoDate}
+            />
+          ) : null}
+        </TrackerCard>
+
+        <DailyCheck
+          day={selectedDay}
+          daysInMonth={daysInMonth}
+          monthName={MONTH_NAMES[month]}
+          isToday={selectedDay === today}
+          todayDay={today}
+          habits={data.habits}
+          grid={data.grid}
+          onSet={setCell}
+          onShiftDay={(d) =>
+            setSelectedDay((prev) => Math.min(Math.max(prev + d, 1), daysInMonth))
+          }
+        />
+
+        <Deadlines
+          tasks={tasks}
+          now={nowMs}
+          onAdd={animateRows(addTask)}
+          onChangeText={setTaskText}
+          onEditDue={setEditingDue}
+          onToggleDone={animateRows(toggleTaskDone)}
+          onRemove={animateRows(removeTask)}
+          onShowHistory={() => onOpenHistory('deadlines')}
+        />
+
+        <HabitsList
+          habits={data.habits}
+          onRename={renameHabit}
+          onAdd={addHabit}
+          onRemove={removeHabit}
+        />
+
+        <KeyGoals goals={data.keyGoals} onChangeText={setGoalText} onToggleDone={toggleGoalDone} />
+
+        <Observations
+          observations={data.observations}
+          onChange={setObservation}
+          onAdd={animateRows(addObservation)}
+          onRemove={animateRows(removeObservation)}
+        />
+
+        <View style={styles.quoteCard}>
+          <View style={styles.quoteHead}>
+            <View style={styles.accent} />
+            <Text style={styles.quoteLabel}>DISCIPLINE.</Text>
+          </View>
+          <Text style={styles.quote}>“{quoteForDate(now)}”</Text>
+        </View>
+      </KeyboardSafeScroll>
 
       <DueDatePicker
         visible={editingDue !== null}
@@ -406,9 +392,6 @@ const makeStyles = (p: Palette) =>
     safe: {
       flex: 1,
       backgroundColor: 'transparent',
-    },
-    flex: {
-      flex: 1,
     },
     /** the gap spaces every card, so none of them carries a margin of its own */
     content: {

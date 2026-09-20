@@ -10,7 +10,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.owaiskhan.monthlyplanning",
       "appleTeamId": "8A3Z824TH3",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.owaiskhan.monthlyplanning"
@@ -33,7 +33,7 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "backgroundColor": "#242424",
         "foregroundImage": "./assets/android-icon-foreground.png",

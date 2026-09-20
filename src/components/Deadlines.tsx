@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useRevealOnFocus } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
@@ -93,6 +94,7 @@ export default function Deadlines({
   onShowHistory,
 }: Props) {
   const { palette } = useTheme();
+  const revealOnFocus = useRevealOnFocus();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
   const ordered = useMemo(() => unfinished(tasks), [tasks]);
@@ -157,6 +159,8 @@ export default function Deadlines({
                     onChangeText={(v) => onChangeText(t.id, v.slice(0, MAX_TASK_TEXT))}
                     placeholder="what has to be finished…"
                     placeholderTextColor={palette.inkSoft}
+                    // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
+                    onFocus={revealOnFocus}
                     returnKeyType="done"
                     // `multiline` here is for wrapping, not for paragraphs — these
                     // fields hold one short line. Left on the default, Return types a

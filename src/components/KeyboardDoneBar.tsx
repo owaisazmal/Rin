@@ -3,18 +3,24 @@ import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { FONT, Palette, RADIUS, useTheme } from '../theme';
 
 /**
- * A bar that sits on top of the keyboard with one way out of an edit.
+ * A bar that sits on top of the keyboard with the way out of an edit.
  *
- * The keyboard's own return key already says DONE and the page dismisses on a
- * drag, but neither announces itself: someone who has just typed into a field
- * has to know the return key changed meaning. This is the visible version of
- * the same thing.
+ * It used to be one of three — the return key, a drag of the page, and this.
+ * The other two were not equals: the return key announces nothing, so someone
+ * who has just typed into a field has to already know it changed meaning, and
+ * dismissing on a drag meant scrolling the page threw the edit away, which is
+ * exactly what somebody does when the field they are typing into has gone
+ * behind the keyboard. So on iOS the drag was dropped and this became the one
+ * deliberate way out, with the return key behind it. Android kept its drag,
+ * because the field never went behind the keyboard there in the first place —
+ * KeyboardSafeScroll has the whole of that reasoning.
  *
- * It belongs *inside* the screen's `KeyboardAvoidingView`, as the last child
- * after the scroll view — and as an ordinary one, not an absolute one. That
- * view pads its box by the keyboard's height, which shrinks the column its
- * children are laid out in, so the last child in the column lands exactly on
- * top of the keyboard with no second measurement to keep in step.
+ * It belongs *inside* the `KeyboardAvoidingView`, as the last child after the
+ * scroll view — and as an ordinary one, not an absolute one. That view pads its
+ * box by the keyboard's height, which shrinks the column its children are laid
+ * out in, so the last child in the column lands exactly on top of the keyboard
+ * with no second measurement to keep in step. KeyboardSafeScroll is what makes
+ * that true; this comment is why it is built the way it is.
  *
  * Absolute positioning was tried first and does not work: `bottom: 0` anchors
  * to the padding box's outer edge, the padding is not subtracted, and the bar
@@ -55,7 +61,7 @@ export default function KeyboardDoneBar() {
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel="Finish editing"
-        // the same thing the return key does, and the same thing a drag does
+        // the same thing the return key does, said out loud
         onPress={() => Keyboard.dismiss()}
         style={({ pressed }) => [styles.btn, pressed && { opacity: 0.6 }]}
       >

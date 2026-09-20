@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { useRevealOnFocus } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { KeyGoal, MAX_GOAL_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
@@ -12,6 +13,7 @@ interface Props {
 
 export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
   const { palette } = useTheme();
+  const revealOnFocus = useRevealOnFocus();
 
   const doneCount = goals.filter((g) => g.done && g.text.trim()).length;
 
@@ -106,6 +108,8 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
               onChangeText={(t) => onChangeText(i, t.slice(0, MAX_GOAL_LEN))}
               placeholder="goal"
               placeholderTextColor={palette.inkSoft}
+              // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
+              onFocus={revealOnFocus}
               returnKeyType="done"
               // `multiline` here is for wrapping, not for paragraphs — these
               // fields hold one short line. Left on the default, Return types a

@@ -1339,6 +1339,31 @@ function initColophon() {
 
 /* ==================================================================== boot */
 
+/* ===================================================================== nav */
+
+/**
+ * Marks the masthead link for the section being read. One observer and a
+ * zero-height band just above the middle of the screen: whichever section
+ * crosses it is the one on screen. Nothing runs per scroll frame.
+ */
+function initNav() {
+  const links = $$('.mast-nav a[href^="#"]');
+  const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+  const sections = [...byId.keys()].map((id) => document.getElementById(id)).filter(Boolean);
+  if (!sections.length) return;
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const link = byId.get(e.target.id);
+        if (e.isIntersecting) link.setAttribute('aria-current', 'true');
+        else link.removeAttribute('aria-current');
+      }
+    },
+    { rootMargin: '-45% 0px -55% 0px' }
+  );
+  sections.forEach((sec) => io.observe(sec));
+}
+
 /* ================================================================ showcase */
 
 /**
@@ -1661,6 +1686,7 @@ function boot() {
     theme.onChange(paintMarks);
   });
   attempt('theme', initTheme);
+  attempt('nav', initNav);
   attempt('ground', initGround);
   attempt('hero', initHero);
   attempt('refusals', initRefusals);
