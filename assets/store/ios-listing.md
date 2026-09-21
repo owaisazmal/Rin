@@ -90,3 +90,49 @@ Manually release this version.
 App Information: Category Productivity (secondary Health and Fitness), Age Rating 4+
 App Privacy:     required before review, must match docs/privacy.html
 Pricing:         Free
+
+## TestFlight Test Information (external group)
+
+Feedback email:  (your email)
+Privacy Policy:  https://owaisazmal.github.io/Rin/privacy.html
+Marketing URL:   https://owaisazmal.github.io/Rin/
+
+### Beta App Description
+
+Rin is a monthly planner built around a radial habit tracker: one ring per
+habit, one sector per day, a whole month on a single screen. Everything lives
+on your phone. There are no accounts and no analytics, and a backup is
+optional and encrypted with a code only you hold.
+
+### What to Test
+
+Everything here works offline on the device. There is no account and no sign in,
+so you can start the moment it opens.
+
+START HERE
+1. Add a few habits, then mark today done or missed in the Daily Check. The rings
+   above should fill as you go.
+2. Switch the tracker between Radial and Year. Both should read clearly at a glance.
+3. Set your key goals for the month and write something in Observations.
+4. Add a task with a due date a few days out, then one that is already past. Watch
+   how the urgency changes as the date gets closer.
+5. Press and hold your home screen, add a Rin widget, and check it shows the same
+   thing the app does.
+6. Flip the theme in Settings and give both dark and light a minute.
+
+NEW IN THIS BUILD
+Typing near the bottom of the screen. The keyboard should never cover the field
+you are in, on the planner or in Backup, and Done should dismiss it cleanly. Try
+it on goals, observations, habits and deadlines.
+
+OPTIONAL, ONLY IF YOU WANT TO TEST BACKUP
+Settings, then Backup, then create one. Your phone generates a recovery code.
+Keep it somewhere safe, because it is the only way to restore and nobody else has
+a copy, including me. Then try restoring on the same device. You are never asked
+for an email, a password or a name.
+
+WHAT I WANT TO HEAR ABOUT
+Anything that looks wrong at a glance, anything that feels slow, any number that
+does not match what you expected, and anywhere the text is too small or a tap
+target too fiddly. Screenshots help a lot. In TestFlight you can take a
+screenshot and send it straight back with a note.

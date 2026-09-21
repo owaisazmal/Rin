@@ -10,7 +10,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.owaiskhan.monthlyplanning",
       "appleTeamId": "8A3Z824TH3",
-      "buildNumber": "2",
+      "buildNumber": "8",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.owaiskhan.monthlyplanning"
