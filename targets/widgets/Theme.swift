@@ -46,8 +46,11 @@ struct Theme {
     done: Color(hex: 0x93C63F),
     missed: Color(hex: 0xEF4C63),
     onState: Color(hex: 0x242424),
+    // index 0 and 1 lifted to clear the card they sit on — see the note in
+    // src/theme.ts. The widget's card is opaque 0x313131 rather than the app's
+    // translucent one, but it lands in the same place, so the fault was the same.
     ghLevels: [
-      Color(hex: 0x2E2E2E), Color(hex: 0x2D4B1F), Color(hex: 0x497B2D),
+      Color(hex: 0x404040), Color(hex: 0x386021), Color(hex: 0x497B2D),
       Color(hex: 0x6DA939), Color(hex: 0x93C63F),
     ]
   )

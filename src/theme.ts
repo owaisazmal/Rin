@@ -112,7 +112,7 @@ export const darkPalette: Palette = {
   missed: '#ef4c63',
   missedSoft: 'rgba(239,76,99,0.18)',
   cellEmpty: '#2e2e2e',
-  ghLevels: ['#2e2e2e', '#2d4b1f', '#497b2d', '#6da939', '#93c63f'],
+  ghLevels: ['#404040', '#386021', '#497b2d', '#6da939', '#93c63f'],
   ghMissed: '#7d2f3c',
   shadow: '#141414',
   shadowOpacity: 0.5,

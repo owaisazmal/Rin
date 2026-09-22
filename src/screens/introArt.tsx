@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
-import { BRAND, FIRE, Palette, RADIUS } from '../theme';
+import { FIRE, Palette, RADIUS } from '../theme';
 
 /**
  * The four intro illustrations.
@@ -10,12 +10,40 @@ import { BRAND, FIRE, Palette, RADIUS } from '../theme';
  * Three are drawn in the app's own vocabulary — the open lock, the year grid
  * and the marks — rather than stock artwork, so the intro is showing the thing
  * it describes. The fourth is the desk clip.
+ *
+ * Every one of them is handed the same box and sizes itself inside it, rather
+ * than carrying the fixed pixel dimensions they each used to. Those ranged from
+ * 92pt tall to 250, so the eyebrow, the title and the body all sat at a
+ * different height on each page and the whole block jumped as you swiped. The
+ * box is what stays put; what fills it is free to be tall or wide.
  */
 
+/** The size the art may occupy — the page's column, and the box's height. */
+export interface ArtBox {
+  width: number;
+  height: number;
+}
+
+/**
+ * The largest `ratio`-shaped rectangle that fits in the box.
+ *
+ * `ratio` is width over height, so a tall drawing gives a number below 1 and a
+ * wide one above. Whichever axis runs out first decides the size.
+ */
+function fit(box: ArtBox, ratio: number): { width: number; height: number } {
+  const byHeight = box.height * ratio;
+  return byHeight <= box.width
+    ? { width: byHeight, height: box.height }
+    : { width: box.width, height: box.width / ratio };
+}
+
 /** An open padlock — nothing here is locked away, including the source */
-export function OpenSource({ palette: p }: { palette: Palette }) {
+export function OpenSource({ palette: p, box }: { palette: Palette; box: ArtBox }) {
+  // Held back from the box's full height: a padlock drawn edge to edge reads as
+  // an icon that has been blown up, where the other three read as drawings.
+  const size = fit({ width: box.width, height: box.height * 0.84 }, 52 / 58);
   return (
-    <Svg width={104} height={116} viewBox="0 0 52 58">
+    <Svg width={size.width} height={size.height} viewBox="0 0 52 58">
       {/*
         Shackle swung clear on the right. It ends at the top of the arc rather
         than dropping back towards the body: a couple of units of gap reads as
@@ -52,13 +80,17 @@ export function OpenSource({ palette: p }: { palette: Palette }) {
 }
 
 /** A run of check-ins that trails off into nothing: the fade this app is for */
-export function FadingStreak({ palette: p }: { palette: Palette }) {
-  const cell = 15;
-  const gap = 5;
+export function FadingStreak({ palette: p, box }: { palette: Palette; box: ArtBox }) {
   const cols = 12;
   const rows = 5;
+  // One step per column, taken from whichever axis is tighter; the cell keeps
+  // three quarters of it and the gap the rest, which is the proportion the
+  // year grid itself uses.
+  const step = Math.min(box.width / cols, box.height / rows);
+  const gap = step * 0.25;
+  const cell = step - gap;
   return (
-    <Svg width={cols * (cell + gap)} height={rows * (cell + gap)}>
+    <Svg width={cols * step - gap} height={rows * step - gap}>
       {Array.from({ length: rows }).map((_, r) =>
         Array.from({ length: cols }).map((_, c) => {
           // solid at the left, thinning through the middle, gone by the right
@@ -68,11 +100,11 @@ export function FadingStreak({ palette: p }: { palette: Palette }) {
           return (
             <Rect
               key={`${r}-${c}`}
-              x={c * (cell + gap)}
-              y={r * (cell + gap)}
+              x={c * step}
+              y={r * step}
               width={cell}
               height={cell}
-              rx={4}
+              rx={cell * 0.27}
               fill={level}
             />
           );
@@ -82,9 +114,22 @@ export function FadingStreak({ palette: p }: { palette: Palette }) {
   );
 }
 
+/**
+ * The clip's own shape, from the file: `assets/video/light.mp4` is 468×750.
+ *
+ * It is a portrait drawing — a desk at the bottom, a thought bubble filling the
+ * top — and it used to be poured into a 4:3 plate under `contentFit="cover"`.
+ * Cover keeps the centre, so at that shape it kept a band across the middle
+ * worth 47% of the frame and threw away the rest: the top of the bubble and the
+ * whole desk, which is to say both of the things the drawing is of. The plate
+ * now takes the clip's shape instead of the clip taking the plate's.
+ */
+const CLIP_RATIO = 468 / 750;
+
 /** Looping desk clip — someone mid-thought, which is the page's whole point */
-export function ThinkingClip({ palette: p }: { palette: Palette }) {
+export function ThinkingClip({ palette: p, box }: { palette: Palette; box: ArtBox }) {
   const styles = useMemo(() => makeClipStyles(p), [p]);
+  const size = fit(box, CLIP_RATIO);
 
   const player = useVideoPlayer(
     require('../../assets/video/light.mp4'),
@@ -104,11 +149,15 @@ export function ThinkingClip({ palette: p }: { palette: Palette }) {
     // The clip is black line art on white, so it keeps its own light plate in
     // both themes — in dark mode it reads as a print pinned to the page rather
     // than a white rectangle that missed the memo.
-    <View style={styles.plate} pointerEvents="none">
+    <View style={[styles.plate, size]} pointerEvents="none">
       <VideoView
         style={StyleSheet.absoluteFill}
         player={player}
-        contentFit="cover"
+        // `contain`, like the theme backdrop's clip, so the plate can never
+        // crop the drawing again. With the plate on the clip's own ratio there
+        // is nothing to letterbox today; this is what keeps that true if the
+        // file is ever recut.
+        contentFit="contain"
         nativeControls={false}
         allowsPictureInPicture={false}
       />
@@ -118,9 +167,10 @@ export function ThinkingClip({ palette: p }: { palette: Palette }) {
 }
 
 /** The daily ritual: one mark, and the flame it keeps alight */
-export function MarkAndFlame({ palette: p }: { palette: Palette }) {
+export function MarkAndFlame({ palette: p, box }: { palette: Palette; box: ArtBox }) {
+  const size = fit(box, 196 / 92);
   return (
-    <Svg width={196} height={92} viewBox="0 0 196 92">
+    <Svg width={size.width} height={size.height} viewBox="0 0 196 92">
       <Rect x={6} y={20} width={52} height={52} rx={12} fill={p.doneSoft} />
       <Path
         d="M20 46.5 L29 55.5 L45 36.5"
@@ -159,14 +209,16 @@ export function MarkAndFlame({ palette: p }: { palette: Palette }) {
 const makeClipStyles = (p: Palette) =>
   StyleSheet.create({
     plate: {
-      width: '100%',
-      // the clip is 4:3; matching it means no letterboxed seam inside the plate
-      aspectRatio: 4 / 3,
       borderRadius: RADIUS.card,
       borderWidth: 1,
       borderColor: p.lineFaint,
       overflow: 'hidden',
-      backgroundColor: BRAND.ivory,
+      // White, not ivory, and only the warm wash below makes them the same
+      // surface: the clip's own field is pure white, and 30% ivory over white
+      // and over ivory do not land on the same colour. On white they do, so a
+      // letterbox bar — if a recut ever puts one there — is invisible instead
+      // of being a faintly cooler rectangle inside the plate.
+      backgroundColor: '#FFFFFF',
     },
     warm: {
       position: 'absolute',

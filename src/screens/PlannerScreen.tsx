@@ -32,6 +32,7 @@ import { useNow } from '../hooks/useNow';
 import { useReminderSync, useWidgetSync } from '../hooks/useOutboundSync';
 import { TaskStore } from '../hooks/useTasks';
 import { useYearSummary } from '../hooks/useYearSummary';
+import { useYearWindow } from '../hooks/useYearWindow';
 import { MONTH_NAMES } from '../dates';
 import { HistoryFilter } from '../history';
 import { quoteForDate } from '../quotes';
@@ -143,6 +144,18 @@ export default function PlannerScreen({
 
   const yearMonths = useYearSummary(year, month, data, daysInMonth);
   const streakDays = useCurrentStreak(year, yearMonths);
+  /*
+    The year grid's own span, which is not the browsed year. It opens on the
+    twelve months up to this one — a span that crosses New Year, and so cannot
+    be the calendar-year array above: that one is a contract the streak badge,
+    the widget snapshot and both native widget targets index as January-first.
+  */
+  const yearWindow = useYearWindow({
+    now: { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() },
+    browsedYear: year,
+    browsedMonth: month,
+    browsedMonths: yearMonths,
+  });
   // Both, not just the month: pushing before the deadlines have loaded would
   // put a snapshot on the home screen saying nothing is due, and only correct
   // it on the next edit.
@@ -172,17 +185,24 @@ export default function PlannerScreen({
     [flushSave, year, month]
   );
 
+  /**
+   * Takes the year as well as the month, because the grid it is called from
+   * shows the twelve months up to this one and those straddle New Year —
+   * moving on the month alone would land a tap on last December in this year's
+   * December, silently.
+   */
   const gotoDate = useCallback(
-    (m: number, day: number) => {
-      if (m === month) {
+    (y: number, m: number, day: number) => {
+      if (y === year && m === month) {
         setSelectedDay(day);
         return;
       }
       flushSave();
       pendingSelect.current = day;
+      setYear(y);
       setMonth(m);
     },
-    [month, flushSave]
+    [year, month, flushSave]
   );
 
   const addHabit = useMemo(() => animateRows(appendHabit), [appendHabit]);
@@ -312,13 +332,16 @@ export default function PlannerScreen({
               onToggle={cycleCell}
               onSelectDay={setSelectedDay}
             />
-          ) : yearMonths ? (
+          ) : yearWindow.blocks ? (
             <YearChart
-              year={year}
-              months={yearMonths}
-              focusMonth={month}
+              blocks={yearWindow.blocks}
+              span={yearWindow.span}
+              onSetSpan={yearWindow.setSpan}
+              years={yearWindow.years}
+              stats={yearWindow.stats}
+              focus={{ year, month }}
               now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
-              selected={{ month, day: selectedDay }}
+              selected={{ year, month, day: selectedDay }}
               onSelectDate={gotoDate}
             />
           ) : null}

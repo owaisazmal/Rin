@@ -50,8 +50,12 @@ data class WidgetTheme(
       done = 0xFF93C63F.toInt(),
       missed = 0xFFEF4C63.toInt(),
       onState = 0xFF242424.toInt(),
+      // index 0 and 1 lifted to clear the card they sit on — see the note in
+      // src/theme.ts. The widget's card is opaque 0xFF313131 rather than the
+      // app's translucent one, but it lands in the same place, so the fault
+      // was the same.
       ghLevels = listOf(
-        0xFF2E2E2E.toInt(), 0xFF2D4B1F.toInt(), 0xFF497B2D.toInt(),
+        0xFF404040.toInt(), 0xFF386021.toInt(), 0xFF497B2D.toInt(),
         0xFF6DA939.toInt(), 0xFF93C63F.toInt(),
       ),
     )

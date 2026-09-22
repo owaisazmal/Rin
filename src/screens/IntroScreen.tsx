@@ -60,10 +60,37 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
   },
 ];
 
+/** Page-indicator geometry: a dot, the air after it, and the capsule on top */
+const DOT = 6;
+const DOT_GAP = 12;
+const PITCH = DOT + DOT_GAP;
+const THUMB = 20;
+
 export default function IntroScreen({ onDone }: { onDone: () => void }) {
   const { palette } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+
+  /**
+   * One box for all four illustrations, so the words under them don't move.
+   *
+   * They used to size themselves — 116pt of padlock, 100 of grid, 250 of clip,
+   * 92 of marks — which put the eyebrow, the title and the body at a different
+   * height on every page. Swiping shuffled the whole block up and down. Now the
+   * box is fixed and each drawing fits itself into it.
+   *
+   * Taken from the window rather than written down, because the page is centred
+   * in a view that does not scroll: on a short phone a fixed box plus five
+   * lines of body copy is taller than the space there is, and the overflow has
+   * nowhere to go.
+   */
+  const box = useMemo(
+    () => ({
+      width: width - 60, // the page's 30pt gutters
+      height: Math.round(Math.min(280, Math.max(150, height * 0.28))),
+    }),
+    [width, height]
+  );
 
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
@@ -111,51 +138,85 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
         scrollEventThrottle={16}
         style={styles.flex}
       >
-        {PAGES.map((p) => (
-          <View key={p.kind} style={[styles.page, { width }]}>
-            <View style={styles.art}>
-              {p.kind === 'open' ? <OpenSource palette={palette} /> : null}
-              {p.kind === 'grid' ? <FadingStreak palette={palette} /> : null}
-              {p.kind === 'clip' ? <ThinkingClip palette={palette} /> : null}
-              {p.kind === 'marks' ? <MarkAndFlame palette={palette} /> : null}
+        {PAGES.map((p, i) => {
+          /*
+            The page already travels with the scroll; these move against it, so
+            the drawing and the words arrive at slightly different speeds and
+            the turn reads as depth rather than as one flat sheet sliding. The
+            art is the further of the two, and neither fades to nothing —
+            mid-swipe both pages are on screen at once, and a full cross-fade
+            leaves that moment looking washed out.
+          */
+          const span = [(i - 1) * width, i * width, (i + 1) * width];
+          const drift = (d: number) =>
+            scrollX.interpolate({
+              inputRange: span,
+              outputRange: [d, 0, -d],
+              extrapolate: 'clamp',
+            });
+          const opacity = scrollX.interpolate({
+            inputRange: span,
+            outputRange: [0.25, 1, 0.25],
+            extrapolate: 'clamp',
+          });
+          return (
+            <View key={p.kind} style={[styles.page, { width }]}>
+              <Animated.View
+                style={[styles.art, { height: box.height, opacity, transform: [{ translateX: drift(width * 0.22) }] }]}
+              >
+                {p.kind === 'open' ? <OpenSource palette={palette} box={box} /> : null}
+                {p.kind === 'grid' ? <FadingStreak palette={palette} box={box} /> : null}
+                {p.kind === 'clip' ? <ThinkingClip palette={palette} box={box} /> : null}
+                {p.kind === 'marks' ? <MarkAndFlame palette={palette} box={box} /> : null}
+              </Animated.View>
+              <Animated.View
+                style={{ opacity, transform: [{ translateX: drift(width * 0.08) }] }}
+              >
+                <Text style={styles.eyebrow}>{p.eyebrow}</Text>
+                <Text style={styles.title}>{p.title}</Text>
+                <Text style={styles.body}>{p.body}</Text>
+              </Animated.View>
             </View>
-            <Text style={styles.eyebrow}>{p.eyebrow}</Text>
-            <Text style={styles.title}>{p.title}</Text>
-            <Text style={styles.body}>{p.body}</Text>
-          </View>
-        ))}
+          );
+        })}
       </Animated.ScrollView>
 
       <View style={styles.footer}>
+        {/*
+          A capsule that slides along a row of dots, rather than a dot that
+          stretches into one.
+
+          Stretching was the old trick and it could not work: `scaleX` scales
+          the rendered layer, corner radius and all, so a 7pt circle pulled out
+          to 3.1× came out as an ellipse with 11pt ends — a lopsided blob, not a
+          pill. Width would keep the ends round, but width is not a property the
+          native driver can animate, and this is driven by the scroll offset on
+          the native thread. So the thing that moves keeps one size and one
+          shape, and only travels: `translateX` distorts nothing, and it tracks
+          the finger continuously instead of snapping when the page lands.
+        */}
         <View style={styles.dots}>
-          {PAGES.map((p, i) => (
+          <View style={[styles.track, { width: PAGES.length * PITCH - DOT_GAP }]}>
+            {PAGES.map((p) => (
+              <View key={p.kind} style={styles.dot} />
+            ))}
             <Animated.View
-              key={p.kind}
               style={[
-                styles.dot,
+                styles.thumb,
                 {
-                  // The active dot stretches into a bar and hands that width to
-                  // its neighbour as the page turns. Done with scaleX, not
-                  // width: the scroll offset drives this on the native thread,
-                  // and width is not a property the native driver can animate.
                   transform: [
                     {
-                      scaleX: scrollX.interpolate({
-                        inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                        outputRange: [1, 3.1, 1],
+                      translateX: scrollX.interpolate({
+                        inputRange: [0, (PAGES.length - 1) * width],
+                        outputRange: [0, (PAGES.length - 1) * PITCH],
                         extrapolate: 'clamp',
                       }),
                     },
                   ],
-                  opacity: scrollX.interpolate({
-                    inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                    outputRange: [0.3, 1, 0.3],
-                    extrapolate: 'clamp',
-                  }),
                 },
               ]}
             />
-          ))}
+          </View>
         </View>
 
         <Pressable
@@ -212,12 +273,24 @@ const makeStyles = (p: Palette) =>
       fontFamily: FONT.bold,
       color: p.ink,
       marginBottom: 14,
+      // Two lines' worth, because one page's title is a single line and the
+      // rest are two. The block is centred, so without this that page's copy
+      // sits lower than its neighbours' and the words step down as you swipe
+      // onto it. The art box above holds its own height for the same reason.
+      minHeight: 70,
     },
     body: {
       fontSize: 14,
       lineHeight: 22,
       fontFamily: FONT.regular,
       color: p.inkSoft,
+      // Five lines, which is what the longest of the four runs to on a phone of
+      // ordinary width. Same reason as the title above: the block is centred,
+      // so a page whose copy runs a line longer than its neighbours' would lift
+      // the whole thing and the words would step as you swipe onto it. On a
+      // narrow enough screen a page can still outgrow this, and then it lifts —
+      // but by the one line it has gained, not by the four the art used to.
+      minHeight: 110,
     },
     footer: {
       paddingHorizontal: 30,
@@ -229,14 +302,27 @@ const makeStyles = (p: Palette) =>
       justifyContent: 'center',
       marginBottom: 20,
     },
+    track: {
+      height: DOT,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
     dot: {
-      width: 7,
-      height: 7,
+      width: DOT,
+      height: DOT,
       borderRadius: RADIUS.pill,
       backgroundColor: p.accent,
-      // scaleX grows it from the centre, so the row stays balanced as the
-      // active dot expands; the gap absorbs the extra width
-      marginHorizontal: 5,
+      opacity: 0.3,
+    },
+    thumb: {
+      position: 'absolute',
+      top: 0,
+      // centred on the first dot, and from there it moves one pitch per page
+      left: (DOT - THUMB) / 2,
+      width: THUMB,
+      height: DOT,
+      borderRadius: RADIUS.pill,
+      backgroundColor: p.accent,
     },
     primary: {
       height: 52,
