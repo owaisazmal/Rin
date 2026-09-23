@@ -38,13 +38,15 @@ struct RadialChart: View {
   let theme: Theme
   var minRings: Int = 4
   var showToday: Bool = true
+  /// radius of the empty centre as a share of the chart's side
+  var holeRatio: CGFloat = 0.17
 
   var body: some View {
     GeometryReader { geo in
       let side = min(geo.size.width, geo.size.height)
       // leave a sliver of room outside the rings for the today marker
       let outer = side / 2 - (showToday ? 5 : 1)
-      let inner = side * 0.17
+      let inner = side * holeRatio
       let rings = max(snapshot.habits.count, minRings)
       let ringWidth = (outer - inner) / CGFloat(rings)
       let days = max(snapshot.daysInMonth, 1)

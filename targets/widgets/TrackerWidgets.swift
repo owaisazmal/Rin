@@ -28,11 +28,14 @@ struct RadialWidgetView: View {
     Group {
       switch family {
       case .systemSmall:
-        VStack(spacing: 5) {
-          RadialChart(snapshot: snap, theme: theme)
+        // the count sits in the hole, so the rings can take the whole square
+        ZStack {
+          RadialChart(snapshot: snap, theme: theme, holeRatio: 0.22)
           Text("\(snap.monthDone)/\(snap.monthTotal)")
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(theme.inkSoft)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
 
       case .systemMedium:
@@ -109,6 +112,9 @@ struct RadialTrackerWidget: Widget {
     .configurationDisplayName("Radial Tracker")
     .description("This month as rings — one ring per habit, one wedge per day.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    // the view pads itself; the system's own margins on top left the rings
+    // at barely half the square
+    .contentMarginsDisabled()
   }
 }
 

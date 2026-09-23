@@ -13,7 +13,6 @@ import { StatusBar } from 'expo-status-bar';
 import DailyCheck from '../components/DailyCheck';
 import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
-import HabitsList from '../components/HabitsList';
 import HistoryIcon from '../components/HistoryIcon';
 import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import KeyGoals from '../components/KeyGoals';
@@ -359,6 +358,9 @@ export default function PlannerScreen({
           onShiftDay={(d) =>
             setSelectedDay((prev) => Math.min(Math.max(prev + d, 1), daysInMonth))
           }
+          onAdd={addHabit}
+          onRename={renameHabit}
+          onRemove={removeHabit}
         />
 
         <Deadlines
@@ -370,13 +372,6 @@ export default function PlannerScreen({
           onToggleDone={animateRows(toggleTaskDone)}
           onRemove={animateRows(removeTask)}
           onShowHistory={() => onOpenHistory('deadlines')}
-        />
-
-        <HabitsList
-          habits={data.habits}
-          onRename={renameHabit}
-          onAdd={addHabit}
-          onRemove={removeHabit}
         />
 
         <KeyGoals goals={data.keyGoals} onChangeText={setGoalText} onToggleDone={toggleGoalDone} />

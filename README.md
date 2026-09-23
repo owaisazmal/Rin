@@ -167,7 +167,7 @@ src/__tests__/                 the pure logic: streaks, deadlines, history, stor
                                session, the sync ledger, the backup run, and the words the card uses
 
 src/components/                TrackerCard, MonthNav, RadialTracker, YearChart, DailyCheck,
-                               HabitsList, Observations, KeyGoals, Deadlines, DueDatePicker,
+                               Observations, KeyGoals, Deadlines, DueDatePicker,
                                StreakBadge, MarkButton, SegmentedControl,
                                AuroraBackground, …
 
