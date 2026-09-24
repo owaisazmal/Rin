@@ -41,7 +41,6 @@ GoogleService-Info.plist
 
 # ---- and the rest, which only this file excludes ----
 # none of it is compiled, so it is upload time and nothing else
-screenshot-widgets/
 screenshots/
 assets/store/
 docs/

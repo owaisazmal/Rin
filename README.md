@@ -12,11 +12,12 @@ Free and open-source. A digital version of the whiteboard "Monthly Planning" boa
 
 | Planner | Year grid | Daily check | Widgets |
 | :-: | :-: | :-: | :-: |
-| ![Radial tracker on iOS in dark mode](screenshots/planner-ios-dark.png) | ![Year grid on Android in light mode](screenshots/year-android-light.png) | ![Daily check and habit list on iOS](screenshots/daily-ios-dark.png) | ![Home screen widgets on Android](screenshots/widgets-android-light.png) |
+| ![Radial tracker on iOS in dark mode](screenshots/readme/planner-ios-dark.png) | ![Year grid on Android in light mode](screenshots/readme/year-android-light.png) | ![Daily check and habit list on iOS](screenshots/readme/daily-ios-dark.png) | ![Home screen widgets on Android](screenshots/readme/widgets-android-light.png) |
 | iOS · dark | Android · light | iOS · dark | Android · light |
 
 Sample data, not a real month. The full set of widget layouts for both
-platforms is in [`screenshot-widgets/`](screenshot-widgets/).
+platforms is in [`screenshots/widgets.md`](screenshots/widgets.md), and every
+screen on phones, iPads and tablets is in [`screenshots/`](screenshots/).
 
 ## Open, and staying that way
 

@@ -16,7 +16,7 @@ import {
 import { useHistory } from '../hooks/useHistory';
 import { useNow } from '../hooks/useNow';
 import { startOfDay } from '../dates';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
  * What has already happened — habits ticked or missed, deadlines finished —
@@ -297,6 +297,7 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: 'transparent' },
     content: {
+      ...COLUMN,
       flexGrow: 1,
       paddingHorizontal: 16,
       paddingTop: 8,

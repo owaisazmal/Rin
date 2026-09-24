@@ -1,18 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { ReactNode, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   View,
+  ViewStyle,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LogoMark from '../components/LogoMark';
-import { FONT, Palette, RADIUS, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, useTheme } from '../theme';
 import { FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
 
 /**
@@ -80,13 +82,12 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
    * box is fixed and each drawing fits itself into it.
    *
    * Taken from the window rather than written down, because the page is centred
-   * in a view that does not scroll: on a short phone a fixed box plus five
-   * lines of body copy is taller than the space there is, and the overflow has
-   * nowhere to go.
+   * and only scrolls as a last resort: on a short phone a fixed box plus five
+   * lines of body copy is taller than the space there is.
    */
   const box = useMemo(
     () => ({
-      width: width - 60, // the page's 30pt gutters
+      width: Math.min(width, COLUMN.maxWidth) - 60, // the page's 30pt gutters
       height: Math.round(Math.min(280, Math.max(150, height * 0.28))),
     }),
     [width, height]
@@ -160,7 +161,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
             extrapolate: 'clamp',
           });
           return (
-            <View key={p.kind} style={[styles.page, { width }]}>
+            <IntroPage key={p.kind} width={width} contentStyle={styles.page}>
               <Animated.View
                 style={[styles.art, { height: box.height, opacity, transform: [{ translateX: drift(width * 0.22) }] }]}
               >
@@ -176,7 +177,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
                 <Text style={styles.title}>{p.title}</Text>
                 <Text style={styles.body}>{p.body}</Text>
               </Animated.View>
-            </View>
+            </IntroPage>
           );
         })}
       </Animated.ScrollView>
@@ -230,6 +231,35 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** One page: centred when it fits, scrollable when large text makes it taller than its room */
+function IntroPage({
+  width,
+  contentStyle,
+  children,
+}: {
+  width: number;
+  contentStyle: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const [room, setRoom] = useState(0);
+  const [need, setNeed] = useState(0);
+  const overflows = room > 0 && need > room + 1;
+  return (
+    <View style={{ width }} onLayout={(e) => setRoom(e.nativeEvent.layout.height)}>
+      <ScrollView
+        // when cut off, stop short of the dots so the last line doesn't look like it runs under them
+        style={overflows && { marginBottom: 16 }}
+        contentContainerStyle={contentStyle}
+        onContentSizeChange={(_, h) => setNeed(h)}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={false}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: 'transparent' },
@@ -251,7 +281,8 @@ const makeStyles = (p: Palette) =>
     },
     skipSpent: { opacity: 0 },
     page: {
-      flex: 1,
+      ...COLUMN,
+      flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 30,
     },
@@ -293,6 +324,7 @@ const makeStyles = (p: Palette) =>
       minHeight: 110,
     },
     footer: {
+      ...COLUMN,
       paddingHorizontal: 30,
       paddingBottom: 12,
     },

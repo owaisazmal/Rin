@@ -20,7 +20,7 @@ Both stores want no alpha channel; every file here is flat RGB. Upload in the nu
 | 07 | Both themes, widgets included | light | Home-screen widgets |
 
 Slides 01–05 use the same iPhone captures on both stores. The widget slides differ:
-the Play set shows the Android launcher (`screenshot-widgets/android-page*.png`),
+the Play set shows the Android launcher (`screenshots/*/android/widgets/page*.png`),
 the App Store set shows the iOS home screen. Status bars and home indicators are
 cut from every capture, so the phone frame is platform-neutral.
 

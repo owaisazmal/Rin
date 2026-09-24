@@ -237,10 +237,15 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
             {creating ? (
               <>
                 <Text style={styles.label}>YOUR CODE</Text>
-                <Pressable onPress={copy} style={styles.codeBox}>
-                  <Text style={styles.code} selectable>
-                    {fresh}
-                  </Text>
+                <Pressable onPress={copy} onLongPress={copy} style={styles.codeBox}>
+                  {/* a Text per group, so a narrow screen wraps between groups, never inside one */}
+                  <View style={styles.codeGroups}>
+                    {fresh.split('-').map((group, i, groups) => (
+                      <Text key={i} style={styles.code}>
+                        {i < groups.length - 1 ? `${group}-` : group}
+                      </Text>
+                    ))}
+                  </View>
                 </Pressable>
 
                 <View style={styles.codeActions}>
@@ -342,6 +347,12 @@ const makeStyles = (p: Palette) =>
       paddingVertical: 16,
       paddingHorizontal: 12,
       alignItems: 'center',
+    },
+    codeGroups: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
     },
     code: {
       fontSize: 16,

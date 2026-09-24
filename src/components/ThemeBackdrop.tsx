@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Palette, ThemeMode, useTheme } from '../theme';
+import { COLUMN, Palette, ThemeMode, useTheme } from '../theme';
 
 /**
  * The theme's looping clip, blended into the page rather than sat on it.
@@ -50,6 +50,9 @@ const FADE = 46;
 
 export default function ThemeBackdrop() {
   const { mode, palette } = useTheme();
+  // past the gutter and any room beside a capped column, so the band has no side edges
+  const { width } = useWindowDimensions();
+  const bleed = 16 + Math.max(0, (width - COLUMN.maxWidth) / 2);
 
   /**
    * The clip lags the palette on purpose.
@@ -110,7 +113,7 @@ export default function ThemeBackdrop() {
   const blend = cut === 'dark' ? styles.onDark : styles.onLight;
 
   return (
-    <View style={[styles.fill, IOS && styles.bleed]} pointerEvents="none">
+    <View style={[styles.fill, IOS && { left: -bleed, right: -bleed }]} pointerEvents="none">
       <VideoView
         style={IOS ? styles.fill : [styles.fill, blend]}
         player={player}
@@ -168,8 +171,6 @@ function EdgeFade({ palette, placement }: { palette: Palette; placement: 'top' |
 
 const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  /** past the screen's 16pt gutter, so the band has no left or right edge */
-  bleed: { left: -16, right: -16 },
   fade: { position: 'absolute', left: 0, right: 0, height: FADE },
   onLight: { mixBlendMode: 'multiply' },
   onDark: { mixBlendMode: 'screen' },

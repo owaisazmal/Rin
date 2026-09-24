@@ -5,6 +5,8 @@ Captured from the iPhone 16 Pro simulator with sample data (four habits, May–A
 theme toggle, which they read from the snapshot. The system appearance is only
 the fallback, for a widget placed before the app has ever written one.
 
+The iOS shots are in [`dark/ios/widgets/`](dark/ios/widgets/) and [`light/ios/widgets/`](light/ios/widgets/).
+
 | File | Widgets shown |
 | --- | --- |
 | `smalls-*.png` | Radial Tracker · Month Progress · Streak · Today's Check (all small), plus Radial Tracker medium |
@@ -42,8 +44,9 @@ which is not part of the home-screen layout these shots come from.
 
 ## Android
 
-`android-page1-*.png` — Radial Tracker · Month Progress · Streak · Today's Check
-`android-page2-*.png` — Year Tracker · Daily Quote · Key Goals
+In [`dark/android/widgets/`](dark/android/widgets/) and [`light/android/widgets/`](light/android/widgets/):
+`page1-*.png` — Radial Tracker · Month Progress · Streak · Today's Check
+`page2-*.png` — Year Tracker · Daily Quote · Key Goals
 
 All seven widgets exist on both platforms, built with Jetpack Glance from the
 same JSON snapshot. Two differences are inherent to the platform:

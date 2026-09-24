@@ -37,7 +37,7 @@ import { HistoryFilter } from '../history';
 import { quoteForDate } from '../quotes';
 import { damagedNotice } from './backupWording';
 import { ChartType } from '../settings';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 const rowsAnimation = LayoutAnimation.create(200, 'easeInEaseOut', 'opacity');
 
@@ -245,12 +245,26 @@ export default function PlannerScreen({
             already fills a 400pt screen, so anything to its left would push
             the settings button off the edge.
           */}
-          <View>
+          <View style={styles.wordmark}>
             <View style={styles.brand}>
               <LogoMark size={28} />
-              <Text style={styles.headerSub}>MONTHLY</Text>
+              <Text
+                style={styles.headerSub}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
+                MONTHLY
+              </Text>
             </View>
-            <Text style={styles.headerTitle}>PLANNING</Text>
+            <Text
+              style={styles.headerTitle}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.5}
+            >
+              PLANNING
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <StreakBadge days={streakDays} palette={palette} />
@@ -413,6 +427,7 @@ const makeStyles = (p: Palette) =>
     },
     /** the gap spaces every card, so none of them carries a margin of its own */
     content: {
+      ...COLUMN,
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 48,
@@ -425,6 +440,8 @@ const makeStyles = (p: Palette) =>
       marginBottom: 4,
       paddingHorizontal: 4,
     },
+    // gives way before the actions do, so large text can't push Settings off-screen
+    wordmark: { flexShrink: 1 },
     brand: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -432,6 +449,7 @@ const makeStyles = (p: Palette) =>
       marginBottom: 2,
     },
     headerSub: {
+      flexShrink: 1,
       fontSize: 11,
       fontFamily: FONT.bold,
       letterSpacing: 4,

@@ -8,7 +8,7 @@ import ThemeBackdrop from '../components/ThemeBackdrop';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import type { BackupHolds, RestoreFailure } from './backupWording';
-import { FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
 const THEME_OPTIONS = [
   { value: 'dark' as ThemeMode, label: 'DARK' },
@@ -394,6 +394,7 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: 'transparent' },
     content: {
+      ...COLUMN,
       flexGrow: 1,
       paddingHorizontal: 16,
       paddingTop: 8,

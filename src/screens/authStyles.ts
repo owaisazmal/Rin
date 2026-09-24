@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native';
-import { FONT, Palette, RADIUS, cardSurface } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface } from '../theme';
 
 /**
  * What the sign-in and reset screens share: a fixed top bar, a centred column,
@@ -17,6 +17,7 @@ export const authStyles = (p: Palette) =>
       marginTop: 4,
     },
     content: {
+      ...COLUMN,
       flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 20,

@@ -192,6 +192,9 @@ export const RADIUS = {
   pill: 999,
 } as const;
 
+/** The content column: full width on a phone, centred at a readable width on iPads and tablets */
+export const COLUMN = { width: '100%', maxWidth: 640, alignSelf: 'center' } as const;
+
 /**
  * The shadow as one CSS colour. iOS wants the tint and the strength as two
  * props, CSS wants them as one; both palettes keep `shadow` as `#rrggbb`, so a
