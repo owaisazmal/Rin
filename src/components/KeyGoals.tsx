@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
-import { useRevealOnFocus } from './KeyboardSafeScroll';
+import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { KeyGoal, MAX_GOAL_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
@@ -105,7 +105,7 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
               style={[styles.input, g.done && styles.inputDone]}
               value={g.text}
               maxLength={MAX_GOAL_LEN}
-              onChangeText={(t) => onChangeText(i, t.slice(0, MAX_GOAL_LEN))}
+              onChangeText={(t) => onChangeText(i, withoutTabs(t).slice(0, MAX_GOAL_LEN))}
               placeholder="goal"
               placeholderTextColor={palette.inkSoft}
               // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll

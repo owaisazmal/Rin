@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useRevealOnFocus } from './KeyboardSafeScroll';
+import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
@@ -156,7 +156,7 @@ export default function Deadlines({
                     style={styles.input}
                     value={t.text}
                     maxLength={MAX_TASK_TEXT}
-                    onChangeText={(v) => onChangeText(t.id, v.slice(0, MAX_TASK_TEXT))}
+                    onChangeText={(v) => onChangeText(t.id, withoutTabs(v).slice(0, MAX_TASK_TEXT))}
                     placeholder="what has to be finished…"
                     placeholderTextColor={palette.inkSoft}
                     // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll

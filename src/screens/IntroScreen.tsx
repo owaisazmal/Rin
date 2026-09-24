@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import LogoMark from '../components/LogoMark';
 import { COLUMN, FONT, Palette, RADIUS, useTheme } from '../theme';
 import { FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
+import { device } from '../device';
 
 /**
  * What the app is for, before anyone is asked to sign in.
@@ -37,7 +38,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
     eyebrow: 'BEFORE ANYTHING ELSE',
     title: 'Built for myself.\nOpen to everyone.',
     body:
-      'No analytics, no trackers, no account needed — your habits sit on your phone and go nowhere else. The source is public and stays that way for as long as this app exists. If something here bothers you, read it, fork it, and build the version you would rather use.',
+      `No analytics, no trackers, no account needed — your habits sit on your ${device()} and go nowhere else. The source is public and stays that way for as long as this app exists. If something here bothers you, read it, fork it, and build the version you would rather use.`,
   },
   {
     kind: 'grid',

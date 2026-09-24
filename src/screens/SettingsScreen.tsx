@@ -7,6 +7,7 @@ import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
+import { device } from '../device';
 import type { BackupHolds, RestoreFailure } from './backupWording';
 import { COLUMN, FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
 
@@ -133,7 +134,7 @@ export default function SettingsScreen({
     if (restoring || !onRestoreMonth) return;
     Alert.alert(
       `Restore ${nameOf(key)}?`,
-      "This replaces this phone's damaged copy of that month with the one in the backup. Anything written in it since the damage is lost with it. Nothing else on this phone is touched.",
+      `This replaces this ${device()}'s damaged copy of that month with the one in the backup. Anything written in it since the damage is lost with it. Nothing else on this ${device()} is touched.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -188,7 +189,7 @@ export default function SettingsScreen({
   const confirmDelete = () =>
     Alert.alert(
       'Delete the backup?',
-      "Everything in the backup is erased for good, and no code can bring it back — not yours and not mine. What is on this phone stays exactly as it is.",
+      `Everything in the backup is erased for good, and no code can bring it back — not yours and not mine. What is on this ${device()} stays exactly as it is.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -218,7 +219,7 @@ export default function SettingsScreen({
   const confirmForget = () =>
     Alert.alert(
       'Forget the code?',
-      'This phone stops backing up. The backup itself stays where it is — anyone with the code written down can still restore it.',
+      `This ${device()} stops backing up. The backup itself stays where it is — anyone with the code written down can still restore it.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Forget', style: 'destructive', onPress: onForgetBackup },
@@ -322,8 +323,8 @@ export default function SettingsScreen({
             <>
               <Text style={styles.emptyTitle}>No backup</Text>
               <Text style={styles.emptyBody}>
-                Everything works without one. A backup carries your months to your next
-                phone, encrypted with a code only you hold.
+                Everything works without one. A backup carries your months to your
+                next {device()}, encrypted with a code only you hold.
               </Text>
               <Pressable
                 onPress={onOpenBackup}
@@ -381,7 +382,7 @@ export default function SettingsScreen({
           </Pressable>
           <Text style={styles.madeBy}>
             App is public, and staying that way. No trackers, no analytics, no
-            data collection. Nothing leaves this phone unless you ask for a
+            data collection. Nothing leaves this {device()} unless you ask for a
             backup, and what leaves then is encrypted with a code I never see.
           </Text>
         </View>

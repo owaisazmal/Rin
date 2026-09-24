@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Clipboard,
   LayoutAnimation,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ import { restoreEverything } from '../sync';
 import { backupNow } from '../hooks/backupRuns';
 import { sentAnything } from '../hooks/autoBackupPolicy';
 import { restoreReport, runReport } from './backupWording';
+import { device } from '../device';
 import { FONT, Palette, RADIUS, useTheme } from '../theme';
 
 type Tab = 'create' | 'restore';
@@ -221,8 +223,8 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
             <Text style={styles.brandTitle}>BACKUP</Text>
             <Text style={styles.tagline}>
               {creating
-                ? 'One code carries your months to your next phone.'
-                : 'Type the code and this phone becomes the other one.'}
+                ? `One code carries your months to your next ${device()}.`
+                : `Type the code and this ${device()} becomes the other one.`}
             </Text>
           </View>
 
@@ -285,11 +287,13 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
                   autoCapitalize="characters"
                   autoCorrect={false}
                   autoComplete="off"
+                  // Gboard otherwise suggests words over the code and can learn it
+                  keyboardType={Platform.OS === 'android' ? 'visible-password' : undefined}
                   returnKeyType="go"
                   onSubmitEditing={runRestore}
                 />
                 <Text style={styles.warning}>
-                  This replaces what is on this phone with what is in the backup.
+                  This replaces what is on this {device()} with what is in the backup.
                 </Text>
               </>
             )}
@@ -315,7 +319,7 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
             </Pressable>
 
             <Text style={styles.fine}>
-              Everything is encrypted on this phone before it leaves. The server
+              Everything is encrypted on this {device()} before it leaves. The server
               stores what it cannot read.
             </Text>
           </View>

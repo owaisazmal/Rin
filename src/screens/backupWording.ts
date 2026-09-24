@@ -1,5 +1,6 @@
 import type { BackupRun, BlockedDoc, RestoreRun } from '../sync';
 import type { BackupStatus, Damage } from '../hooks/autoBackupPolicy';
+import { device } from '../device';
 
 /**
  * What the two backup screens are allowed to say, and the words for saying it.
@@ -208,7 +209,7 @@ function revive(key: string): string {
  * choosing between the two ways out has to be told that before they choose.
  */
 function pullBack(): string {
-  return "Restoring that month puts the backup's copy on this phone in place of the damaged one, and anything written in it since the damage goes with it.";
+  return `Restoring that month puts the backup's copy on this ${device()} in place of the damaged one, and anything written in it since the damage goes with it.`;
 }
 
 /**
@@ -221,7 +222,7 @@ function pullBack(): string {
  * against a better option — it is the only way forward.
  */
 function onlyCopy(): string {
-  return "The backup does not hold that month, so this phone's copy is the only one there is. Writing in it again is the only way forward: that saves what is on screen and lets go of the rest.";
+  return `The backup does not hold that month, so this ${device()}'s copy is the only one there is. Writing in it again is the only way forward: that saves what is on screen and lets go of the rest.`;
 }
 
 /**
@@ -285,7 +286,7 @@ export function damagedNotice(record: DamagedRecord, restorable = false): string
   // record nobody can edit is a record nobody can rescue, and the backup card
   // sends people here to do exactly that. What it must not do is let someone
   // type over the rest of it without knowing that is what they are doing.
-  return `Rin could not read ${subject} on this phone, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.${back}`;
+  return `Rin could not read ${subject} on this ${device()}, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.${back}`;
 }
 
 // --- the card in Settings ----------------------------------------------------
@@ -403,7 +404,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
   if (lead.reason === 'too-large') {
     return {
       title: `${name} ${verbFor(lead.key)} too large to back up`,
-      body: `${shorten(lead.key, lead.detail, 'that month')} Nothing on this phone has been lost.${also}`,
+      body: `${shorten(lead.key, lead.detail, 'that month')} Nothing on this ${device()} has been lost.${also}`,
       attention: true,
       retry: true,
       // A month the server would not take is not a damaged one. Everything on
@@ -446,11 +447,11 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
     const ending =
       out === 'restore' ? pullBack() : out === 'only-copy' ? onlyCopy() : revive(lead.key);
     return {
-      title: `Rin could not read ${within} on this phone`,
+      title: `Rin could not read ${within} on this ${device()}`,
       body:
         out === 'only-copy'
-          ? `This phone's copy looks damaged, so nothing was sent. ${ending}${also}`
-          : `This phone's copy looks damaged, so nothing was sent and the copy in the backup is untouched — Rin is holding on to the good one rather than writing over it with this. ${ending}${also}`,
+          ? `This ${device()}'s copy looks damaged, so nothing was sent. ${ending}${also}`
+          : `This ${device()}'s copy looks damaged, so nothing was sent and the copy in the backup is untouched — Rin is holding on to the good one rather than writing over it with this. ${ending}${also}`,
       attention: true,
       retry: true,
       restore: out === 'restore' ? lead.key : null,
@@ -484,7 +485,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
   if (lead.reason === 'rejected') {
     return {
       title: `${name} ${verbFor(lead.key)} not reaching the backup`,
-      body: `The server turned it down, which is a fault at my end rather than anything you did. Everything is still here on this phone, Rin will keep trying this on its own, and backing up again will try it again now.${also}`,
+      body: `The server turned it down, which is a fault at my end rather than anything you did. Everything is still here on this ${device()}, Rin will keep trying this on its own, and backing up again will try it again now.${also}`,
       attention: true,
       retry: true,
       // Nothing on this phone is damaged; the server declined to take a
@@ -498,7 +499,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
   // point of writing it down — but the reason is a question only a run answers.
   return {
     title: `${name} ${verbFor(lead.key)} not reaching the backup`,
-    body: `Everything is still here on this phone. Backing up now will say what stopped it.${also}`,
+    body: `Everything is still here on this ${device()}. Backing up now will say what stopped it.${also}`,
     attention: true,
     retry: true,
     // Whether this is damage or a refusal is the question a run answers, and
@@ -572,13 +573,13 @@ function damagedCard(
    * "part of it" for the second would be describing damage nobody measured.
    */
   const opening = lead.lost
-    ? `This phone's copy is damaged — ${lead.lost} did not survive.`
-    : "This phone's copy is damaged.";
+    ? `This ${device()}'s copy is damaged — ${lead.lost} did not survive.`
+    : `This ${device()}'s copy is damaged.`;
 
   return {
     title: lead.lost
       ? `Rin could only read part of ${name}`
-      : `Rin could not read ${name} on this phone`,
+      : `Rin could not read ${name} on this ${device()}`,
     /**
      * Three endings, and what changes with them is how much the card is
      * entitled to say about the backup. With a listing in hand there is a copy
@@ -670,7 +671,7 @@ export function backupCard(
   if (!status.reconciled) {
     return {
       title: 'Backup is on',
-      body: `Rin has not checked this phone against the backup yet. It does that when you open the app.${sent}`,
+      body: `Rin has not checked this ${device()} against the backup yet. It does that when you open the app.${sent}`,
       attention: false,
       retry: false,
       restore: null,
@@ -680,10 +681,10 @@ export function backupCard(
   return {
     title: 'Backed up',
     body: lastBackupAt
-      ? `Everything on this phone is in the backup.${sent}`
+      ? `Everything on this ${device()} is in the backup.${sent}`
       : // Nothing has gone from *this* phone — it restored what is up there and
         // has changed nothing since. A date here would be somebody else's.
-        'Everything on this phone matches the backup.',
+        `Everything on this ${device()} matches the backup.`,
     attention: false,
     retry: false,
     restore: null,
@@ -747,7 +748,7 @@ export function restoreFailure(reason: RestoreFailure): string {
     case 'offline':
       return 'Rin could not reach the backup. Your damaged copy is untouched, so this is safe to try again when you have a connection.';
     case 'rejected':
-      return 'The backup server turned this phone away, so nothing was replaced. Rin will keep trying on its own.';
+      return `The backup server turned this ${device()} away, so nothing was replaced. Rin will keep trying on its own.`;
     case 'missing':
       return 'The backup does not hold that month after all, so there was nothing to put back. Your copy is untouched.';
     case 'unreadable':
@@ -786,7 +787,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
    * from claiming it on behalf of the months that went up beside it.
    */
   if (pushed === 0 && blocked.every((doc) => doc.reason === 'rejected')) {
-    return 'The backup server turned this app away, so nothing was sent. That is a setup problem at my end, not yours — nothing on this phone was lost, and what is already in the backup is untouched.';
+    return `The backup server turned this app away, so nothing was sent. That is a setup problem at my end, not yours — nothing on this ${device()} was lost, and what is already in the backup is untouched.`;
   }
 
   const lead = leading(blocked);
@@ -801,12 +802,12 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
     return `${name} ${verbFor(lead.key)} too large to back up${bulk ? `, and most of it is ${bulk}` : ''}. ${shorten(lead.key, lead.detail)}${also}`;
   }
   if (lead.reason === 'unreadable') {
-    return `Rin could not read ${within} on this phone, so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
+    return `Rin could not read ${within} on this ${device()}, so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
   // Without this the sentence fell through to the line below and told somebody
   // the server had turned down a document the server was never offered.
   if (lead.reason === 'incomplete') {
-    return `Rin could only read part of ${within} on this phone — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
+    return `Rin could only read part of ${within} on this ${device()} — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
   return `${name} ${pastVerbFor(lead.key)} turned down by the server. Backing up again will try it again.${also}`;
 }
@@ -827,7 +828,7 @@ export function runReport(run: Extract<BackupRun, { ok: true }>): RunReport {
     return {
       progress:
         run.months === 0
-          ? 'This phone is backed up. Rin sends new changes whenever you open it.'
+          ? `This ${device()} is backed up. Rin sends new changes whenever you open it.`
           : `${held} safe. Rin sends new changes whenever you open it.`,
       problem: null,
     };
@@ -853,7 +854,7 @@ export function restoreReport(run: Extract<RestoreRun, { ok: true }>): RunReport
   const notes: string[] = [];
 
   if (run.months === 0 && run.skipped > 0) {
-    notes.push('None of the months in this backup could be opened, so no month on this phone was replaced.');
+    notes.push(`None of the months in this backup could be opened, so no month on this ${device()} was replaced.`);
   } else if (run.skipped === 1) {
     notes.push('One month in this backup could not be opened, so it was left out.');
   } else if (run.skipped > 1) {
@@ -861,7 +862,7 @@ export function restoreReport(run: Extract<RestoreRun, { ok: true }>): RunReport
   }
 
   if (run.deadlines === 'unreadable') {
-    notes.push('The deadline list in this backup could not be opened, so the deadlines already on this phone were left as they are.');
+    notes.push(`The deadline list in this backup could not be opened, so the deadlines already on this ${device()} were left as they are.`);
   }
 
   /**
@@ -874,7 +875,7 @@ export function restoreReport(run: Extract<RestoreRun, { ok: true }>): RunReport
    * why the deadlines did not follow.
    */
   if (run.deadlines === 'partial') {
-    notes.push('Only part of the deadline list in this backup could be opened, so the deadlines already on this phone were left as they are rather than replaced by half a list.');
+    notes.push(`Only part of the deadline list in this backup could be opened, so the deadlines already on this ${device()} were left as they are rather than replaced by half a list.`);
   }
 
   return {

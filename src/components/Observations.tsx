@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useRevealOnFocus } from './KeyboardSafeScroll';
+import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_OBSERVATIONS, MAX_OBSERVATION_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
@@ -130,7 +130,7 @@ export default function Observations({ observations, onChange, onAdd, onRemove }
               style={styles.input}
               value={o}
               maxLength={MAX_OBSERVATION_LEN}
-              onChangeText={(t) => onChange(i, t.slice(0, MAX_OBSERVATION_LEN))}
+              onChangeText={(t) => onChange(i, withoutTabs(t).slice(0, MAX_OBSERVATION_LEN))}
               placeholder="write it down…"
               placeholderTextColor={palette.inkSoft}
               // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll

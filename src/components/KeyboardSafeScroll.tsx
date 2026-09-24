@@ -103,6 +103,9 @@ export function useRevealOnFocus(): () => void {
   return useContext(RevealOnFocus);
 }
 
+/** The iPad's Tab key types a tab into a multiline field; these fields each hold one line */
+export const withoutTabs = (text: string) => text.replace(/\t/g, '');
+
 interface Props extends ScrollViewProps {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -334,6 +337,17 @@ export default function KeyboardSafeScroll({
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      {Platform.OS === 'android' && (
+        // After Tab, Android gives focus to the first focusable view when an edit
+        // ends. This is that view, so the next keys don't land in another field.
+        <View
+          focusable
+          collapsable={false}
+          importantForAccessibility="no"
+          pointerEvents="none"
+          style={styles.focusCatcher}
+        />
+      )}
       <ScrollView
         // Spread first, so nothing a caller passes can quietly take over one of
         // the props below — those are the whole point of this component.
@@ -388,5 +402,10 @@ export default function KeyboardSafeScroll({
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+  },
+  focusCatcher: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
   },
 });
