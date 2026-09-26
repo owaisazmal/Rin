@@ -1,0 +1,108 @@
+# EAS store builds from "Run workflow" or a v* tag. Needs the EXPO_TOKEN secret.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Store builds to start
+        type: choice
+        options: [all, ios, android]
+        default: all
+      submit:
+        description: Submit to the stores when done (needs store credentials saved in EAS)
+        type: boolean
+        default: false
+  push:
+    tags: ['v[0-9]*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: 24.9.0 # same as eas.json
+
+jobs:
+  preflight:
+    name: Release checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      platforms: ${{ steps.check.outputs.platforms }}
+    steps:
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add an EXPO_TOKEN repository secret (expo.dev > Access tokens)."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          packager: npm
+      - name: Check version and build numbers
+        id: check
+        env:
+          PLATFORM: ${{ inputs.platform || 'all' }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: node .github/scripts/release-preflight.js
+
+  ci:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: EAS build (${{ matrix.platform }})
+    needs: [preflight, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.preflight.outputs.platforms) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          packager: npm
+      - name: Placeholder Firebase config
+        # eas-cli reads the app config here; the EAS builder gets the real files
+        run: node .github/scripts/firebase-stub.js "$RUNNER_TEMP/firebase"
+      - name: Start build
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          SUBMIT: ${{ inputs.submit || false }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          node .github/scripts/release-preflight.js # a re-run of one leg skips the preflight job
+          args=(--platform "$PLATFORM" --profile production-ci --non-interactive --no-wait --freeze-credentials --json
+                --message "GitHub Actions: $GITHUB_REF_NAME (${GITHUB_SHA::7})")
+          if [ "$SUBMIT" = true ]; then args+=(--auto-submit-with-profile production); fi
+          eas build "${args[@]}" > "$RUNNER_TEMP/build.json"
+          node .github/scripts/build-summary.js "$RUNNER_TEMP/build.json" | tee -a "$GITHUB_STEP_SUMMARY"

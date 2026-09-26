@@ -28,6 +28,11 @@
       },
       "node": "24.9.0"
     },
+    "production-ci": {
+      "extends": "production",
+      "autoIncrement": false,
+      "environment": "production"
+    },
     "base": {}
   },
   "submit": {

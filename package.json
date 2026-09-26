@@ -45,7 +45,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
-    "test:rules": "npx --yes firebase-tools emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\""
+    "test:rules": "npx --yes firebase-tools@15.31.0 emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\""
   },
   "private": true,
   "expo": {

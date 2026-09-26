@@ -1,0 +1,120 @@
+# Also run by release.yml before any store build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'screenshots/**'
+      - 'assets/store/**'
+      - '**.md'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'screenshots/**'
+      - 'assets/store/**'
+      - '**.md'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 24.9.0 # same as eas.json
+
+jobs:
+  test:
+    name: Typecheck, tests, bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test -- --ci
+      - name: Expo doctor
+        # both skipped checks depend on outside data; run `npx expo install --check` locally
+        env:
+          EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: 1
+          EXPO_DOCTOR_ENABLE_DIRECTORY_CHECK: 0
+          EXPO_DOCTOR_WARN_ON_NETWORK_ERRORS: 1
+        run: npx --yes expo-doctor@1.20.4
+      - name: Bundle JS for iOS and Android
+        run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/export"
+
+  rules:
+    name: Firestore rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run test:rules
+
+  native:
+    name: Prebuild + Android release build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+      - run: npm ci
+      - name: Placeholder Firebase config
+        run: node .github/scripts/firebase-stub.js "$RUNNER_TEMP/firebase"
+      - name: Prebuild iOS and Android
+        run: npx expo prebuild --no-install
+      - name: Android release build
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+  ios-widgets:
+    name: iOS widget typecheck
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: xcrun --sdk iphonesimulator swiftc -typecheck -application-extension -target arm64-apple-ios18.0-simulator targets/widgets/*.swift
