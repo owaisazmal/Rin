@@ -124,6 +124,10 @@ from GitHub (the Run workflow button, or a pushed tag like `v1.0.0` matching
 `version`) with the numbers `app.json` holds, so bump them first. It needs an
 `EXPO_TOKEN` repository secret.
 
+| Every push | A release |
+| :-: | :-: |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/ci-flow-dark.svg"><img alt="Commit and push, CI runs four checks, fix anything red and push again" src="screenshots/readme/ci-flow-light.svg" width="400"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/release-flow-dark.svg"><img alt="Bump app.json, start the release, EAS builds, submit to TestFlight and Play" src="screenshots/readme/release-flow-light.svg" width="400"></picture> |
+
 Firebase's two config files never enter the repo; `.env.example` says where
 they go, locally and for EAS builds.
 
