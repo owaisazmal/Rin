@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { MonthData } from '../types';
 import { Task } from '../tasks';
 import { YearMonthSummary } from '../storage';
@@ -15,6 +16,40 @@ import { syncReminders } from '../notifications';
 
 /** Long enough that a burst of taps produces one push, not one per tap */
 const DEBOUNCE_MS = 1200;
+
+/**
+ * Runs `push` once its inputs have been still for DEBOUNCE_MS, or straight away
+ * if the app leaves the foreground first: iOS suspends the app before the timer
+ * fires, so an edit made just before going home would wait for the next launch.
+ */
+function useDebouncedPush(push: (() => void) | null, deps: unknown[]) {
+  const pending = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!push) return;
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      push();
+    };
+    pending.current = send;
+    const t = setTimeout(send, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(t);
+      if (pending.current === send) pending.current = null;
+    };
+    // `push` is rebuilt every render; `deps` are what it reads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') pending.current?.();
+    });
+    return () => sub.remove();
+  }, []);
+}
 
 /**
  * Mirror a snapshot into the shared container the widgets read.
@@ -34,13 +69,12 @@ export function useWidgetSync(
   mode: ThemeMode,
   tasks: Task[]
 ) {
-  useEffect(() => {
-    if (!enabled || !yearMonths) return;
-    const t = setTimeout(() => {
-      syncWidgets(buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [enabled, data, year, month, yearMonths, mode, tasks]);
+  useDebouncedPush(
+    enabled && yearMonths
+      ? () => syncWidgets(buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks))
+      : null,
+    [enabled, data, year, month, yearMonths, mode, tasks]
+  );
 }
 
 /**
@@ -56,11 +90,10 @@ export function useReminderSync(
   today: number | null,
   tasks: Task[]
 ) {
-  useEffect(() => {
-    if (!enabled) return;
-    const t = setTimeout(() => {
-      syncReminders({ habits: data.habits, grid: data.grid, today, tasks, now: new Date() });
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [enabled, data, today, tasks]);
+  useDebouncedPush(
+    enabled
+      ? () => syncReminders({ habits: data.habits, grid: data.grid, today, tasks, now: new Date() })
+      : null,
+    [enabled, data, today, tasks]
+  );
 }

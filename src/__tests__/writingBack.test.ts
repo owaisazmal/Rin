@@ -15,6 +15,9 @@ import { NO_RUNS, statusOf } from '../hooks/autoBackupPolicy';
 import { emptyMonthData } from '../types';
 import type { Task } from '../tasks';
 
+/** no day open for marking, so these tests never touch the grid */
+const NO_DAYS: number[] = [];
+
 /**
  * What a screen writes back over what it was given.
  *
@@ -231,7 +234,7 @@ describe('a month this phone could only half read', () => {
   it('is not written back merely because somebody opened it', async () => {
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
     await planner.settle();
@@ -249,7 +252,7 @@ describe('a month this phone could only half read', () => {
   it('shows what survived, and says it cannot save', async () => {
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
 
     expect(planner.shown.loaded).toBe(true);
@@ -266,7 +269,7 @@ describe('a month this phone could only half read', () => {
     // had made impossible to take.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     planner.shown.renameHabit('0', 'Walk');
     await planner.settle();
@@ -288,7 +291,7 @@ describe('a month this phone could only half read', () => {
     // cannot vouch for.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     planner.shown.renameHabit('0', 'Walk');
     await planner.settle();
@@ -303,7 +306,7 @@ describe('a month this phone read in full', () => {
   it('saves an edit once the typing stops', async () => {
     await saveMonth(2026, 8, month);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     expect(planner.shown.vouched).toBe(true);
 
@@ -323,7 +326,7 @@ describe('a month this phone read in full', () => {
   it('writes on the way out of the month without waiting for the pause', async () => {
     await saveMonth(2026, 8, month);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     planner.shown.setObservation(0, 'Quieter week');
     await planner.settle();
@@ -342,7 +345,7 @@ describe('a month this phone read in full', () => {
     // opened. That is not damage — writing an empty month over nothing takes
     // nothing away — and the backup depends on it: this is how paging back
     // through last year materialises the months it then declines to send.
-    const planner = mount(() => useMonthData(2025, 3, null));
+    const planner = mount(() => useMonthData(2025, 3, NO_DAYS));
     await planner.settle();
     jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
     await planner.settle();
@@ -449,7 +452,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   it('writes down what was lost, in the words the voucher used', async () => {
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
 
     const ledger = await ledgerSettled();
@@ -466,7 +469,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     // request, no anonymous sign-in and nothing on the wire.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
     await planner.settle();
@@ -479,7 +482,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   it('leaves the note where the next launch will find it', async () => {
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     await ledgerSettled();
 
@@ -498,7 +501,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     expect(statusOf(await loadLedger(), NO_RUNS).reconciled).toBe(true);
 
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
 
     const status = statusOf(await ledgerSettled(), NO_RUNS);
@@ -514,7 +517,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     // An undamaged phone does not so much as create the file.
     await saveMonth(2026, 8, month);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
     await planner.settle();
@@ -530,7 +533,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     // say it worked is not one.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     expect(unvouchedKeys(await ledgerSettled())).toEqual(['2026-09']);
 
@@ -552,7 +555,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     // here would be the app going quiet about a month it knows it cannot read.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
     planner.shown.renameHabit('0', 'Walk');
     // no settle, so the save effect has not run and there is nothing pending
@@ -571,14 +574,14 @@ describe('telling the backup about a record this phone cannot read', () => {
     // a whole one there is.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
-    const damaged = mount(() => useMonthData(2026, 8, null));
+    const damaged = mount(() => useMonthData(2026, 8, NO_DAYS));
     await damaged.settle();
     expect(unvouchedKeys(await ledgerSettled())).toEqual(['2026-09']);
 
     // what the restore leaves behind: both habits and both marks, on disk
     await saveMonth(2026, 8, month);
 
-    const restored = mount(() => useMonthData(2026, 8, null));
+    const restored = mount(() => useMonthData(2026, 8, NO_DAYS));
     await restored.settle();
 
     expect(restored.shown.vouched).toBe(true);
@@ -591,7 +594,7 @@ describe('telling the backup about a record this phone cannot read', () => {
     // being unable to describe the damage is not being unable to see it.
     mockLocal.set(MONTH_BLOB, '{not json');
 
-    const planner = mount(() => useMonthData(2026, 8, null));
+    const planner = mount(() => useMonthData(2026, 8, NO_DAYS));
     await planner.settle();
 
     const ledger = await ledgerSettled();

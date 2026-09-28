@@ -35,3 +35,16 @@ export function startOfDay(ms: number): number {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
+
+/** How many days a check-in stays open: its own day and the one after, 48 hours */
+export const MARK_WINDOW_DAYS = 2;
+
+/** Days of `month` that can still be marked at `now`, latest first */
+export function markableDays(year: number, month: number, now: Date): number[] {
+  const out: number[] = [];
+  for (let back = 0; back < MARK_WINDOW_DAYS; back++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+    if (d.getFullYear() === year && d.getMonth() === month) out.push(d.getDate());
+  }
+  return out;
+}

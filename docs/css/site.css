@@ -778,6 +778,14 @@ p {
   font-weight: 500;
   fill: var(--ink-soft);
 }
+.radial .daylabel.pick {
+  cursor: pointer;
+}
+.radial .daylabel.selected {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--ink);
+}
 .radial .daylabel.today {
   font-size: 12px;
   font-weight: 700;
@@ -898,6 +906,45 @@ p {
   letter-spacing: 1px;
   color: var(--accent);
   text-transform: uppercase;
+}
+
+/* DailyCheck.tsx's day stepper, and the note under it on a day that isn't today */
+.daynav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.daynav .label {
+  min-width: 70px;
+  text-align: center;
+  line-height: 1.2;
+}
+.daynav .label b {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.daynav .label .today-badge {
+  display: block;
+  font-style: normal;
+}
+.daynav .navbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.daynote {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+/* a locked day still shows its marks, muted, as MarkButton.tsx does */
+.mark:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+.mark:disabled[aria-pressed='true'] {
+  opacity: 0.5;
 }
 
 .demo-note {

@@ -29,6 +29,9 @@ interface Props {
   daysInMonth: number;
   monthName: string;
   isToday: boolean;
+  isYesterday: boolean;
+  /** inside the 48 hour window: today, or yesterday */
+  canMark: boolean;
   /** current day-of-month, or null when the open month isn't the current one */
   todayDay: number | null;
   habits: Habit[];
@@ -75,6 +78,8 @@ export default function DailyCheck({
   daysInMonth,
   monthName,
   isToday,
+  isYesterday,
+  canMark,
   todayDay,
   habits,
   grid,
@@ -142,6 +147,7 @@ export default function DailyCheck({
                 {monthName.slice(0, 3)} {day}
               </Text>
               {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
+              {isYesterday && <Text style={styles.todayBadge}>YESTERDAY</Text>}
             </View>
             <Pressable
               hitSlop={8}
@@ -197,13 +203,17 @@ export default function DailyCheck({
         </View>
       ) : (
         <>
-          {!isToday && (
+          {!canMark ? (
             <Text style={styles.locked}>
               {day < (todayDay ?? 0) || todayDay === null
-                ? 'Past days are locked — only today can be marked.'
+                ? 'Past days are locked — only today and yesterday can be marked.'
                 : "You can't mark a day before it arrives."}
             </Text>
-          )}
+          ) : isYesterday ? (
+            <Text style={styles.locked}>
+              Yesterday stays open until midnight, then anything blank is marked missed.
+            </Text>
+          ) : null}
           {habits.map((h) => {
             const state = grid[cellKey(day, h.id)] ?? 0;
             return (
@@ -214,14 +224,14 @@ export default function DailyCheck({
                 <MarkButton
                   kind="done"
                   active={state === 1}
-                  disabled={!isToday}
+                  disabled={!canMark}
                   palette={palette}
                   onPress={() => onSet(day, h.id, state === 1 ? 0 : 1)}
                 />
                 <MarkButton
                   kind="missed"
                   active={state === 2}
-                  disabled={!isToday}
+                  disabled={!canMark}
                   palette={palette}
                   onPress={() => onSet(day, h.id, state === 2 ? 0 : 2)}
                 />
@@ -301,7 +311,7 @@ const makeStyles = (p: Palette) =>
       fontSize: 13,
       fontFamily: FONT.bold,
       color: p.ink,
-      minWidth: 58,
+      minWidth: 64,
       textAlign: 'center',
     },
     todayBadge: {

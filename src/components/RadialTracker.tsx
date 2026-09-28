@@ -12,6 +12,8 @@ interface Props {
   habits: Habit[];
   grid: Record<string, CellState>;
   today: number | null;
+  /** days that can still be marked: today and yesterday */
+  markable: readonly number[];
   selectedDay: number;
   onToggle: (day: number, habitId: string) => void;
   onSelectDay: (day: number) => void;
@@ -51,6 +53,7 @@ export default function RadialTracker({
   habits,
   grid,
   today,
+  markable,
   selectedDay,
   onToggle,
   onSelectDay,
@@ -113,9 +116,9 @@ export default function RadialTracker({
             fill={c.fill}
             stroke={c.stroke}
             strokeWidth={0.7}
-            // only today's wedge is interactive; history is read-only
+            // only today's and yesterday's wedges are interactive
             onPress={
-              c.habitId !== null && c.day === today
+              c.habitId !== null && markable.includes(c.day)
                 ? () => onToggle(c.day, c.habitId as string)
                 : undefined
             }

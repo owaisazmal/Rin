@@ -136,21 +136,25 @@ struct TodayWidgetView: View {
     }
   }
 
-  private var limit: Int {
-    switch family {
-    case .systemSmall: return 3
-    case .systemMedium: return 4
-    default: return 8
-    }
-  }
-
   var body: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
-    let snap = entry.snapshot
-    let visible = Array(rows.prefix(limit))
+    let rows = self.rows
+
+    // as many rows as this widget has room for, rather than a fixed count per size
+    ViewThatFits(in: .vertical) {
+      ForEach(Array((0...rows.count).reversed()), id: \.self) { shown in
+        list(rows, shown: shown, theme: theme)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    // no padding of its own: the system's content margins are the only inset
+    .widgetBackground(theme.bg)
+  }
+
+  private func list(_ rows: [(name: String, state: Int)], shown: Int, theme: Theme) -> some View {
     let doneToday = rows.filter { $0.state == 1 }.count
 
-    VStack(alignment: .leading, spacing: family == .systemSmall ? 5 : 7) {
+    return VStack(alignment: .leading, spacing: family == .systemSmall ? 5 : 7) {
       WidgetHeading(
         text: "TODAY",
         theme: theme,
@@ -158,11 +162,11 @@ struct TodayWidgetView: View {
       )
 
       if rows.isEmpty {
-        Text(snap.today == nil ? "Open the app to sync this month." : "No habits yet.")
+        Text(entry.snapshot.today == nil ? "Open the app to sync this month." : "No habits yet.")
           .font(.system(size: 11))
           .foregroundColor(theme.inkSoft)
       } else {
-        ForEach(Array(visible.enumerated()), id: \.offset) { _, row in
+        ForEach(Array(rows.prefix(shown).enumerated()), id: \.offset) { _, row in
           HStack(spacing: 7) {
             StateGlyph(state: row.state, theme: theme)
             // the glyph already says "done"; a strikethrough on top of it is
@@ -174,16 +178,13 @@ struct TodayWidgetView: View {
             Spacer(minLength: 0)
           }
         }
-        if rows.count > visible.count {
-          Text("+\(rows.count - visible.count) more")
+        if rows.count > shown {
+          Text("+\(rows.count - shown) more")
             .font(.system(size: 9))
             .foregroundColor(theme.inkSoft)
         }
       }
-      Spacer(minLength: 0)
     }
-    .padding(family == .systemSmall ? 11 : 14)
-    .widgetBackground(theme.bg)
   }
 }
 

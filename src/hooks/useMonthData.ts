@@ -31,9 +31,11 @@ export function monthDocKey(year: number, month: number): string {
  * dialogs — `removeHabit` deletes unconditionally and leaves the "are you
  * sure" to the caller, which is the part that belongs to the UI.
  */
-export function useMonthData(year: number, month: number, today: number | null) {
+export function useMonthData(year: number, month: number, markable: readonly number[]) {
   const [data, setData] = useState<MonthData>(emptyMonthData());
   const [loaded, setLoaded] = useState(false);
+  // bumped to read the open month again after something else wrote it
+  const [readCount, setReadCount] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<{ year: number; month: number; data: MonthData } | null>(null);
   /**
@@ -109,7 +111,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
     return () => {
       cancelled = true;
     };
-  }, [year, month]);
+  }, [year, month, readCount]);
 
   /**
    * The one door every mutation below goes through.
@@ -239,14 +241,26 @@ export function useMonthData(year: number, month: number, today: number | null) 
   }, [reportEdit]);
 
   /**
-   * History is read-only: only the real current day can be marked. `today` is
-   * null whenever the open month isn't the current one, which locks it
-   * wholesale. Guarded here rather than only in the UI so no caller can slip
-   * past it.
+   * Read the open month again, if it is `year`/`month`, after something other
+   * than this hook wrote it to disk. Declined while an edit is waiting to be
+   * saved, so nothing typed is thrown away.
+   */
+  const reread = useCallback(
+    (y: number, m: number) => {
+      if (monthDocKey(y, m) !== docKey || touched.current || pendingSave.current) return;
+      setReadCount((n) => n + 1);
+    },
+    [docKey]
+  );
+
+  /**
+   * History is read-only outside the 48 hour window: only the days in
+   * `markable` (today, and yesterday) can be marked. Guarded here rather than
+   * only in the UI so no caller can slip past it.
    */
   const setCell = useCallback(
     (day: number, habitId: string, state: CellState) => {
-      if (day !== today) return;
+      if (!markable.includes(day)) return;
       edit((prev) => {
         const key = cellKey(day, habitId);
         const grid = { ...prev.grid };
@@ -255,12 +269,12 @@ export function useMonthData(year: number, month: number, today: number | null) 
         return { ...prev, grid };
       });
     },
-    [today, edit]
+    [markable, edit]
   );
 
   const cycleCell = useCallback(
     (day: number, habitId: string) => {
-      if (day !== today) return;
+      if (!markable.includes(day)) return;
       edit((prev) => {
         const key = cellKey(day, habitId);
         const next: CellState = (((prev.grid[key] ?? 0) + 1) % 3) as CellState;
@@ -270,7 +284,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
         return { ...prev, grid };
       });
     },
-    [today, edit]
+    [markable, edit]
   );
 
   const addHabit = useCallback(() => {
@@ -398,6 +412,7 @@ export function useMonthData(year: number, month: number, today: number | null) 
     daysInMonth,
     stats,
     flushSave,
+    reread,
     setCell,
     cycleCell,
     addHabit,
