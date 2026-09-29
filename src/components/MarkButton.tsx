@@ -51,7 +51,7 @@ export default function MarkButton({
 }: {
   kind: 'done' | 'missed';
   active: boolean;
-  /** days outside the 48 hour window (today and yesterday) are read-only */
+  /** a past day's existing mark can't be changed, and a future day can't be marked */
   disabled?: boolean;
   palette: Palette;
   onPress: () => void;

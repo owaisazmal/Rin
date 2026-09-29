@@ -28,7 +28,6 @@ export function useYearWindow({
   browsedYear,
   browsedMonth,
   browsedMonths,
-  revision = 0,
 }: {
   now: { year: number; month: number; day: number };
   /** the calendar year open in the planner */
@@ -36,8 +35,6 @@ export function useYearWindow({
   browsedMonth: number;
   /** that year's summaries with the open month's live edits laid over them */
   browsedMonths: YearMonthSummary[] | null;
-  /** bumped when stored months change under this hook */
-  revision?: number;
 }): {
   span: YearSpan;
   setSpan: (span: YearSpan) => void;
@@ -158,7 +155,7 @@ export function useYearWindow({
     // `needed` is rebuilt on every render; its contents are what matter.
     // `browsedMonth` is here so paging re-reads the neighbouring year too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [neededKey, browsedYear, browsedMonth, revision]);
+  }, [neededKey, browsedYear, browsedMonth]);
 
   const built = useMemo(() => {
     if (!browsedMonths) return null;

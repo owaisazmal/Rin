@@ -16,9 +16,7 @@ export function useYearSummary(
   year: number,
   month: number,
   data: MonthData,
-  daysInMonth: number,
-  /** bumped when stored months change under this hook */
-  revision = 0
+  daysInMonth: number
 ): YearMonthSummary[] | null {
   const [summary, setSummary] = useState<{
     year: number;
@@ -33,7 +31,7 @@ export function useYearSummary(
     return () => {
       cancelled = true;
     };
-  }, [year, month, revision]);
+  }, [year, month]);
 
   return useMemo(() => {
     if (!summary || summary.year !== year) return null;

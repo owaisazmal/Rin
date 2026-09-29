@@ -25,7 +25,6 @@ import StreakBadge from '../components/StreakBadge';
 import TrackerCard from '../components/TrackerCard';
 import YearChart from '../components/YearChart';
 import { useChartTransition } from '../hooks/useChartTransition';
-import { useClosedDays } from '../hooks/useClosedDays';
 import { useCurrentStreak } from '../hooks/useCurrentStreak';
 import { monthDocKey, useMonthData } from '../hooks/useMonthData';
 import { useNow } from '../hooks/useNow';
@@ -33,7 +32,8 @@ import { useReminderSync, useWidgetSync } from '../hooks/useOutboundSync';
 import { TaskStore } from '../hooks/useTasks';
 import { useYearSummary } from '../hooks/useYearSummary';
 import { useYearWindow } from '../hooks/useYearWindow';
-import { MONTH_NAMES, markableDays, startOfDay } from '../dates';
+import { MONTH_NAMES, startOfDay } from '../dates';
+import { dayWhen } from '../marking';
 import { HistoryFilter } from '../history';
 import { quoteForDate } from '../quotes';
 import { damagedNotice } from './backupWording';
@@ -106,11 +106,11 @@ export default function PlannerScreen({
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
   const today = isCurrentMonth ? now.getDate() : null;
   const dayStart = startOfDay(nowMs);
-  // today and yesterday, whichever of them fall in the open month
-  const markable = useMemo(
-    () => markableDays(year, month, new Date(dayStart)),
-    [year, month, dayStart]
-  );
+  // what "today" is for the marking rule, stable until midnight
+  const todayRef = useMemo(() => {
+    const d = new Date(dayStart);
+    return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
+  }, [dayStart]);
   const [selectedDay, setSelectedDay] = useState(today ?? 1);
 
   const {
@@ -120,7 +120,7 @@ export default function PlannerScreen({
     daysInMonth,
     stats,
     flushSave,
-    reread,
+    canMarkCell,
     setCell,
     cycleCell,
     addHabit: appendHabit,
@@ -133,7 +133,7 @@ export default function PlannerScreen({
     setObservation,
     addObservation,
     removeObservation,
-  } = useMonthData(year, month, markable);
+  } = useMonthData(year, month, todayRef);
 
   const {
     tasks,
@@ -149,8 +149,7 @@ export default function PlannerScreen({
   // which task's deadline is being edited, or null when the sheet is closed
   const [editingDue, setEditingDue] = useState<string | null>(null);
 
-  const closedRevision = useClosedDays(dayStart, { flushSave, reread });
-  const yearMonths = useYearSummary(year, month, data, daysInMonth, closedRevision);
+  const yearMonths = useYearSummary(year, month, data, daysInMonth);
   const streakDays = useCurrentStreak(year, yearMonths);
   /*
     The year grid's own span, which is not the browsed year. It opens on the
@@ -163,7 +162,6 @@ export default function PlannerScreen({
     browsedYear: year,
     browsedMonth: month,
     browsedMonths: yearMonths,
-    revision: closedRevision,
   });
   // Both, not just the month: pushing before the deadlines have loaded would
   // put a snapshot on the home screen saying nothing is due, and only correct
@@ -173,11 +171,14 @@ export default function PlannerScreen({
 
   const { chartAnim, monthAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
 
-  // Opening a month lands on its latest markable day (today, or yesterday when
-  // that was the last of last month), on the 1st otherwise — unless a date was
-  // picked from the year grid on the way in.
+  // Opening a month lands on today when it's the current one, on the 1st
+  // otherwise — unless a date was picked from the year grid on the way in.
   useEffect(() => {
-    setSelectedDay(pendingSelect.current ?? markableDays(year, month, new Date())[0] ?? 1);
+    const n = new Date();
+    setSelectedDay(
+      pendingSelect.current ??
+        (year === n.getFullYear() && month === n.getMonth() ? n.getDate() : 1)
+    );
     pendingSelect.current = null;
   }, [year, month]);
 
@@ -348,7 +349,7 @@ export default function PlannerScreen({
               habits={data.habits}
               grid={data.grid}
               today={today}
-              markable={markable}
+              canMark={canMarkCell}
               selectedDay={selectedDay}
               onToggle={cycleCell}
               onSelectDay={setSelectedDay}
@@ -372,10 +373,8 @@ export default function PlannerScreen({
           day={selectedDay}
           daysInMonth={daysInMonth}
           monthName={MONTH_NAMES[month]}
-          isToday={selectedDay === today}
-          isYesterday={markable.includes(selectedDay) && selectedDay !== today}
-          canMark={markable.includes(selectedDay)}
-          todayDay={today}
+          when={dayWhen(year, month, selectedDay, todayRef)}
+          canMark={(habitId) => canMarkCell(selectedDay, habitId)}
           habits={data.habits}
           grid={data.grid}
           onSet={setCell}

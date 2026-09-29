@@ -13,6 +13,7 @@ import { useRevealOnFocus } from './KeyboardSafeScroll';
 import MarkButton from './MarkButton';
 import SectionHeader from './SectionHeader';
 import { CellState, Habit, MAX_HABITS, MAX_HABIT_NAME, cellKey } from '../types';
+import { DayWhen } from '../marking';
 import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
@@ -28,12 +29,9 @@ interface Props {
   day: number;
   daysInMonth: number;
   monthName: string;
-  isToday: boolean;
-  isYesterday: boolean;
-  /** inside the 48 hour window: today, or yesterday */
-  canMark: boolean;
-  /** current day-of-month, or null when the open month isn't the current one */
-  todayDay: number | null;
+  when: DayWhen;
+  /** whether this habit can be marked on this day, by the rule in marking.ts */
+  canMark: (habitId: string) => boolean;
   habits: Habit[];
   grid: Record<string, CellState>;
   onSet: (day: number, habitId: string, state: CellState) => void;
@@ -77,10 +75,8 @@ export default function DailyCheck({
   day,
   daysInMonth,
   monthName,
-  isToday,
-  isYesterday,
+  when,
   canMark,
-  todayDay,
   habits,
   grid,
   onSet,
@@ -146,8 +142,7 @@ export default function DailyCheck({
               <Text style={styles.dayLabel}>
                 {monthName.slice(0, 3)} {day}
               </Text>
-              {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
-              {isYesterday && <Text style={styles.todayBadge}>YESTERDAY</Text>}
+              {when === 'today' && <Text style={styles.todayBadge}>TODAY</Text>}
             </View>
             <Pressable
               hitSlop={8}
@@ -203,17 +198,15 @@ export default function DailyCheck({
         </View>
       ) : (
         <>
-          {!canMark ? (
+          {when !== 'today' && (
             <Text style={styles.locked}>
-              {day < (todayDay ?? 0) || todayDay === null
-                ? 'Past days are locked — only today and yesterday can be marked.'
-                : "You can't mark a day before it arrives."}
+              {when === 'future'
+                ? "You can't mark a day before it arrives."
+                : habits.some((h) => canMark(h.id))
+                ? 'Fill in anything left blank. Marks already made stay as they are.'
+                : 'Marks on past days stay as they are.'}
             </Text>
-          ) : isYesterday ? (
-            <Text style={styles.locked}>
-              Yesterday stays open until midnight, then anything blank is marked missed.
-            </Text>
-          ) : null}
+          )}
           {habits.map((h) => {
             const state = grid[cellKey(day, h.id)] ?? 0;
             return (
@@ -224,14 +217,14 @@ export default function DailyCheck({
                 <MarkButton
                   kind="done"
                   active={state === 1}
-                  disabled={!canMark}
+                  disabled={!canMark(h.id)}
                   palette={palette}
                   onPress={() => onSet(day, h.id, state === 1 ? 0 : 1)}
                 />
                 <MarkButton
                   kind="missed"
                   active={state === 2}
-                  disabled={!canMark}
+                  disabled={!canMark(h.id)}
                   palette={palette}
                   onPress={() => onSet(day, h.id, state === 2 ? 0 : 2)}
                 />
@@ -311,7 +304,7 @@ const makeStyles = (p: Palette) =>
       fontSize: 13,
       fontFamily: FONT.bold,
       color: p.ink,
-      minWidth: 64,
+      minWidth: 58,
       textAlign: 'center',
     },
     todayBadge: {

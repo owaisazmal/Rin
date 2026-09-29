@@ -350,14 +350,6 @@ const MONTH_N = NOW.getMonth();
 const TODAY = NOW.getDate();
 const DAYS = monthLength(YEAR_N, MONTH_N);
 
-/**
- * The days the app still lets you mark: today and yesterday (`markableDays` in
- * src/dates.ts). On the 1st, yesterday is last month, which this page has none of.
- */
-function openDays(today) {
-  return today > 1 ? [today, today - 1] : [today];
-}
-const OPEN = openDays(TODAY);
 
 const HABITS = ['Wake 6:00', 'Read 20 pages', 'Train', 'No sugar'];
 
@@ -378,28 +370,20 @@ const store = {
     this.grid.set(this.key(d, r), v);
     this.emit();
   },
-  cycle(d, r) {
-    const next = (this.get(d, r) + 1) % 3;
-    this.set(d, r, next);
-    return next;
-  },
   onChange(fn) {
     this.listeners.push(fn);
   },
   emit() {
     this.listeners.forEach((fn) => fn());
   },
-  /**
-   * Every past day pre-filled and today left blank for the visitor. A closed day
-   * has no blanks left, because the app marks them missed (src/closedDays.ts).
-   */
+  /** every past day pre-filled with a few blanks; today left blank, because today is the visitor's */
   seed() {
     this.grid.clear();
+    filledNow.clear();
     for (let d = 1; d < TODAY; d++) {
       for (let r = 0; r < HABITS.length; r++) {
         const v = seeded(d * 7 + r * 31);
-        const blank = v <= 0.12;
-        this.grid.set(this.key(d, r), v > 0.82 || (blank && !OPEN.includes(d)) ? 2 : blank ? 0 : 1);
+        this.grid.set(this.key(d, r), v > 0.82 ? 2 : v > 0.12 ? 1 : 0);
       }
     }
     this.emit();
@@ -446,6 +430,24 @@ const store = {
   },
 };
 
+/**
+ * The app's marking rule (src/marking.ts): today is open, a past day can be
+ * filled in wherever it was left blank, and nothing after today can be marked.
+ * A past cell filled in this visit stays changeable, so a mis-tap isn't final.
+ */
+const filledNow = new Set();
+function canMark(d, r) {
+  if (d === TODAY) return true;
+  if (d > TODAY) return false;
+  return store.get(d, r) === 0 || filledNow.has(store.key(d, r));
+}
+function markCell(d, r, v) {
+  if (!canMark(d, r)) return false;
+  if (d < TODAY) filledNow.add(store.key(d, r));
+  store.set(d, r, v);
+  return true;
+}
+
 store.seed();
 
 /* ============================================================ the mark, drawn */
@@ -474,9 +476,10 @@ function glyph(d, width = 2.33) {
 }
 
 /**
- * The app's radial, live. Only today's and yesterday's columns are markable,
- * as in the app, and demonstrating it by refusal says more than a paragraph
- * would. `onSelectDay` makes the day labels pick a day, like RadialTracker.tsx.
+ * The app's radial, live. Today's column and any past cell left blank are
+ * markable, as in the app, and demonstrating the rest by refusal says more than
+ * a paragraph would. `onSelectDay` makes the day labels pick a day, like
+ * RadialTracker.tsx.
  */
 function buildRadial(
   svg,
@@ -487,8 +490,9 @@ function buildRadial(
   const g = el('g');
   svg.appendChild(g);
 
-  const open = interactive ? openDays(today) : [];
   const cellNodes = new Map();
+  // the one live cell that takes Tab, as a roving tabindex
+  let focusKey = `${today}:0`;
   const labelNodes = new Map();
   const cells = trackerCells(size, days, habits, (d, r) =>
     interactive ? store.get(d, r) : sampleAt(d, r, today)
@@ -500,10 +504,7 @@ function buildRadial(
     // a placeholder ring, so each cell carries its own position
     path.dataset.day = String(c.day);
     path.dataset.real = c.real ? '1' : '';
-    if (interactive && c.real && open.includes(c.day)) {
-      path.classList.add('live');
-      path.setAttribute('role', 'button');
-      path.setAttribute('tabindex', c.ring === 0 && c.day === today ? '0' : '-1');
+    if (interactive && c.real) {
       path.dataset.ring = String(c.ring);
       path.addEventListener('click', () => mark(c.day, c.ring, path));
       path.addEventListener('keydown', (ev) => {
@@ -537,24 +538,28 @@ function buildRadial(
     labelNodes.set(l.day, t);
   }
 
-  /** up and down move between rings, left and right between the open days */
+  /** up and down move between rings, left and right between days, to the next live cell */
   function onCellKey(ev, day, ring) {
     const step = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowRight: [1, 0], ArrowLeft: [-1, 0] }[
       ev.key
     ];
     if (!step) return;
     ev.preventDefault();
-    const nextDay = open.includes(day + step[0]) ? day + step[0] : day;
-    const nextRing = Math.min(habits - 1, Math.max(0, ring + step[1]));
-    const target = cellNodes.get(`${nextDay}:${nextRing}`);
-    if (!target) return;
-    $$('.cell.live', svg).forEach((n) => n.setAttribute('tabindex', '-1'));
-    target.setAttribute('tabindex', '0');
-    target.focus();
+    let d = day;
+    let r = ring;
+    do {
+      d += step[0];
+      r += step[1];
+      if (d < 1 || d > days || r < 0 || r >= habits) return;
+    } while (!canMark(d, r));
+    focusKey = `${d}:${r}`;
+    repaint();
+    cellNodes.get(focusKey)?.focus();
   }
 
   function mark(day, ring, node) {
-    const v = store.cycle(day, ring);
+    const v = (store.get(day, ring) + 1) % 3;
+    if (!markCell(day, ring, v)) return;
     if (!lessMotion()) {
       node.classList.remove('pop');
       void node.getBBox();
@@ -578,11 +583,21 @@ function buildRadial(
         : 0;
       node.setAttribute('fill', fills[state]);
       node.setAttribute('stroke', c.real ? p.line : p.lineFaint);
-      if (c.real && open.includes(c.day)) {
-        node.setAttribute(
-          'aria-label',
-          `${HABITS[c.ring]}, day ${c.day}: ${['pending', 'done', 'missed'][state]}`
-        );
+      if (interactive && c.real) {
+        const live = canMark(c.day, c.ring);
+        node.classList.toggle('live', live);
+        if (live) {
+          node.setAttribute('role', 'button');
+          node.setAttribute('tabindex', `${c.day}:${c.ring}` === focusKey ? '0' : '-1');
+          node.setAttribute(
+            'aria-label',
+            `${HABITS[c.ring]}, day ${c.day}: ${['pending', 'done', 'missed'][state]}`
+          );
+        } else {
+          node.removeAttribute('role');
+          node.removeAttribute('tabindex');
+          node.removeAttribute('aria-label');
+        }
       }
     }
   }
@@ -596,16 +611,14 @@ function buildRadial(
 }
 
 /**
- * The non-interactive diagram's month: deterministic, and full of misses because
+ * The non-interactive diagram's month: deterministic, and full of holes because
  * a real month is. Nothing after the highlighted day is marked — a chart that
- * shows next week as already done is arguing against the app's own rule. Only
- * yesterday can still be blank; older blanks have closed as missed.
+ * shows next week as already done is arguing against the app's own rule.
  */
 function sampleAt(d, r, today = 12) {
   if (d >= today) return 0;
   const v = seeded(d * 11 + r * 17 + 3);
-  const blank = v <= 0.16;
-  return v > 0.86 || (blank && d < today - 1) ? 2 : blank ? 0 : 1;
+  return v > 0.86 ? 2 : v > 0.16 ? 1 : 0;
 }
 
 let liveEl = null;
@@ -733,9 +746,8 @@ function initHero() {
   });
 
   function toggle(ring, want) {
-    if (!OPEN.includes(day)) return;
     const v = store.get(day, ring);
-    store.set(day, ring, v === want ? 0 : want);
+    if (!markCell(day, ring, v === want ? 0 : want)) return;
     const node = radial.cellNodes.get(`${day}:${ring}`);
     if (node && !lessMotion()) {
       node.classList.remove('pop');
@@ -759,7 +771,7 @@ function initHero() {
       ? 'That ring has no habit on it yet. The empty ones are drawn so the grid keeps its shape.'
       : day > TODAY
       ? 'That day has not happened yet.'
-      : 'Past days are locked. Only today and yesterday can be marked.';
+      : 'That day already has a mark. A past day can be filled in where it was left blank, but not changed.';
     clearTimeout(caption.__t);
     caption.__t = setTimeout(() => (caption.textContent = defaultCaption), 3600);
   });
@@ -782,19 +794,17 @@ function initHero() {
       'aria-label',
       days > 0 ? `Streak active, ${days} ${days === 1 ? 'day' : 'days'}` : 'No active streak'
     );
-    const open = OPEN.includes(day);
-    const badge = day === TODAY ? 'Today' : open ? 'Yesterday' : '';
     dayLabel.innerHTML =
       `<b>${MONTH_ABBR[MONTH_N]} ${day}</b>` +
-      (badge ? `<i class="today-badge">${badge}</i>` : '');
+      (day === TODAY ? '<i class="today-badge">Today</i>' : '');
     dayNote.textContent =
       day === TODAY
         ? ''
-        : open
-        ? 'Yesterday stays open until midnight, then anything blank is marked missed.'
         : day > TODAY
         ? 'You can’t mark a day before it arrives.'
-        : 'Past days are locked. Only today and yesterday can be marked.';
+        : HABITS.some((_, r) => canMark(day, r))
+        ? 'Fill in anything left blank. Marks already made stay as they are.'
+        : 'Marks on past days stay as they are.';
     dayNote.hidden = !dayNote.textContent;
     prevBtn.disabled = day <= 1;
     nextBtn.disabled = day >= DAYS;
@@ -803,7 +813,7 @@ function initHero() {
       const v = store.get(day, r);
       $$('.mark', row).forEach((b, i) => {
         b.setAttribute('aria-pressed', String(v === i + 1));
-        b.disabled = !open;
+        b.disabled = !canMark(day, r);
       });
     });
   }
@@ -1055,7 +1065,7 @@ function initViews() {
   /**
    * The current month is the visitor's own marks; the rest is sample data, with
    * a four-day hole left in March on purpose. A habit site with a perfect grid
-   * is selling a fantasy. Days with nothing ticked closed as missed, as in the app.
+   * is selling a fantasy.
    */
   function yearMonths() {
     const months = [];
@@ -1071,12 +1081,10 @@ function initViews() {
       const len = monthLength(YEAR_N, m);
       const tallies = {};
       for (let d = 1; d <= len; d++) {
+        if (m === 2 && d >= 11 && d <= 14) continue; // the travel week
         const v = seeded(m * 97 + d * 13);
         const thin = m === 7 ? 0.45 : 0.16;
-        if ((m === 2 && d >= 11 && d <= 14) || v < thin) {
-          tallies[d] = { done: 0, missed: 4 };
-          continue;
-        }
+        if (v < thin) continue;
         const done = Math.max(1, Math.round(v * 4));
         tallies[d] = { done: Math.min(4, done), missed: v > 0.93 ? 1 : 0 };
       }
@@ -1100,8 +1108,8 @@ function initViews() {
   if (yearNote) {
     yearNote.textContent =
       MONTH_N > 2
-        ? 'Today and yesterday are yours. The rest of this month, and the months behind it, are sample data, with a missed travel week in March, because a real month has holes in it.'
-        : 'Today and yesterday are yours. The rest of this month, and the months behind it, are sample data. It has holes in it, because a real month does.';
+        ? 'Today is yours, and so is anything left blank this month. The rest of this month, and the months behind it, are sample data, with a travel week in March, because a real month has holes in it.'
+        : 'Today is yours, and so is anything left blank this month. The rest of this month, and the months behind it, are sample data. It has holes in it, because a real month does.';
   }
 
   const scroller = $('#year-scroll');

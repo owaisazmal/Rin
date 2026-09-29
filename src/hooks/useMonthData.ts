@@ -11,6 +11,7 @@ import {
 import { readMonthForEditing, saveMonth } from '../storage';
 import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 import { monthLength } from '../dates';
+import { DayRef, canMark, dayWhen } from '../marking';
 
 /**
  * What this month is called on the server — `2026-09`.
@@ -31,11 +32,11 @@ export function monthDocKey(year: number, month: number): string {
  * dialogs — `removeHabit` deletes unconditionally and leaves the "are you
  * sure" to the caller, which is the part that belongs to the UI.
  */
-export function useMonthData(year: number, month: number, markable: readonly number[]) {
+export function useMonthData(year: number, month: number, today: DayRef) {
   const [data, setData] = useState<MonthData>(emptyMonthData());
   const [loaded, setLoaded] = useState(false);
-  // bumped to read the open month again after something else wrote it
-  const [readCount, setReadCount] = useState(0);
+  // past-day cells filled in during this visit, still changeable until it ends
+  const filledNow = useRef(new Set<string>());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<{ year: number; month: number; data: MonthData } | null>(null);
   /**
@@ -65,6 +66,7 @@ export function useMonthData(year: number, month: number, markable: readonly num
     // a write for this one, so the permission is withdrawn before the read that
     // grants it rather than after.
     vouched.current = false;
+    filledNow.current = new Set();
     const key = monthDocKey(year, month);
     readMonthForEditing(year, month).then(({ data: read, complete, lost }) => {
       /**
@@ -111,7 +113,7 @@ export function useMonthData(year: number, month: number, markable: readonly num
     return () => {
       cancelled = true;
     };
-  }, [year, month, readCount]);
+  }, [year, month]);
 
   /**
    * The one door every mutation below goes through.
@@ -240,43 +242,42 @@ export function useMonthData(year: number, month: number, markable: readonly num
     reportEdit(p !== null);
   }, [reportEdit]);
 
-  /**
-   * Read the open month again, if it is `year`/`month`, after something other
-   * than this hook wrote it to disk. Declined while an edit is waiting to be
-   * saved, so nothing typed is thrown away.
-   */
-  const reread = useCallback(
-    (y: number, m: number) => {
-      if (monthDocKey(y, m) !== docKey || touched.current || pendingSave.current) return;
-      setReadCount((n) => n + 1);
+  /** Whether a cell can be marked, by the rule in marking.ts */
+  const canMarkCell = useCallback(
+    (day: number, habitId: string) => {
+      const key = cellKey(day, habitId);
+      return canMark(dayWhen(year, month, day, today), data.grid[key] ?? 0, filledNow.current.has(key));
     },
-    [docKey]
+    [year, month, today, data.grid]
   );
 
   /**
-   * History is read-only outside the 48 hour window: only the days in
-   * `markable` (today, and yesterday) can be marked. Guarded here rather than
-   * only in the UI so no caller can slip past it.
+   * The same rule, checked against the grid being changed rather than the one
+   * last rendered, so no caller can slip past it.
    */
   const setCell = useCallback(
     (day: number, habitId: string, state: CellState) => {
-      if (!markable.includes(day)) return;
+      const when = dayWhen(year, month, day, today);
       edit((prev) => {
         const key = cellKey(day, habitId);
+        if (!canMark(when, prev.grid[key] ?? 0, filledNow.current.has(key))) return prev;
+        if (when === 'past') filledNow.current.add(key);
         const grid = { ...prev.grid };
         if (state === 0) delete grid[key];
         else grid[key] = state;
         return { ...prev, grid };
       });
     },
-    [markable, edit]
+    [year, month, today, edit]
   );
 
   const cycleCell = useCallback(
     (day: number, habitId: string) => {
-      if (!markable.includes(day)) return;
+      const when = dayWhen(year, month, day, today);
       edit((prev) => {
         const key = cellKey(day, habitId);
+        if (!canMark(when, prev.grid[key] ?? 0, filledNow.current.has(key))) return prev;
+        if (when === 'past') filledNow.current.add(key);
         const next: CellState = (((prev.grid[key] ?? 0) + 1) % 3) as CellState;
         const grid = { ...prev.grid };
         if (next === 0) delete grid[key];
@@ -284,7 +285,7 @@ export function useMonthData(year: number, month: number, markable: readonly num
         return { ...prev, grid };
       });
     },
-    [markable, edit]
+    [year, month, today, edit]
   );
 
   const addHabit = useCallback(() => {
@@ -412,7 +413,7 @@ export function useMonthData(year: number, month: number, markable: readonly num
     daysInMonth,
     stats,
     flushSave,
-    reread,
+    canMarkCell,
     setCell,
     cycleCell,
     addHabit,

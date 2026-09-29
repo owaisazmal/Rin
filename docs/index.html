@@ -93,7 +93,7 @@
 
         <div class="radial-slot">
           <svg class="radial" id="hero-radial" role="group"
-               aria-label="Radial habit tracker. Only today and yesterday can be marked."></svg>
+               aria-label="Radial habit tracker. Today, and any past day left blank, can be marked."></svg>
         </div>
 
         <div class="progress" id="demo-bar"><i></i></div>
@@ -120,7 +120,7 @@
       </div>
 
       <div class="demo-note">
-        <p class="caption" id="demo-caption">Pre-filled with sample marks; today and yesterday are yours. A demo
+        <p class="caption" id="demo-caption">Pre-filled with sample marks; today, and anything left blank, is yours. A demo
           of this page, not a web version of the app.
           There isn’t one.</p>
         <button class="quiet" type="button" id="demo-reset">Reset</button>
@@ -214,16 +214,16 @@
       <p>The circle is divided into one sector for each day of the month, running clockwise from
         twelve o’clock, and one ring for each habit, with the first habit innermost. Tap a cell to
         cycle it: pending, then done, then missed, then back to pending.</p>
-      <p>Today’s date is picked out in the accent colour. You can mark today, and yesterday until
-        midnight, for the day you forgot. After that the day closes and anything left blank is
-        marked missed: a chart you can fill in afterwards records what you wish had happened.</p>
+      <p>Today’s date is picked out in the accent colour. Forgot a day? Go back to it, in any
+        month, and fill in whatever you left blank. A mark already made stays as it was, so the
+        chart can be completed but never rewritten.</p>
       <p>With fewer than six habits the extra rings are still drawn, empty, so the grid keeps its
         shape rather than collapsing into a thin band.</p>
       <ol class="callouts">
         <li><b>1</b>A sector: one day, clockwise from twelve</li>
         <li><b>2</b>A ring: one habit, the first innermost</li>
         <li data-tone="done"><b>3</b>Green done, red missed</li>
-        <li data-tone="accent"><b>4</b>Today and yesterday are markable</li>
+        <li data-tone="accent"><b>4</b>Today, and any blank before it, is markable</li>
       </ol>
     </div>
   </div>
@@ -267,7 +267,7 @@
         <div class="panel" id="panel-day" hidden>
           <div id="panel-day-list"></div>
           <p class="caption">The daily check, for today. In the app the arrows walk back through
-            the month; every day but today and yesterday is read-only.</p>
+            the month, and a past day can be filled in wherever it was left blank.</p>
         </div>
 
         <div class="panel" id="panel-history" hidden>
