@@ -355,6 +355,92 @@ describe('a month this phone read in full', () => {
   });
 });
 
+describe('a month with no habits of its own', () => {
+  const NEW_MONTH_BLOB = '@monthly-planning/2026-09';
+
+  /** August 2026, the month before the one being opened */
+  const lastMonth = { ...month, habits: [...month.habits, { id: '2', name: ' ' }] };
+
+  async function open() {
+    const planner = mount(() => useMonthData(2026, 8, TODAY));
+    await planner.settle();
+    await planner.settle();
+    return planner;
+  }
+
+  async function saved(planner: { settle(): Promise<unknown> }) {
+    await planner.settle();
+    jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
+    await planner.settle();
+    return JSON.parse(mockLocal.get(NEW_MONTH_BLOB)!);
+  }
+
+  it('shows the habits of the month before, without their marks or blank rows', async () => {
+    await saveMonth(2026, 7, lastMonth);
+
+    const planner = await open();
+
+    expect(planner.shown.data.habits).toEqual(month.habits);
+    expect(planner.shown.data.grid).toEqual({});
+  });
+
+  it('looks past months that were opened and left empty', async () => {
+    await saveMonth(2026, 5, lastMonth);
+    await saveMonth(2026, 6, emptyMonthData());
+    await saveMonth(2026, 7, emptyMonthData());
+
+    const planner = await open();
+
+    expect(planner.shown.data.habits).toEqual(month.habits);
+  });
+
+  it('keeps following the earlier month until something is marked', async () => {
+    await saveMonth(2026, 7, lastMonth);
+
+    const planner = await open();
+    planner.shown.setGoalText(0, 'Ship it');
+
+    expect((await saved(planner)).habits).toEqual([]);
+  });
+
+  it('takes the habits as its own once one is marked', async () => {
+    await saveMonth(2026, 7, lastMonth);
+
+    const planner = await open();
+    planner.shown.setCell(15, '0', 1);
+
+    expect(await saved(planner)).toMatchObject({ habits: month.habits, grid: { '15:0': 1 } });
+  });
+
+  it('stays empty once every habit has been removed', async () => {
+    await saveMonth(2026, 7, lastMonth);
+
+    const planner = await open();
+    planner.shown.removeHabit('0');
+    planner.shown.removeHabit('1');
+    await saved(planner);
+
+    expect((await open()).shown.data.habits).toEqual([]);
+  });
+
+  it('carries nothing past a month that was emptied on purpose', async () => {
+    await saveMonth(2026, 6, lastMonth);
+    await saveMonth(2026, 7, { ...emptyMonthData(), habitsCleared: true });
+
+    expect((await open()).shown.data.habits).toEqual([]);
+  });
+
+  it('carries from December into January', async () => {
+    await saveMonth(2026, 11, lastMonth);
+
+    const planner = mount(() => useMonthData(2027, 0, { year: 2027, month: 0, day: 1 }));
+    await planner.settle();
+    await planner.settle();
+
+    expect(planner.shown.data.habits).toEqual(month.habits);
+  });
+});
+
 describe('a deadline list this phone could only half read', () => {
   it('is not written back merely because the planner opened', async () => {
     mockLocal.set(TASKS_BLOB, halfReadableTasks);

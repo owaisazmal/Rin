@@ -117,6 +117,7 @@ export function parseMonthData(raw: unknown): MonthData {
   const habits = parseHabits(r.habits);
   return {
     habits,
+    ...(r.habitsCleared === true && habits.length === 0 ? { habitsCleared: true as const } : {}),
     grid: parseGrid(r.grid, habits),
     observations: parseObservations(r.observations),
     keyGoals: parseKeyGoals(r.keyGoals),
@@ -459,6 +460,23 @@ export async function readMonthForEditing(
       // whatever is on disk is precisely how the record stops being recoverable.
       return { data: emptyMonthData(), complete: false };
   }
+}
+
+/**
+ * Habits for a month that has none of its own: the list of the latest earlier
+ * month that has any. Stops at a month whose list was emptied on purpose.
+ */
+export async function loadCarriedHabits(year: number, month: number): Promise<Habit[]> {
+  const earlier = (await listStoredMonths())
+    .filter((m) => m.year < year || (m.year === year && m.month < month))
+    .reverse();
+  for (const m of earlier) {
+    const data = await loadMonth(m.year, m.month);
+    if (data.habitsCleared) return [];
+    const habits = data.habits.filter((h) => h.name.trim() !== '');
+    if (habits.length) return habits;
+  }
+  return [];
 }
 
 export async function saveMonth(year: number, month: number, data: MonthData): Promise<void> {

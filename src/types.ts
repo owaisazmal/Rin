@@ -14,6 +14,8 @@ export interface KeyGoal {
 
 export interface MonthData {
   habits: Habit[];
+  /** every habit was removed on purpose, so none are carried in from an earlier month */
+  habitsCleared?: true;
   /** key: `${day}:${habitId}` */
   grid: Record<string, CellState>;
   observations: string[];

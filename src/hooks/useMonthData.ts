@@ -8,7 +8,7 @@ import {
   emptyMonthData,
   nextHabitId,
 } from '../types';
-import { readMonthForEditing, saveMonth } from '../storage';
+import { loadCarriedHabits, readMonthForEditing, saveMonth } from '../storage';
 import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 import { monthLength } from '../dates';
 import { DayRef, canMark, dayWhen } from '../marking';
@@ -22,6 +22,14 @@ import { DayRef, canMark, dayWhen } from '../marking';
  */
 export function monthDocKey(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+/** Swaps the habit list; emptying it is remembered so nothing is carried back in */
+function withHabits(prev: MonthData, habits: Habit[]): MonthData {
+  const next: MonthData = { ...prev, habits };
+  if (habits.length) delete next.habitsCleared;
+  else next.habitsCleared = true;
+  return next;
 }
 
 /**
@@ -55,6 +63,8 @@ export function useMonthData(year: number, month: number, today: DayRef) {
    * the month is the render that first sees it.
    */
   const vouched = useRef(false);
+  // habits shown from an earlier month; not saved here until one is marked or changed
+  const inherited = useRef(false);
 
   const daysInMonth = monthLength(year, month);
   const docKey = monthDocKey(year, month);
@@ -66,9 +76,10 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     // a write for this one, so the permission is withdrawn before the read that
     // grants it rather than after.
     vouched.current = false;
+    inherited.current = false;
     filledNow.current = new Set();
     const key = monthDocKey(year, month);
-    readMonthForEditing(year, month).then(({ data: read, complete, lost }) => {
+    readMonthForEditing(year, month).then(async ({ data: read, complete, lost }) => {
       /**
        * Tell the ledger what this read found, before anything else.
        *
@@ -105,9 +116,16 @@ export function useMonthData(year: number, month: number, today: DayRef) {
       if (complete) clearUnvouched(key);
       else recordUnvouched(key, lost ?? '');
 
+      // a month with no habits of its own shows the latest earlier month's
+      const carried =
+        complete && read.habits.length === 0 && !read.habitsCleared
+          ? await loadCarriedHabits(year, month)
+          : [];
+
       if (cancelled) return;
       vouched.current = complete;
-      setData(read);
+      inherited.current = carried.length > 0;
+      setData(carried.length ? { ...read, habits: carried } : read);
       setLoaded(true);
     });
     return () => {
@@ -136,10 +154,14 @@ export function useMonthData(year: number, month: number, today: DayRef) {
    * without costing an upload of a month nobody changed.
    */
   const edit = useCallback(
-    (change: (prev: MonthData) => MonthData) => {
+    (change: (prev: MonthData) => MonthData, ownsHabits = false) => {
       setData((prev) => {
         const next = change(prev);
-        if (next !== prev) touched.current = docKey;
+        if (next !== prev) {
+          touched.current = docKey;
+          // marks and habit edits make the carried list this month's own
+          if (ownsHabits) inherited.current = false;
+        }
         return next;
       });
     },
@@ -208,10 +230,11 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     // something this phone can vouch for — and the edits that follow it in the
     // same session are ordinary ones.
     if (repairing) vouched.current = true;
-    pendingSave.current = { year, month, data };
+    const record = inherited.current ? { ...data, habits: [] } : data;
+    pendingSave.current = { year, month, data: record };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveMonth(year, month, data);
+      saveMonth(year, month, record);
       reportEdit(true);
       pendingSave.current = null;
     }, 400);
@@ -266,7 +289,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
         if (state === 0) delete grid[key];
         else grid[key] = state;
         return { ...prev, grid };
-      });
+      }, true);
     },
     [year, month, today, edit]
   );
@@ -283,24 +306,27 @@ export function useMonthData(year: number, month: number, today: DayRef) {
         if (next === 0) delete grid[key];
         else grid[key] = next;
         return { ...prev, grid };
-      });
+      }, true);
     },
     [year, month, today, edit]
   );
 
   const addHabit = useCallback(() => {
-    edit((prev) => ({
-      ...prev,
-      habits: [...prev.habits, { id: nextHabitId(prev.habits), name: '' }],
-    }));
+    edit(
+      (prev) => withHabits(prev, [...prev.habits, { id: nextHabitId(prev.habits), name: '' }]),
+      true
+    );
   }, [edit]);
 
   const renameHabit = useCallback(
     (id: string, name: string) => {
-      edit((prev) => ({
-        ...prev,
-        habits: prev.habits.map((h) => (h.id === id ? { ...h, name } : h)),
-      }));
+      edit(
+        (prev) => ({
+          ...prev,
+          habits: prev.habits.map((h) => (h.id === id ? { ...h, name } : h)),
+        }),
+        true
+      );
     },
     [edit]
   );
@@ -312,8 +338,8 @@ export function useMonthData(year: number, month: number, today: DayRef) {
         for (const [key, state] of Object.entries(prev.grid)) {
           if (!key.endsWith(`:${id}`)) grid[key] = state;
         }
-        return { ...prev, habits: prev.habits.filter((h) => h.id !== id), grid };
-      });
+        return withHabits({ ...prev, grid }, prev.habits.filter((h) => h.id !== id));
+      }, true);
     },
     [edit]
   );
