@@ -99,6 +99,7 @@ jest.mock('@react-native-firebase/app-check', () => ({
     configure() {}
   },
   initializeAppCheck: jest.fn(),
+  getToken: jest.fn(),
 }));
 
 jest.mock('@react-native-firebase/firestore', () => {

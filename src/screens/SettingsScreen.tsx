@@ -17,6 +17,7 @@ const THEME_OPTIONS = [
 ] as const;
 
 const REPO_URL = 'https://github.com/owaisazmal/monthly-planning';
+const PRIVACY_URL = 'https://owaisazmal.github.io/Rin/privacy.html';
 
 interface Props {
   hasBackup: boolean;
@@ -385,6 +386,14 @@ export default function SettingsScreen({
             data collection. Nothing leaves this {device()} unless you ask for a
             backup, and what leaves then is encrypted with a code I never see.
           </Text>
+          <Pressable
+            hitSlop={10}
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(PRIVACY_URL)}
+            style={({ pressed }) => [styles.repo, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.repoText}>Privacy policy</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>

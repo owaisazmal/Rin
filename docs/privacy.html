@@ -49,7 +49,7 @@
 
     <span class="eyebrow">Privacy policy</span>
     <h1>What Rin stores,<br>and what it sends.</h1>
-    <p class="updated">Last updated 9 September 2026 · applies to Rin for iOS and Android</p>
+    <p class="updated">Last updated 7 October 2026 · applies to Rin for iOS and Android</p>
 
     <p class="lede" style="max-width:none">Rin is a habit planner made by Owais Khan. It is free
       and open-source, and this policy describes it as it is actually built. Every claim below
@@ -90,27 +90,27 @@
     <p>None of it is transmitted, and none of it is readable by the developer. There is no cloud
       copy of a device that has not enabled backup.</p>
 
-    <h2>What is sent on every launch</h2>
-    <h3>A device attestation</h3>
-    <p>Firebase App Check runs once when the app starts, whether or not you ever use backup. It
-      uses Apple's App Attest on iOS and the Play Integrity API on Android to confirm that a
-      request came from a genuine install of this app rather than a script, which is what stops
-      the backup store being a free key-value database for anyone who read the repo. It involves
-      Apple or Google under their own terms, and it carries nothing about you or your habits. It does reach Google, which sees your IP
-      address, so it is listed here rather than under backup, where it does not belong.</p>
-
     <h2>What is sent, and only if you enable backup</h2>
-    <p>Backup is off until you turn it on, and the app is fully usable without it. When you do
-      turn it on, two more things happen.</p>
+    <p>Backup is off until you turn it on, and the app is fully usable without it. Until you
+      use it, the app sends nothing to the backup server or to the attestation services described
+      below. When you do turn it on, or enter a code to restore one, three things happen.</p>
 
-    <h3>1 · An anonymous sign-in</h3>
+    <h3>1 · A device attestation</h3>
+    <p>Before the app first contacts the backup server, Firebase App Check uses Apple's App
+      Attest on iOS and the Play Integrity API on Android to confirm that the request comes from
+      a genuine install of this app rather than a script, which is what stops the backup store
+      being a free key-value database for anyone who read the repo. It involves Apple or Google
+      under their own terms, and it carries nothing about you or your habits. It does reach
+      Google, which sees your IP address.</p>
+
+    <h3>2 · An anonymous sign-in</h3>
     <p>The app signs in to Firebase Authentication anonymously. This creates a throwaway
       identifier for the install. It is not an account: no name, no email address, no password,
       and nothing you have written is filed under it. Reinstalling produces a different one. It
       exists so that requests carry an attestation token and Firebase can apply its own rate
       limits.</p>
 
-    <h3>2 · Encrypted records</h3>
+    <h3>3 · Encrypted records</h3>
     <p>Each month, and your list of deadlines, is encrypted on the phone with XChaCha20-Poly1305
       using a key derived from a backup code that the app generates on your device and stores in
       the iOS Keychain or the Android Keystore. Only the resulting ciphertext is uploaded, filed
@@ -118,7 +118,7 @@
     <p>Because the id and the key come from different derivations, the id reveals nothing about
       the key. Anyone holding the entire database, whether Google, the developer or someone who got
       in, has a pile of unreadable ciphertext under opaque ids. The whole of the server side
-      is 81 lines, and it is
+      is 96 lines, and it is
       <a href="https://github.com/owaisazmal/Rin/blob/main/firestore.rules">in the repository</a>.</p>
     <p>The backup code never leaves your phone. There is deliberately no recovery path: if you
       lose the code, the backup stays encrypted forever, and nobody, including the developer,
@@ -191,19 +191,18 @@
     <p>Only if backup is enabled, and only for the purposes above:</p>
     <ul>
       <li><strong>Google</strong> (Firebase App Check) and <strong>Apple</strong> (App Attest) or
-        <strong>Google Play</strong> (Play Integrity), for the launch-time device attestation
-        described above. This happens on every install, backup or not.</li>
+        <strong>Google Play</strong> (Play Integrity), for the device attestation
+        described above.</li>
       <li><strong>Google Firebase</strong> (Authentication, Firestore) stores the encrypted
         records and, like any hosted service, processes the connection metadata that reaching it
         necessarily involves, including your IP address, under
-        <a href="https://firebase.google.com/support/privacy">Google's own privacy terms</a>.
-        Only if backup is enabled.</li>
+        <a href="https://firebase.google.com/support/privacy">Google's own privacy terms</a>.</li>
     </ul>
     <p>Nothing else. The app contains no other network code: the only file in the project that
       touches a network is
       <a href="https://github.com/owaisazmal/Rin/blob/main/src/sync.ts"><code>src/sync.ts</code></a>,
-      and its entire surface is eight functions: one that starts App Check, and seven that will
-      not do anything without a backup code.</p>
+      and its entire surface is nine functions, none of which will do anything without a backup
+      code.</p>
 
     <h2>Notifications</h2>
     <p>Habit nudges and deadline reminders are scheduled locally by your device. They are not

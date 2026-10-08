@@ -17,7 +17,7 @@ import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
-import { deleteBackup, listMonths, restoreMonth, startAppCheck } from './src/sync';
+import { deleteBackup, listMonths, restoreMonth } from './src/sync';
 import { useFonts } from 'expo-font';
 /**
  * One import per weight rather than the package root.
@@ -60,10 +60,6 @@ export default function App() {
     JosefinSans_600SemiBold,
     JosefinSans_700Bold,
   });
-
-  // Before anything can reach the backup server, and once per launch. It is a
-  // no-op for someone who never backs up, which is most people.
-  useEffect(startAppCheck, []);
 
   /**
    * The date Settings reads, moved only by a run that actually put bytes on the

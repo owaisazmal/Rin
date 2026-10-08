@@ -11,6 +11,7 @@ import {
 } from '@react-native-firebase/firestore';
 import {
   ReactNativeFirebaseAppCheckProvider,
+  getToken,
   initializeAppCheck,
 } from '@react-native-firebase/app-check';
 import {
@@ -142,29 +143,37 @@ function tasksDoc(id: string, key: string) {
   return doc(getFirestore(), 'backups', id, 'tasks', key);
 }
 
-/** Signs in anonymously if this install hasn't already. Idempotent. */
-async function ready(): Promise<void> {
-  const instance = getAuth();
-  if (!instance.currentUser) await signInAnonymously(instance);
-}
+let appCheck: Promise<void> | null = null;
 
 /**
  * Turns on App Check, which is what stops the backend being a free key-value
- * store for anyone who read this repo. Called once at startup; failing to
- * activate should not take the app down, since everything except backup works
- * without a network.
+ * store for anyone who read this repo. Started by the first call that needs
+ * the server rather than at launch, so a phone that never backs up never
+ * contacts Google at all.
  */
-export function startAppCheck(): void {
-  try {
-    const provider = new ReactNativeFirebaseAppCheckProvider();
-    provider.configure({
-      android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
-      apple: { provider: __DEV__ ? 'debug' : 'appAttest' },
-    });
-    initializeAppCheck(undefined, { provider, isTokenAutoRefreshEnabled: true });
-  } catch {
-    // an install that can't attest simply won't be able to back up
-  }
+function startAppCheck(): Promise<void> {
+  appCheck ??= (async () => {
+    try {
+      const provider = new ReactNativeFirebaseAppCheckProvider();
+      provider.configure({
+        android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
+        apple: { provider: __DEV__ ? 'debug' : 'appAttest' },
+      });
+      const instance = initializeAppCheck(undefined, { provider, isTokenAutoRefreshEnabled: true });
+      // queued behind the provider setup, so no request can overtake it
+      await getToken(instance);
+    } catch {
+      // an install that can't attest simply won't be able to back up
+    }
+  })();
+  return appCheck;
+}
+
+/** Starts App Check, then signs in anonymously if this install hasn't already. Idempotent. */
+async function ready(): Promise<void> {
+  await startAppCheck();
+  const instance = getAuth();
+  if (!instance.currentUser) await signInAnonymously(instance);
 }
 
 /**

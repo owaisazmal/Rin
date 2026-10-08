@@ -81,6 +81,7 @@ const mockState = {
   signedIn: false,
   failWith: null as string | null,
   signInCalls: 0,
+  appCheckStarts: 0,
   /** every document write that reached the server, so a skip is measurable */
   writes: 0,
   /**
@@ -100,10 +101,16 @@ jest.mock('@react-native-firebase/auth', () => ({
   }),
 }));
 
+// React Native defines this; plain Node does not
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
+
 jest.mock('@react-native-firebase/app-check', () => ({
   __esModule: true,
   ReactNativeFirebaseAppCheckProvider: class { configure() {} },
-  initializeAppCheck: jest.fn(),
+  initializeAppCheck: jest.fn(() => {
+    mockState.appCheckStarts++;
+  }),
+  getToken: jest.fn(),
 }));
 
 jest.mock('@react-native-firebase/firestore', () => {
@@ -157,6 +164,7 @@ beforeEach(() => {
   mockState.signedIn = false;
   mockState.failWith = null;
   mockState.signInCalls = 0;
+  mockState.appCheckStarts = 0;
   mockState.writes = 0;
   mockState.failTasksWith = null;
   readMonth.mockClear();
@@ -266,6 +274,18 @@ describe('what goes on the wire', () => {
     await pushMonth(CODE, 2026, 7, month);
     await pullMonth(CODE, 2026, 8);
     expect(mockState.signInCalls).toBe(1);
+  });
+
+  it('starts App Check with the first request rather than at launch, and once', async () => {
+    let fresh!: typeof import('../sync');
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      fresh = require('../sync');
+    });
+    expect(mockState.appCheckStarts).toBe(0);
+    await fresh.pushMonth(CODE, 2026, 8, month);
+    await fresh.pullMonth(CODE, 2026, 8);
+    expect(mockState.appCheckStarts).toBe(1);
   });
 });
 
