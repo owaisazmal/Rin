@@ -20,8 +20,9 @@ export const DISCIPLINE_QUOTES = [
 
 /** Stable quote for a given date — changes once per day. */
 export function quoteForDate(date: Date): string {
-  const dayOfYear = Math.floor(
-    (date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / DAY
-  );
+  // calendar dates, not elapsed time: a daylight-saving hour must not move the day
+  const year = date.getFullYear();
+  const dayOfYear =
+    (Date.UTC(year, date.getMonth(), date.getDate()) - Date.UTC(year, 0, 0)) / DAY;
   return DISCIPLINE_QUOTES[dayOfYear % DISCIPLINE_QUOTES.length];
 }

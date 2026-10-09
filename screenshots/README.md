@@ -21,4 +21,4 @@ A device's dark folder holds shots 01–09 and its light folder holds 10–13, s
 
 [`widgets.md`](widgets.md) says what each widget shot shows, and [`readme/`](readme/) holds the four images the main README uses.
 
-Taken on 23 Sep 2026 from debug builds on iOS 26.1 simulators and an Android 16 emulator, with the sample data in [`assets/store/tools/seed-sample-data.py`](../assets/store/tools/seed-sample-data.py). Device shots are JPEG to keep the repo light. Store listing images live in [`assets/store/`](../assets/store/).
+Taken on 9 Oct 2026 from debug builds on iOS 27.0 simulators and an Android 16 emulator, with the sample data in [`assets/store/tools/seed-sample-data.py`](../assets/store/tools/seed-sample-data.py). Device shots are JPEG to keep the repo light. Store listing images live in [`assets/store/`](../assets/store/).

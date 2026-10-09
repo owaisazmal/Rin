@@ -10,7 +10,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.owaiskhan.monthlyplanning",
       "appleTeamId": "8A3Z824TH3",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.owaiskhan.monthlyplanning"
@@ -58,7 +58,7 @@
         "me.everything.badger.permission.BADGE_COUNT_READ",
         "me.everything.badger.permission.BADGE_COUNT_WRITE"
       ],
-      "versionCode": 15,
+      "versionCode": 16,
       "adaptiveIcon": {
         "backgroundColor": "#242424",
         "foregroundImage": "./assets/android-icon-foreground.png",

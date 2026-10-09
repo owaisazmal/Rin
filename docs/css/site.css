@@ -53,7 +53,7 @@
 :root {
   /* light palette — src/theme.ts lightPalette */
   --bg: #ffffe3;
-  --card: rgba(255, 255, 250, 0.88);
+  --card: rgba(255, 255, 250, 0.8);
   --chip: #ececdb;
   --ink: #4a4a4a;
   --ink-soft: #5f6b78;
@@ -134,8 +134,8 @@
   --missed: #ef4c63;
   --missed-soft: rgba(239, 76, 99, 0.18);
   --cell-empty: #1a1a1a;
-  --gh-0: #1a1a1a;
-  --gh-1: #2d4b1f;
+  --gh-0: #2a2a2a;
+  --gh-1: #386021;
   --gh-2: #497b2d;
   --gh-3: #6da939;
   --gh-4: #93c63f;

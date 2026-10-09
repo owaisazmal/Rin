@@ -1,5 +1,6 @@
 import { MAX_MONTH_CT, ciphertextChars } from '../backup';
-import { parseMonthData, vouchMonthValue } from '../storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dropCardFromMonths, parseMonthData, vouchMonthValue } from '../storage';
 import {
   MAX_CARD_ITEMS,
   MAX_CARD_ITEM_LEN,
@@ -21,7 +22,7 @@ import {
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
-  default: { getItem: jest.fn(), setItem: jest.fn(), multiGet: jest.fn() },
+  default: { getItem: jest.fn(), setItem: jest.fn(), multiGet: jest.fn(), getAllKeys: jest.fn() },
 }));
 
 // `backup.ts` is here for its size arithmetic alone; nothing below seals anything
@@ -188,5 +189,50 @@ describe('the size of a month with every card full', () => {
     // the parser keeps all of it, so this is the record the backup would send
     expect(vouchMonthValue(month)).toMatchObject({ status: 'complete' });
     expect(ciphertextChars(JSON.stringify(parseMonthData(month)))).toBeLessThan(MAX_MONTH_CT);
+  });
+});
+
+describe('dropCardFromMonths', () => {
+  const store = new Map<string, string>();
+  const notes = { id: 'c-notes', title: 'Notes', kind: 'note', items: [{ text: 'keep', done: false }] };
+  const put = (key: string, month: unknown) =>
+    store.set(`@monthly-planning/${key}`, JSON.stringify(month));
+  const cardsIn = (key: string) => JSON.parse(store.get(`@monthly-planning/${key}`)!).cards;
+
+  beforeEach(() => {
+    store.clear();
+    jest.mocked(AsyncStorage.getAllKeys).mockImplementation(async () => [...store.keys()]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => store.get(key) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      store.set(key, value);
+    });
+  });
+
+  it('takes the card out of the other months and says which it rewrote', async () => {
+    put('2026-07', { ...emptyMonthData(), cards: [ideas, notes] });
+    put('2026-08', { ...emptyMonthData(), cards: [ideas] });
+    put('2026-09', { ...emptyMonthData(), cards: [notes] });
+    put('2026-10', { ...emptyMonthData(), cards: [ideas] });
+
+    const changed = await dropCardFromMonths('c-ideas', { year: 2026, month: 9 });
+
+    expect(changed).toEqual([
+      { year: 2026, month: 6 },
+      { year: 2026, month: 7 },
+    ]);
+    expect(cardsIn('2026-07')).toEqual([notes]);
+    // the key goes with the last card, so the month reads as it did before cards
+    expect(cardsIn('2026-08')).toBeUndefined();
+    expect(cardsIn('2026-09')).toEqual([notes]);
+    // the open month belongs to the screen
+    expect(cardsIn('2026-10')).toEqual([ideas]);
+  });
+
+  it('leaves a month it cannot read in full alone', async () => {
+    const damaged = { ...emptyMonthData(), cards: [ideas, { id: 'nope' }] };
+    put('2026-08', damaged);
+
+    expect(await dropCardFromMonths('c-ideas', { year: 2026, month: 9 })).toEqual([]);
+    expect(JSON.parse(store.get('@monthly-planning/2026-08')!)).toEqual(damaged);
   });
 });

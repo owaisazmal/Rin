@@ -56,9 +56,9 @@ export const DARK = {
 
 export const LIGHT = {
   bg: BRAND.ivory,
-  blobs: [BRAND.grey, BRAND.grey, BRAND.slate, BRAND.grey, BRAND.slate],
-  blobStrength: 0.3,
-  card: 'rgba(255,255,250,0.88)',
+  blobs: ['#A0A0A0', '#A0A0A0', BRAND.slate, BRAND.grey, BRAND.slate],
+  blobStrength: 0.65,
+  card: 'rgba(255,255,250,0.80)',
   chip: '#ececdb',
   ink: BRAND.charcoal,
   inkSoft: '#5f6b78',
@@ -436,8 +436,8 @@ const DAY_MS = 86400000;
 
 /** Stable quote for a given date — changes once per day, matching src/quotes.ts. */
 export function quoteForDate(date) {
-  const dayOfYear = Math.floor(
-    (date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / DAY_MS
-  );
+  const year = date.getFullYear();
+  const dayOfYear =
+    (Date.UTC(year, date.getMonth(), date.getDate()) - Date.UTC(year, 0, 0)) / DAY_MS;
   return DISCIPLINE_QUOTES[dayOfYear % DISCIPLINE_QUOTES.length];
 }

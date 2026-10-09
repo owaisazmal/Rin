@@ -1,9 +1,11 @@
 # Widget screenshots
 
-Captured from the iPhone 16 Pro simulator with sample data (four habits, May–Aug
-2026). Every page is shot in both themes — the widgets follow the app's own
-theme toggle, which they read from the snapshot. The system appearance is only
-the fallback, for a widget placed before the app has ever written one.
+Captured from the iPhone 17 simulator with the sample data in
+[`assets/store/tools/seed-sample-data.py`](../assets/store/tools/seed-sample-data.py)
+(five habits, March to October 2026). Every page is shot in both themes — the
+widgets follow the app's own theme toggle, which they read from the snapshot.
+The system appearance is only the fallback, for a widget placed before the app
+has ever written one.
 
 The iOS shots are in [`dark/ios/widgets/`](dark/ios/widgets/) and [`light/ios/widgets/`](light/ios/widgets/).
 
@@ -44,9 +46,11 @@ which is not part of the home-screen layout these shots come from.
 
 ## Android
 
-In [`dark/android/widgets/`](dark/android/widgets/) and [`light/android/widgets/`](light/android/widgets/):
+In [`dark/android/widgets/`](dark/android/widgets/) and [`light/android/widgets/`](light/android/widgets/),
+from a Pixel launcher on its 4 × 5 grid, with the same sample data as the iOS pages:
 `page1-*.png` — Radial Tracker · Month Progress · Streak · Today's Check
-`page2-*.png` — Year Tracker · Daily Quote · Key Goals
+`page2-*.png` — Year Tracker · Key Goals
+`page3-*.png` — Daily Quote at 2 × 2 and at 4 × 2
 
 All seven widgets exist on both platforms, built with Jetpack Glance from the
 same JSON snapshot. Two differences are inherent to the platform:

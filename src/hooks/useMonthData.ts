@@ -13,7 +13,12 @@ import {
   emptyMonthData,
   nextHabitId,
 } from '../types';
-import { loadCarriedHabits, readMonthForEditing, saveMonth } from '../storage';
+import {
+  dropCardFromMonths,
+  loadCarriedHabits,
+  readMonthForEditing,
+  saveMonth,
+} from '../storage';
 import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 import { monthLength } from '../dates';
 import { DayRef, canMark, dayWhen } from '../marking';
@@ -483,7 +488,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [edit]
   );
 
-  /** Takes a deleted card's lines out of this month; the key goes with the last of them */
+  /** Takes a deleted card's lines out of every month; the key goes with the last of them */
   const dropCard = useCallback(
     (id: string) => {
       edit((prev) => {
@@ -492,8 +497,12 @@ export function useMonthData(year: number, month: number, today: DayRef) {
         const left = cards.filter((c) => c.id !== id);
         return left.length ? { ...rest, cards: left } : rest;
       });
+      // the edit above saves the open month; the others are rewritten on disk
+      dropCardFromMonths(id, { year, month }).then((months) =>
+        months.forEach((m) => markDirty(monthDocKey(m.year, m.month)))
+      );
     },
-    [edit]
+    [edit, year, month]
   );
 
   /** Whether removing this habit would take marks with it — the caller's cue to confirm */

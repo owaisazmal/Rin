@@ -545,6 +545,27 @@ export async function saveMonth(year: number, month: number, data: MonthData): P
   }
 }
 
+/**
+ * Takes a deleted card out of every stored month but `open`, which the screen
+ * holds. A month that cannot be read in full is left as it is.
+ */
+export async function dropCardFromMonths(
+  id: string,
+  open: { year: number; month: number }
+): Promise<{ year: number; month: number }[]> {
+  const changed: { year: number; month: number }[] = [];
+  for (const m of await listStoredMonths()) {
+    if (m.year === open.year && m.month === open.month) continue;
+    const read = await readMonthVouched(m.year, m.month);
+    if (read.status !== 'complete' || !read.data.cards?.some((c) => c.id === id)) continue;
+    const { cards, ...rest } = read.data;
+    const left = cards.filter((c) => c.id !== id);
+    await saveMonth(m.year, m.month, left.length ? { ...rest, cards: left } : rest);
+    changed.push(m);
+  }
+  return changed;
+}
+
 /** One stored month, with the year and month it came from */
 export interface MonthRecord {
   year: number;

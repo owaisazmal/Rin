@@ -4,6 +4,10 @@
  * so this runs in plain Node rather than a React Native environment — faster,
  * and it keeps the suite honest about what it actually exercises.
  */
+
+// a zone with daylight saving, so local-date tests run the same on every machine
+process.env.TZ = 'America/Los_Angeles';
+
 module.exports = {
   testEnvironment: 'node',
   testMatch: ['<rootDir>/src/**/__tests__/**/*.test.ts'],

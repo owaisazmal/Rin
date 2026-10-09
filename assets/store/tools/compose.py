@@ -20,9 +20,9 @@ BARS = {
     'android': (90, 70),          # 1080 x 2400 emulator: status bar, gesture pill
 }
 THEME = {
-    'dark': dict(bg='#242424', ink='#FFFFE3', accent='#8fa5ba', soft='#CBCBCB',
-                 blobs='radial-gradient(90% 60% at 12% 4%, rgba(109,129,150,.30), transparent 70%), radial-gradient(95% 60% at 92% 62%, rgba(74,74,74,.95), transparent 70%)',
-                 bezel='#0f0f0f', edge='rgba(255,255,227,.14)', shadow='rgba(0,0,0,.6)'),
+    'dark': dict(bg='#0d0d0d', ink='#FFFFE3', accent='#8fa5ba', soft='#CBCBCB',
+                 blobs='radial-gradient(90% 60% at 12% 4%, rgba(76,91,107,.30), transparent 70%), radial-gradient(95% 60% at 92% 62%, rgba(51,51,51,.95), transparent 70%)',
+                 bezel='#000000', edge='rgba(255,255,227,.14)', shadow='rgba(0,0,0,.6)'),
     'light': dict(bg='#FFFFE3', ink='#4A4A4A', accent='#57697c', soft='#5f6b78',
                   blobs='radial-gradient(90% 60% at 88% 4%, rgba(203,203,203,.65), transparent 70%), radial-gradient(95% 60% at 8% 66%, rgba(109,129,150,.18), transparent 70%)',
                   bezel='#1c1c1c', edge='rgba(74,74,74,.18)', shadow='rgba(74,74,74,.28)'),
