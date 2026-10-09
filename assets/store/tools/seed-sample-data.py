@@ -18,7 +18,8 @@ STREAK_FROM = dt.date(TODAY.year, 7, 20)
 BLANK_DAY = dt.date(TODAY.year, 7, 19)  # one blank day breaks the run, so the badge reads a believable number
 
 store = {}
-for m, rate in RATES.items():
+for m in range(3, TODAY.month + 1):
+    rate = RATES.get(m, 1.0)  # months after the table run clean
     days = calendar.monthrange(TODAY.year, m)[1]
     grid = {}
     for day in range(1, days + 1):

@@ -7,10 +7,39 @@ extension View {
   @ViewBuilder
   func widgetBackground(_ color: Color) -> some View {
     if #available(iOS 17.0, *) {
-      containerBackground(color, for: .widget)
+      modifier(FlatWidgetBackground(color: color))
     } else {
       background(color)
     }
+  }
+}
+
+/// The Home Screen lays a highlight over a container background, which greys a
+/// dark one. Painting the ground in the content too keeps it the theme's colour.
+@available(iOS 17.0, *)
+private struct FlatWidgetBackground: ViewModifier {
+  let color: Color
+  @Environment(\.widgetContentMargins) private var margins
+  @Environment(\.widgetRenderingMode) private var mode
+  @Environment(\.showsWidgetContainerBackground) private var shown
+
+  func body(content: Content) -> some View {
+    content
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background {
+        // tinted, clear and Lock Screen widgets have no ground of their own
+        if mode == .fullColor && shown {
+          color.padding(
+            EdgeInsets(
+              top: -margins.top,
+              leading: -margins.leading,
+              bottom: -margins.bottom,
+              trailing: -margins.trailing
+            )
+          )
+        }
+      }
+      .containerBackground(color, for: .widget)
   }
 }
 

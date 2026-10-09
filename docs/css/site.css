@@ -118,29 +118,29 @@
    inline script, which stamps data-theme before first paint. */
 :root:not([data-theme='light']),
 :root[data-theme='dark'] {
-  --bg: #242424;
-  --card: rgba(49, 49, 49, 0.78);
-  --chip: rgba(66, 66, 66, 0.9);
+  --bg: #0d0d0d;
+  --card: rgba(24, 24, 24, 0.78);
+  --chip: rgba(40, 40, 40, 0.9);
   --ink: #ffffe3;
   --ink-soft: #cbcbcb;
-  --line: #5a5a5a;
-  --line-faint: #343434;
+  --line: #4a4a4a;
+  --line-faint: #242424;
   --accent: #8fa5ba;
   --accent-soft: rgba(143, 165, 186, 0.2);
-  --on-accent: #242424;
-  --on-state: #242424;
+  --on-accent: #0d0d0d;
+  --on-state: #0d0d0d;
   --done: #93c63f;
   --done-soft: rgba(147, 198, 63, 0.2);
   --missed: #ef4c63;
   --missed-soft: rgba(239, 76, 99, 0.18);
-  --cell-empty: #2e2e2e;
-  --gh-0: #2e2e2e;
+  --cell-empty: #1a1a1a;
+  --gh-0: #1a1a1a;
   --gh-1: #2d4b1f;
   --gh-2: #497b2d;
   --gh-3: #6da939;
   --gh-4: #93c63f;
   --gh-missed: #7d2f3c;
-  --shadow-card: 0 12px 20px rgba(20, 20, 20, 0.5);
+  --shadow-card: 0 12px 20px rgba(0, 0, 0, 0.5);
   --mark-empty: #363636;
 
   --done-ink: #93c63f;
