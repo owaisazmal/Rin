@@ -94,7 +94,7 @@ export default function TrackerCard({
 
       {!hasHabits ? (
         <Text style={styles.hint}>
-          Add habits below — then tap chart cells or use the daily check to fill them in.
+          Add habits below, then tap chart cells or use the daily check to fill them in.
         </Text>
       ) : (
         <View style={styles.statsRow}>

@@ -100,29 +100,29 @@ export interface Palette {
 }
 
 export const darkPalette: Palette = {
-  bg: '#242424',
-  // charcoal blobs on a darker charcoal ground — the grey drift, in palette
-  blobs: [BRAND.charcoal, BRAND.slate, BRAND.charcoal, '#3a3a3a', BRAND.slate],
+  bg: '#0d0d0d',
+  // darker shades of charcoal and slate, so the drift stays a wash on near-black
+  blobs: ['#333333', '#4c5b6b', '#333333', '#242424', '#4c5b6b'],
   blobStrength: 0.55,
-  card: 'rgba(49,49,49,0.78)',
-  chip: 'rgba(66,66,66,0.9)',
+  card: 'rgba(24,24,24,0.78)',
+  chip: 'rgba(40,40,40,0.9)',
   ink: BRAND.ivory,
   inkSoft: BRAND.grey,
-  line: '#5a5a5a',
-  lineFaint: '#343434',
-  // slate lightened so it clears 4.5:1 on the charcoal ground
+  line: BRAND.charcoal,
+  lineFaint: '#242424',
+  // slate lightened so it clears 4.5:1 on the dark ground
   accent: '#8fa5ba',
   accentSoft: 'rgba(143,165,186,0.20)',
-  onAccent: '#242424',
-  onState: '#242424',
+  onAccent: '#0d0d0d',
+  onState: '#0d0d0d',
   done: '#93c63f',
   doneSoft: 'rgba(147,198,63,0.20)',
   missed: '#ef4c63',
   missedSoft: 'rgba(239,76,99,0.18)',
-  cellEmpty: '#2e2e2e',
-  ghLevels: ['#404040', '#386021', '#497b2d', '#6da939', '#93c63f'],
+  cellEmpty: '#1a1a1a',
+  ghLevels: ['#2a2a2a', '#386021', '#497b2d', '#6da939', '#93c63f'],
   ghMissed: '#7d2f3c',
-  shadow: '#141414',
+  shadow: '#000000',
   shadowOpacity: 0.5,
 };
 
@@ -131,14 +131,13 @@ export const lightPalette: Palette = {
   /**
    * A darker grey than `BRAND.grey`, for the three blobs that carry the drift.
    *
-   * Matching dark's separation is not enough here. Charcoal sits seventeen
-   * levels above `#242424` and grey sits eighteen below ivory — even on paper —
-   * yet the light drift stayed the fainter of the two at every opacity worth
-   * using. A near-white page keeps the eye light-adapted, and a step away from
+   * Matching dark's separation is not enough here: with grey as far below
+   * ivory as dark's blobs sat above their ground, the light drift still stayed
+   * the fainter of the two at every opacity worth using. A near-white page keeps the eye light-adapted, and a step away from
    * white costs more to see than the same step away from black. So light is
    * given the wider gap rather than the equal one.
    *
-   * Index 3 keeps `BRAND.grey` and stays the quiet one, as `#3a3a3a` is in dark.
+   * Index 3 keeps `BRAND.grey` and stays the quiet one, as `#242424` is in dark.
    */
   blobs: ['#A0A0A0', '#A0A0A0', BRAND.slate, BRAND.grey, BRAND.slate],
   /**

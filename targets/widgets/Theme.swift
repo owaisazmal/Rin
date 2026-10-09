@@ -36,21 +36,21 @@ struct Theme {
   let ghLevels: [Color]
 
   static let dark = Theme(
-    bg: Color(hex: 0x242424),
-    card: Color(hex: 0x313131),
+    bg: Color(hex: 0x0D0D0D),
+    card: Color(hex: 0x161616),
     ink: Brand.ivory,
     inkSoft: Brand.grey,
-    line: Color(hex: 0x5A5A5A),
+    line: Color(hex: 0x4A4A4A),
     accent: Color(hex: 0x8FA5BA),
-    cellEmpty: Color(hex: 0x2E2E2E),
+    cellEmpty: Color(hex: 0x1A1A1A),
     done: Color(hex: 0x93C63F),
     missed: Color(hex: 0xEF4C63),
-    onState: Color(hex: 0x242424),
+    onState: Color(hex: 0x0D0D0D),
     // index 0 and 1 lifted to clear the card they sit on — see the note in
-    // src/theme.ts. The widget's card is opaque 0x313131 rather than the app's
+    // src/theme.ts. The widget's card is opaque 0x161616 rather than the app's
     // translucent one, but it lands in the same place, so the fault was the same.
     ghLevels: [
-      Color(hex: 0x404040), Color(hex: 0x386021), Color(hex: 0x497B2D),
+      Color(hex: 0x2A2A2A), Color(hex: 0x386021), Color(hex: 0x497B2D),
       Color(hex: 0x6DA939), Color(hex: 0x93C63F),
     ]
   )

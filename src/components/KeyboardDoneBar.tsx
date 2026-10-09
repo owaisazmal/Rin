@@ -39,6 +39,9 @@ import { FONT, Palette, RADIUS, useTheme } from '../theme';
 const SHOW = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
 const HIDE = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
+/** How far the bar's colour runs down behind the keyboard */
+const UNDER = 64;
+
 export default function KeyboardDoneBar() {
   const { palette } = useTheme();
   const [open, setOpen] = useState(false);
@@ -57,6 +60,8 @@ export default function KeyboardDoneBar() {
 
   return (
     <View style={styles.bar}>
+      {/* fills in behind the rounded top corners of the iOS keyboard */}
+      {Platform.OS === 'ios' && <View pointerEvents="none" style={styles.under} />}
       <Pressable
         hitSlop={10}
         accessibilityRole="button"
@@ -82,6 +87,14 @@ const makeStyles = (p: Palette) =>
       backgroundColor: p.chip,
       borderTopWidth: 1,
       borderTopColor: p.lineFaint,
+    },
+    under: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: -UNDER,
+      height: UNDER,
+      backgroundColor: p.chip,
     },
     btn: {
       paddingHorizontal: 18,

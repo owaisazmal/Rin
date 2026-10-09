@@ -40,22 +40,22 @@ data class WidgetTheme(
 
   companion object {
     val dark = WidgetTheme(
-      bg = 0xFF242424.toInt(),
-      card = 0xFF313131.toInt(),
+      bg = 0xFF0D0D0D.toInt(),
+      card = 0xFF161616.toInt(),
       ink = 0xFFFFFFE3.toInt(),
       inkSoft = 0xFFCBCBCB.toInt(),
-      line = 0xFF5A5A5A.toInt(),
+      line = 0xFF4A4A4A.toInt(),
       accent = 0xFF8FA5BA.toInt(),
-      cellEmpty = 0xFF2E2E2E.toInt(),
+      cellEmpty = 0xFF1A1A1A.toInt(),
       done = 0xFF93C63F.toInt(),
       missed = 0xFFEF4C63.toInt(),
-      onState = 0xFF242424.toInt(),
+      onState = 0xFF0D0D0D.toInt(),
       // index 0 and 1 lifted to clear the card they sit on — see the note in
-      // src/theme.ts. The widget's card is opaque 0xFF313131 rather than the
+      // src/theme.ts. The widget's card is opaque 0xFF161616 rather than the
       // app's translucent one, but it lands in the same place, so the fault
       // was the same.
       ghLevels = listOf(
-        0xFF404040.toInt(), 0xFF386021.toInt(), 0xFF497B2D.toInt(),
+        0xFF2A2A2A.toInt(), 0xFF386021.toInt(), 0xFF497B2D.toInt(),
         0xFF6DA939.toInt(), 0xFF93C63F.toInt(),
       ),
     )

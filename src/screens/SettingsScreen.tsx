@@ -346,7 +346,7 @@ export default function SettingsScreen({
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Theme</Text>
               <Text style={styles.rowSub}>
-                {mode === 'dark' ? 'Dark — ivory on charcoal' : 'Light — charcoal on ivory'}
+                {mode === 'dark' ? 'Dark — ivory on black' : 'Light — charcoal on ivory'}
               </Text>
             </View>
           </View>

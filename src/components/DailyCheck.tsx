@@ -162,7 +162,7 @@ export default function DailyCheck({
       />
 
       {habits.length === 0 ? (
-        <Text style={styles.empty}>No habits yet — add one to start checking it off.</Text>
+        <Text style={styles.empty}>No habits yet. Add one to start checking it off.</Text>
       ) : editing ? (
         <View style={styles.editList}>
           {habits.map((h, i) => (

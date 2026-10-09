@@ -1,5 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Pressable,
@@ -8,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckGlyph, ChevronGlyph, CloseGlyph } from './Glyphs';
@@ -33,9 +37,64 @@ const KIND_LABEL: Record<CardKind, string> = {
   checklist: 'CHECKLIST',
 };
 
-/** A row's height and the gap under it; renaming scrolls by these */
+/** A row's height and the gap under it; rows are placed and scrolled by these */
 const ROW_HEIGHT = 52;
 const ROW_GAP = 8;
+const ROW_STEP = ROW_HEIGHT + ROW_GAP;
+
+/** A row that slides to a new place in the list instead of jumping there. */
+function SlideRow({
+  index,
+  lifted,
+  style,
+  children,
+}: {
+  index: number;
+  /** the row being moved rides over the one it swaps with */
+  lifted: boolean;
+  style: ViewStyle;
+  children: ReactNode;
+}) {
+  const was = useRef(index);
+  /** how far short of its place the last slide still is */
+  const left = useRef(0);
+  // A fresh value per move, starting where the row is now, so it lands with the new `top`.
+  const y = useMemo(
+    () => new Animated.Value((was.current - index) * ROW_STEP + left.current),
+    [index]
+  );
+
+  useEffect(() => {
+    was.current = index;
+    const watch = y.addListener(({ value }) => {
+      left.current = value;
+    });
+    const slide = Animated.timing(y, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: true,
+    });
+    slide.start(({ finished }) => {
+      if (finished) left.current = 0;
+    });
+    return () => {
+      slide.stop();
+      y.removeListener(watch);
+    };
+  }, [index, y]);
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        { top: index * ROW_STEP, zIndex: lifted ? 1 : 0, transform: [{ translateY: y }] },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 interface Props {
   visible: boolean;
@@ -67,6 +126,12 @@ export default function LayoutEditor({
   const [name, setName] = useState('');
   const [kind, setKind] = useState<CardKind>('list');
   const ready = name.trim() !== '';
+  const [moved, setMoved] = useState<string | null>(null);
+
+  const move = (id: string, by: -1 | 1) => {
+    setMoved(id);
+    onMove(id, by);
+  };
 
   const add = () => {
     if (!ready) return;
@@ -76,13 +141,19 @@ export default function LayoutEditor({
     setTimeout(() => list.current?.scrollToEnd({ animated: true }), 50);
   };
 
+  const renaming = useRef<number | null>(null);
+
   /** The keyboard shrinks the list, so scroll the row being renamed back into view. */
-  const revealRow = (index: number) => {
-    setTimeout(
-      () => list.current?.scrollTo({ y: index * (ROW_HEIGHT + ROW_GAP), animated: true }),
-      300
-    );
-  };
+  const reveal = useCallback(() => {
+    const row = renaming.current;
+    if (row !== null) list.current?.scrollTo({ y: row * ROW_STEP, animated: true });
+  }, []);
+
+  useEffect(() => {
+    // not before the keyboard has settled: the list is still shrinking until then
+    const shown = Keyboard.addListener('keyboardDidShow', reveal);
+    return () => shown.remove();
+  }, [reveal]);
 
   return (
     <Modal
@@ -114,7 +185,7 @@ export default function LayoutEditor({
             <ScrollView
               ref={list}
               style={styles.list}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={{ height: layout.slots.length * ROW_STEP - ROW_GAP }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -124,7 +195,7 @@ export default function LayoutEditor({
                   : (slot.custom?.title ?? '');
                 const spoken = title.trim() || 'untitled card';
                 return (
-                  <View key={slot.id} style={styles.row}>
+                  <SlideRow key={slot.id} index={i} lifted={slot.id === moved} style={styles.row}>
                     <Pressable
                       hitSlop={10}
                       accessibilityRole="switch"
@@ -148,7 +219,13 @@ export default function LayoutEditor({
                             value={slot.custom.title}
                             maxLength={MAX_CARD_TITLE}
                             onChangeText={(t) => onRename(slot.id, t.slice(0, MAX_CARD_TITLE))}
-                            onFocus={() => revealRow(i)}
+                            onFocus={() => {
+                              renaming.current = i;
+                              if (Keyboard.isVisible()) reveal();
+                            }}
+                            onBlur={() => {
+                              renaming.current = null;
+                            }}
                             placeholder="card name"
                             placeholderTextColor={palette.inkSoft}
                             accessibilityLabel={`Name of ${spoken}`}
@@ -168,7 +245,7 @@ export default function LayoutEditor({
                       disabled={i === 0}
                       accessibilityRole="button"
                       accessibilityLabel={`Move ${spoken} up`}
-                      onPress={() => onMove(slot.id, -1)}
+                      onPress={() => move(slot.id, -1)}
                       style={({ pressed }) => [
                         styles.arrow,
                         i === 0 && styles.arrowOff,
@@ -182,7 +259,7 @@ export default function LayoutEditor({
                       disabled={i === layout.slots.length - 1}
                       accessibilityRole="button"
                       accessibilityLabel={`Move ${spoken} down`}
-                      onPress={() => onMove(slot.id, 1)}
+                      onPress={() => move(slot.id, 1)}
                       style={({ pressed }) => [
                         styles.arrow,
                         i === layout.slots.length - 1 && styles.arrowOff,
@@ -202,7 +279,7 @@ export default function LayoutEditor({
                         <CloseGlyph color={palette.missed} />
                       </Pressable>
                     )}
-                  </View>
+                  </SlideRow>
                 );
               })}
             </ScrollView>
@@ -299,10 +376,10 @@ const makeStyles = (p: Palette) =>
       flexShrink: 1,
       marginTop: 14,
     },
-    listContent: {
-      gap: ROW_GAP,
-    },
     row: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
       height: ROW_HEIGHT,
       flexDirection: 'row',
       alignItems: 'center',
