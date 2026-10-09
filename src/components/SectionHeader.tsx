@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
-import { useTheme, FONT } from '../theme';
+import { useTheme, FONT, wrapSafe } from '../theme';
 
 interface Props {
   title: string;
@@ -28,7 +28,7 @@ export default function SectionHeader({ title, right }: Props) {
         text: {
           color: palette.ink,
           fontFamily: FONT.bold,
-          fontSize: 13,
+          fontSize: wrapSafe(13),
           letterSpacing: 2,
           flex: 1,
         },

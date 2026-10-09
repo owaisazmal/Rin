@@ -16,7 +16,7 @@ import {
 import { useHistory } from '../hooks/useHistory';
 import { useNow } from '../hooks/useNow';
 import { startOfDay } from '../dates';
-import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * What has already happened — habits ticked or missed, deadlines finished —
@@ -358,7 +358,7 @@ const makeStyles = (p: Palette) =>
     },
     empty: {
       fontSize: 13,
-      lineHeight: 20,
+      lineHeight: wrapSafe(20),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       paddingHorizontal: 4,
@@ -417,7 +417,7 @@ const makeStyles = (p: Palette) =>
     },
     deadlineText: {
       flex: 1,
-      fontSize: 13,
+      fontSize: wrapSafe(13),
       fontFamily: FONT.semibold,
       color: p.ink,
     },

@@ -24,7 +24,7 @@ import {
   open,
   seal,
 } from './backup';
-import { MonthData } from './types';
+import { MonthData, cardHasContent } from './types';
 import { Task, loadTasks, readTasksVouched, saveTasks, vouchTasksValue } from './tasks';
 import type { VouchedValue } from './tasks';
 import {
@@ -245,7 +245,7 @@ async function pushDoc(
  * Which part of a month is the reason it will not fit.
  *
  * A refusal that says "this month is too big" is a symptom; the thing somebody
- * can act on is that it is the notes, or the grid. Four `JSON.stringify` calls
+ * can act on is that it is the notes, or the grid. Five `JSON.stringify` calls
  * on an object already in memory is a rounding error next to the encryption
  * that is about to be skipped, and it is only reached when a month has already
  * failed the size check, so it costs nothing on the path everybody takes.
@@ -256,6 +256,7 @@ function largestSection(data: MonthData): string {
     ['grid', data.grid],
     ['habits', data.habits],
     ['keyGoals', data.keyGoals],
+    ['cards', data.cards],
   ];
   let name = sections[0][0];
   let largest = -1;
@@ -612,7 +613,8 @@ function isEmptyMonth(data: MonthData): boolean {
     data.habits.length === 0 &&
     Object.keys(data.grid).length === 0 &&
     data.observations.every((line) => line.trim() === '') &&
-    data.keyGoals.every((goal) => goal.text.trim() === '' && !goal.done)
+    data.keyGoals.every((goal) => goal.text.trim() === '' && !goal.done) &&
+    (data.cards ?? []).every((card) => !cardHasContent(card.items))
   );
 }
 

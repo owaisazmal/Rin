@@ -1,12 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  CardItem,
   CellState,
+  CustomCard,
   Habit,
   KeyGoal,
   MAX_HABITS,
+  MAX_MONTH_CARDS,
   MonthData,
   cellKey,
   emptyMonthData,
+  isCardId,
+  isCardKind,
 } from './types';
 
 function monthKey(year: number, month: number): string {
@@ -111,16 +116,54 @@ function parseKeyGoals(raw: unknown): KeyGoal[] {
   });
 }
 
+/** A line with both halves intact; the voucher asks the same of a raw one */
+function isCardItem(item: unknown): item is CardItem {
+  if (!item || typeof item !== 'object') return false;
+  const { text, done } = item as Record<string, unknown>;
+  return typeof text === 'string' && typeof done === 'boolean';
+}
+
+/** A raw card with a valid id, title, kind and items list. */
+function isCardShell(card: unknown): card is Record<string, unknown> & { id: string } {
+  if (!card || typeof card !== 'object') return false;
+  const { id, title, kind, items } = card as Record<string, unknown>;
+  return isCardId(id) && typeof title === 'string' && isCardKind(kind) && Array.isArray(items);
+}
+
+/** Malformed cards are dropped whole; a repeated id keeps the first. */
+function parseCards(raw: unknown): CustomCard[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const cards: CustomCard[] = [];
+  for (const card of raw) {
+    if (!isCardShell(card) || seen.has(card.id)) continue;
+    seen.add(card.id);
+    cards.push({
+      id: card.id,
+      title: card.title as string,
+      kind: card.kind as CustomCard['kind'],
+      items: (card.items as unknown[])
+        .filter(isCardItem)
+        .map((item) => ({ text: item.text, done: item.done })),
+    });
+    if (cards.length === MAX_MONTH_CARDS) break;
+  }
+  return cards;
+}
+
 export function parseMonthData(raw: unknown): MonthData {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return emptyMonthData();
   const r = raw as Record<string, unknown>;
   const habits = parseHabits(r.habits);
+  const cards = parseCards(r.cards);
   return {
     habits,
     ...(r.habitsCleared === true && habits.length === 0 ? { habitsCleared: true as const } : {}),
     grid: parseGrid(r.grid, habits),
     observations: parseObservations(r.observations),
     keyGoals: parseKeyGoals(r.keyGoals),
+    // last, and only when there are some: see the note on `MonthData.cards`
+    ...(cards.length ? { cards } : {}),
   };
 }
 
@@ -366,6 +409,21 @@ export function vouchMonthValue(raw: unknown): VouchedValue<MonthData> {
       if (typeof goal.text !== 'string' || typeof goal.done !== 'boolean') dropped++;
     }
     lost.push(lostCount(dropped, goals.length, 'goals'));
+  }
+
+  if (r.cards !== undefined) {
+    if (!Array.isArray(r.cards)) return { status: 'unreadable' };
+    const kept = data.cards ?? [];
+    lost.push(lostCount(r.cards.length - kept.length, r.cards.length, 'cards'));
+    // lines lost inside a card that itself survived
+    let offered = 0;
+    let read = 0;
+    for (const card of kept) {
+      const source = r.cards.find((c) => isCardShell(c) && c.id === card.id);
+      offered += (source as { items: unknown[] }).items.length;
+      read += card.items.length;
+    }
+    lost.push(lostCount(offered - read, offered, 'card lines'));
   }
 
   const named = lost.filter((entry): entry is string => entry !== null);

@@ -10,15 +10,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import CustomCard from '../components/CustomCard';
 import DailyCheck from '../components/DailyCheck';
 import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
+import EditIcon from '../components/EditIcon';
 import HistoryIcon from '../components/HistoryIcon';
 import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import KeyGoals from '../components/KeyGoals';
+import LayoutEditor from '../components/LayoutEditor';
 import LogoMark from '../components/LogoMark';
 import MonthNav from '../components/MonthNav';
 import Observations from '../components/Observations';
+import QuoteCard from '../components/QuoteCard';
 import RadialTracker from '../components/RadialTracker';
 import SettingsIcon from '../components/SettingsIcon';
 import StreakBadge from '../components/StreakBadge';
@@ -35,10 +39,20 @@ import { useYearWindow } from '../hooks/useYearWindow';
 import { MONTH_NAMES, startOfDay } from '../dates';
 import { dayWhen } from '../marking';
 import { HistoryFilter } from '../history';
-import { quoteForDate } from '../quotes';
+import {
+  CardSlot,
+  PlannerLayout,
+  addCard,
+  adoptCards,
+  moveCard,
+  removeCard,
+  renameCard,
+  toggleCard,
+} from '../layout';
 import { damagedNotice } from './backupWording';
 import { ChartType } from '../settings';
-import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
+import { CardKind, CardRef, cardItemsIn } from '../types';
 
 const rowsAnimation = LayoutAnimation.create(200, 'easeInEaseOut', 'opacity');
 
@@ -63,6 +77,8 @@ function animateRows<A extends unknown[]>(fn: (...args: A) => void) {
 export default function PlannerScreen({
   chart,
   onSetChart,
+  layout,
+  onChangeLayout,
   onOpenSettings,
   onOpenHistory,
   taskStore,
@@ -70,6 +86,10 @@ export default function PlannerScreen({
 }: {
   chart: ChartType;
   onSetChart: (c: ChartType) => void;
+  /** which cards sit below the daily check, and in what order */
+  layout: PlannerLayout;
+  /** takes a change rather than a layout, so two in one tick both land */
+  onChangeLayout: (change: (prev: PlannerLayout) => PlannerLayout) => void;
   onOpenSettings: () => void;
   onOpenHistory: (filter?: HistoryFilter) => void;
   /** owned by the Navigator, because history reads the same list */
@@ -133,6 +153,12 @@ export default function PlannerScreen({
     setObservation,
     addObservation,
     removeObservation,
+    setCardText,
+    toggleCardItem,
+    addCardItem,
+    removeCardItem,
+    retitleCard,
+    dropCard,
   } = useMonthData(year, month, todayRef);
 
   const {
@@ -148,6 +174,13 @@ export default function PlannerScreen({
   } = taskStore;
   // which task's deadline is being edited, or null when the sheet is closed
   const [editingDue, setEditingDue] = useState<string | null>(null);
+  const [editingLayout, setEditingLayout] = useState(false);
+
+  /** A month restored from a backup can hold cards the layout does not know yet. */
+  useEffect(() => {
+    const held = data.cards;
+    if (loaded && held?.length) onChangeLayout((prev) => adoptCards(prev, held));
+  }, [loaded, data.cards, onChangeLayout]);
 
   const yearMonths = useYearSummary(year, month, data, daysInMonth);
   const streakDays = useCurrentStreak(year, yearMonths);
@@ -233,6 +266,93 @@ export default function PlannerScreen({
     [deleteHabit, habitHasMarks, findHabit]
   );
 
+  /** The open month keeps its own copy of the title, for a restore to find. */
+  const renameCustomCard = useCallback(
+    (id: string, title: string) => {
+      onChangeLayout((prev) => renameCard(prev, id, title));
+      retitleCard(id, title);
+    },
+    [onChangeLayout, retitleCard]
+  );
+
+  /** Always confirms: the card may hold content in months not open here. */
+  const deleteCustomCard = useCallback(
+    (id: string) => {
+      const name = layout.slots.find((slot) => slot.id === id)?.custom?.title.trim();
+      Alert.alert(
+        'Delete card?',
+        `${name ? `"${name}"` : 'This card'} comes off every month, along with anything written in it.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              onChangeLayout((prev) => removeCard(prev, id));
+              dropCard(id);
+            },
+          },
+        ]
+      );
+    },
+    [layout.slots, onChangeLayout, dropCard]
+  );
+
+  /** One card below the daily check, by what the layout says goes there */
+  const renderCard = (slot: CardSlot) => {
+    switch (slot.id) {
+      case 'deadlines':
+        return (
+          <Deadlines
+            key={slot.id}
+            tasks={tasks}
+            now={nowMs}
+            onAdd={animateRows(addTask)}
+            onChangeText={setTaskText}
+            onEditDue={setEditingDue}
+            onToggleDone={animateRows(toggleTaskDone)}
+            onRemove={animateRows(removeTask)}
+            onShowHistory={() => onOpenHistory('deadlines')}
+          />
+        );
+      case 'goals':
+        return (
+          <KeyGoals
+            key={slot.id}
+            goals={data.keyGoals}
+            onChangeText={setGoalText}
+            onToggleDone={toggleGoalDone}
+          />
+        );
+      case 'observations':
+        return (
+          <Observations
+            key={slot.id}
+            observations={data.observations}
+            onChange={setObservation}
+            onAdd={animateRows(addObservation)}
+            onRemove={animateRows(removeObservation)}
+          />
+        );
+      case 'quote':
+        return <QuoteCard key={slot.id} date={now} />;
+    }
+    if (!slot.custom) return null;
+    const card: CardRef = { id: slot.id, ...slot.custom };
+    return (
+      <CustomCard
+        key={slot.id}
+        title={card.title}
+        kind={card.kind}
+        items={cardItemsIn(data, card.id, card.kind)}
+        onChangeText={(index, text) => setCardText(card, index, text)}
+        onToggle={(index) => toggleCardItem(card, index)}
+        onAdd={animateRows(() => addCardItem(card))}
+        onRemove={animateRows((index: number) => removeCardItem(card, index))}
+      />
+    );
+  };
+
   const chartSize = Math.min(width - 64, 420);
 
   return (
@@ -245,37 +365,26 @@ export default function PlannerScreen({
         reason set out there: the app draws edge to edge, so the window no
         longer shrinks when the keyboard opens.
       */}
-      <KeyboardSafeScroll contentContainerStyle={styles.content}>
+      <KeyboardSafeScroll
+        contentContainerStyle={styles.content}
+        // the card editor has fields of its own, and is drawn over this page
+        keyboardElsewhere={editingLayout}
+      >
         <View style={styles.header}>
-          {/*
-            The mark shares the eyebrow line rather than sitting beside the
-            whole wordmark: PLANNING at full size plus the three actions
-            already fills a 400pt screen, so anything to its left would push
-            the settings button off the edge.
-          */}
-          <View style={styles.wordmark}>
-            <View style={styles.brand}>
-              <LogoMark size={28} />
-              <Text
-                style={styles.headerSub}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.5}
-              >
-                MONTHLY
-              </Text>
-            </View>
-            <Text
-              style={styles.headerTitle}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.5}
-            >
-              PLANNING
-            </Text>
+          <View accessible accessibilityRole="image" accessibilityLabel="Rin">
+            <LogoMark size={36} />
           </View>
           <View style={styles.headerActions}>
             <StreakBadge days={streakDays} palette={palette} />
+            <Pressable
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Customize cards"
+              onPress={() => setEditingLayout(true)}
+              style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            >
+              <EditIcon color={palette.ink} />
+            </Pressable>
             <Pressable
               hitSlop={10}
               accessibilityRole="button"
@@ -386,33 +495,8 @@ export default function PlannerScreen({
           onRemove={removeHabit}
         />
 
-        <Deadlines
-          tasks={tasks}
-          now={nowMs}
-          onAdd={animateRows(addTask)}
-          onChangeText={setTaskText}
-          onEditDue={setEditingDue}
-          onToggleDone={animateRows(toggleTaskDone)}
-          onRemove={animateRows(removeTask)}
-          onShowHistory={() => onOpenHistory('deadlines')}
-        />
-
-        <KeyGoals goals={data.keyGoals} onChangeText={setGoalText} onToggleDone={toggleGoalDone} />
-
-        <Observations
-          observations={data.observations}
-          onChange={setObservation}
-          onAdd={animateRows(addObservation)}
-          onRemove={animateRows(removeObservation)}
-        />
-
-        <View style={styles.quoteCard}>
-          <View style={styles.quoteHead}>
-            <View style={styles.accent} />
-            <Text style={styles.quoteLabel}>DISCIPLINE.</Text>
-          </View>
-          <Text style={styles.quote}>“{quoteForDate(now)}”</Text>
-        </View>
+        {/* Arranged in the layout editor; a hidden card is not drawn. */}
+        {layout.slots.filter((slot) => slot.shown).map(renderCard)}
       </KeyboardSafeScroll>
 
       <DueDatePicker
@@ -423,6 +507,19 @@ export default function PlannerScreen({
           if (editingDue) setTaskDue(editingDue, due);
           setEditingDue(null);
         }}
+      />
+
+      <LayoutEditor
+        visible={editingLayout}
+        layout={layout}
+        onToggle={(id) => onChangeLayout((prev) => toggleCard(prev, id))}
+        onMove={(id, by) => onChangeLayout((prev) => moveCard(prev, id, by))}
+        onRename={renameCustomCard}
+        onRemove={deleteCustomCard}
+        onAdd={(title: string, kind: CardKind) =>
+          onChangeLayout((prev) => addCard(prev, title, kind))
+        }
+        onClose={() => setEditingLayout(false)}
       />
     </SafeAreaView>
   );
@@ -448,29 +545,6 @@ const makeStyles = (p: Palette) =>
       alignItems: 'center',
       marginBottom: 4,
       paddingHorizontal: 4,
-    },
-    // gives way before the actions do, so large text can't push Settings off-screen
-    wordmark: { flexShrink: 1 },
-    brand: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 2,
-    },
-    headerSub: {
-      flexShrink: 1,
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      letterSpacing: 4,
-      color: p.accent,
-      // Josefin sits high in its box; nudge the caps onto the mark's centreline
-      marginTop: 3,
-    },
-    headerTitle: {
-      fontSize: 30,
-      fontFamily: FONT.bold,
-      letterSpacing: 1,
-      color: p.ink,
     },
     headerActions: {
       flexDirection: 'row',
@@ -502,40 +576,7 @@ const makeStyles = (p: Palette) =>
     damagedText: {
       fontSize: 12,
       fontFamily: FONT.regular,
-      lineHeight: 18,
+      lineHeight: wrapSafe(18),
       color: p.ink,
-    },
-    quoteCard: {
-      ...cardSurface(p),
-      marginTop: 2,
-      paddingVertical: 16,
-      paddingHorizontal: 18,
-    },
-    // an inline accent bar, matching every other section — a borderLeft would
-    // detach into a floating arc against the card's large corner radius
-    quoteHead: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 6,
-    },
-    accent: {
-      width: 4,
-      height: 15,
-      borderRadius: 2,
-      backgroundColor: p.accent,
-      marginRight: 8,
-    },
-    quoteLabel: {
-      fontSize: 12,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.accent,
-    },
-    quote: {
-      fontSize: 13,
-      // the italic family carries the slant; fontStyle would be ignored here
-      fontFamily: FONT.italic,
-      lineHeight: 19,
-      color: p.inkSoft,
     },
   });

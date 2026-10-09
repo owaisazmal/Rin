@@ -109,6 +109,7 @@ const SECTION: Record<string, string> = {
   grid: 'the grid',
   habits: 'the habit list',
   keyGoals: 'the goals',
+  cards: 'the custom cards',
 };
 
 // --- one refusal, four things worth saying about it --------------------------

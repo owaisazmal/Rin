@@ -64,11 +64,12 @@ and the phone re-validates everything it reads back.
 - **Observations**: free-form note lines, add/remove as needed.
 - **Key Goals**: three goal boxes with a "mark done" toggle.
 - **Discipline quote**: rotates daily.
+- **Your cards**: everything below the daily check is yours to arrange. The pencil in the header hides the cards you don't use, reorders the rest, and makes up to four of your own — a note, a list, or a checklist, under whatever name you give it. What a card of your own holds is filed with the month, like observations and goals, so it is in the backup too.
 - **Dark mode**: on by default, switched in Settings. The choice persists, and the home-screen widgets follow it.
 - **Widgets**: eight of them on both platforms (radial, year, streak, today, goals, progress, daily quote, deadlines), plus Lock Screen accessories on iOS.
 - **Reminders**: a few nudges a day, only while something is still unmarked, and a note when the day is done. Habit nudges and deadline reminders are rewritten together, within a budget, because iOS keeps only the 64 soonest pending local notifications.
 - **Backup**: optional. Once you make one, Rin sends what changed when you open the app, and after half a minute of it sitting still with something waiting. It never backs up while the app is closed. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. Nothing this phone cannot read is ever sent over a good copy: a month it cannot account for is named on the Settings card instead. No account, and no way to recover a lost code — which is the same sentence twice, and why the app says so before you rely on it.
-- **Month navigation**: every month keeps its own habits, grid, observations, and goals, persisted on-device with AsyncStorage.
+- **Month navigation**: every month keeps its own habits, grid, observations, goals, and custom cards, persisted on-device with AsyncStorage.
 
 ## Run it
 
@@ -139,7 +140,8 @@ App.tsx                        root: persisted settings, backup state, font, the
 src/theme.ts                   palettes, type scale, radii (the only place colour is defined)
 src/types.ts                   data model (MonthData, Habit, cell states)
 src/storage.ts                 AsyncStorage load/save per month + year summary
-src/settings.ts                theme and chart choice
+src/settings.ts                theme, chart choice, and the planner's card layout
+src/layout.ts                  which cards sit below the daily check, and in what order
 src/dates.ts                   calendar arithmetic and the month/day names
 src/tasks.ts                   deadlines, kept outside MonthData since a date isn't a month
 src/deadlines.ts               how close a deadline is, and how that should read
@@ -180,6 +182,7 @@ src/__tests__/                 the pure logic: streaks, deadlines, history, stor
 
 src/components/                TrackerCard, MonthNav, RadialTracker, YearChart, DailyCheck,
                                Observations, KeyGoals, Deadlines, DueDatePicker,
+                               QuoteCard, CustomCard, LayoutEditor,
                                StreakBadge, MarkButton, SegmentedControl,
                                AuroraBackground, …
 

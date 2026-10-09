@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native';
-import { COLUMN, FONT, Palette, RADIUS, cardSurface } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, wrapSafe } from '../theme';
 
 /**
  * What the sign-in and reset screens share: a fixed top bar, a centred column,
@@ -42,7 +42,7 @@ export const authStyles = (p: Palette) =>
     },
     tagline: {
       marginTop: 8,
-      fontSize: 13,
+      fontSize: wrapSafe(13),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       textAlign: 'center',
@@ -73,7 +73,7 @@ export const authStyles = (p: Palette) =>
       borderColor: p.accent,
     },
     error: {
-      fontSize: 12,
+      fontSize: wrapSafe(12),
       fontFamily: FONT.medium,
       color: p.missed,
       marginBottom: 12,
@@ -95,7 +95,7 @@ export const authStyles = (p: Palette) =>
       marginTop: 14,
       fontSize: 11,
       fontFamily: FONT.regular,
-      lineHeight: 16,
+      lineHeight: wrapSafe(16),
       color: p.inkSoft,
       textAlign: 'center',
     },

@@ -14,7 +14,7 @@ import MarkButton from './MarkButton';
 import SectionHeader from './SectionHeader';
 import { CellState, Habit, MAX_HABITS, MAX_HABIT_NAME, cellKey } from '../types';
 import { DayWhen } from '../marking';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * The day's habits, and the habits themselves.
@@ -316,13 +316,13 @@ const makeStyles = (p: Palette) =>
     },
     empty: {
       fontSize: 13,
-      lineHeight: 19,
+      lineHeight: wrapSafe(19),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       paddingVertical: 4,
     },
     locked: {
-      fontSize: 11,
+      fontSize: wrapSafe(11),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       paddingBottom: 8,

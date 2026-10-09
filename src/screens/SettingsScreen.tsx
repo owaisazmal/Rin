@@ -9,7 +9,7 @@ import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
 import type { BackupHolds, RestoreFailure } from './backupWording';
-import { COLUMN, FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme, wrapSafe } from '../theme';
 
 const THEME_OPTIONS = [
   { value: 'dark' as ThemeMode, label: 'DARK' },
@@ -494,7 +494,7 @@ const makeStyles = (p: Palette) =>
      */
     retryText: { color: p.accent },
     emptyTitle: {
-      fontSize: 17,
+      fontSize: wrapSafe(17),
       fontFamily: FONT.semibold,
       color: p.ink,
     },
@@ -502,7 +502,7 @@ const makeStyles = (p: Palette) =>
       marginTop: 6,
       fontSize: 13,
       fontFamily: FONT.regular,
-      lineHeight: 19,
+      lineHeight: wrapSafe(19),
       color: p.inkSoft,
     },
     /**
@@ -578,7 +578,7 @@ const makeStyles = (p: Palette) =>
     madeBy: {
       textAlign: 'center',
       fontSize: 11,
-      lineHeight: 17,
+      lineHeight: wrapSafe(17),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       opacity: 0.75,

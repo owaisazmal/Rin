@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import SectionHeader from './SectionHeader';
 import SegmentedControl from './SegmentedControl';
 import type { ChartType } from '../settings';
-import { FONT, Palette, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * The card around whichever chart is showing: the switch between the two, the
@@ -156,7 +156,7 @@ const makeStyles = (p: Palette) =>
     },
     hint: {
       marginTop: 10,
-      fontSize: 13,
+      fontSize: wrapSafe(13),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       textAlign: 'center',

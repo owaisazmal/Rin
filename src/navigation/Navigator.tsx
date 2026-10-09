@@ -10,6 +10,7 @@ import type { RestoreFailure } from '../screens/backupWording';
 import { useTasks } from '../hooks/useTasks';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { HistoryFilter } from '../history';
+import type { PlannerLayout } from '../layout';
 import { ChartType } from '../settings';
 
 type Screen = 'planner' | 'settings' | 'history' | 'backup' | 'intro';
@@ -22,6 +23,8 @@ export default function Navigator({
   backupStatus,
   chart,
   onSetChart,
+  layout,
+  onChangeLayout,
   onBackedUp,
   onRetryBackup,
   backupHolds,
@@ -39,6 +42,9 @@ export default function Navigator({
   backupStatus: BackupStatus;
   chart: ChartType;
   onSetChart: (c: ChartType) => void;
+  /** the cards below the planner's daily check; a setting, so it is held above */
+  layout: PlannerLayout;
+  onChangeLayout: (change: (prev: PlannerLayout) => PlannerLayout) => void;
   onBackedUp: (code: string, outcome: BackupOutcome) => void;
   /** takes the park off everything stuck and offers the lot again, now */
   onRetryBackup: () => Promise<void>;
@@ -158,6 +164,8 @@ export default function Navigator({
         <PlannerScreen
           chart={chart}
           onSetChart={onSetChart}
+          layout={layout}
+          onChangeLayout={onChangeLayout}
           onOpenSettings={() => setScreen('settings')}
           onOpenHistory={openHistory}
           taskStore={taskStore}

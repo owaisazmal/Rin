@@ -3,7 +3,7 @@ import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { KeyGoal, MAX_GOAL_LEN } from '../types';
-import { useTheme, cardSurface, RADIUS, FONT } from '../theme';
+import { useTheme, cardSurface, RADIUS, FONT, wrapSafe } from '../theme';
 
 interface Props {
   goals: KeyGoal[];
@@ -66,7 +66,7 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
         },
         check: {
           marginTop: 6,
-          fontSize: 10,
+          fontSize: wrapSafe(10),
           fontFamily: FONT.bold,
           letterSpacing: 0.5,
           color: palette.inkSoft,
@@ -74,7 +74,7 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
           borderColor: palette.line,
           borderRadius: RADIUS.chip,
           paddingVertical: 4,
-          paddingHorizontal: 10,
+          paddingHorizontal: 4,
           overflow: 'hidden',
         },
         checkDone: {
@@ -124,7 +124,13 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
               onPress={() => onToggleDone(i)}
               style={({ pressed }) => pressed && { opacity: 0.6 }}
             >
-              <Text style={[styles.check, g.done && styles.checkDone]}>
+              <Text
+                style={[styles.check, g.done && styles.checkDone]}
+                // one line at any width — it shrinks to fit a narrow box rather than wrap
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
                 {g.done ? '✓ DONE' : 'MARK DONE'}
               </Text>
             </Pressable>

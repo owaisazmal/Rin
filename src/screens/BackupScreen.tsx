@@ -23,7 +23,7 @@ import { backupNow } from '../hooks/backupRuns';
 import { sentAnything } from '../hooks/autoBackupPolicy';
 import { restoreReport, runReport } from './backupWording';
 import { device } from '../device';
-import { FONT, Palette, RADIUS, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, useTheme, wrapSafe } from '../theme';
 
 type Tab = 'create' | 'restore';
 
@@ -387,11 +387,11 @@ const makeStyles = (p: Palette) =>
       marginBottom: 16,
       fontSize: 11,
       fontFamily: FONT.regular,
-      lineHeight: 16,
+      lineHeight: wrapSafe(16),
       color: p.inkSoft,
     },
     done: {
-      fontSize: 12,
+      fontSize: wrapSafe(12),
       fontFamily: FONT.medium,
       color: p.accent,
       marginBottom: 12,

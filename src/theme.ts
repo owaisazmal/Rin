@@ -48,6 +48,14 @@ export const FONT = {
   italic: 'JosefinSans_400Regular_Italic',
 } as const;
 
+/**
+ * Line height (or font size, where there is none) for text that can wrap. On 3x
+ * iPhones a whole-pixel height can round short and clip the last line.
+ */
+export function wrapSafe(size: number): number {
+  return Platform.OS === 'ios' ? size + 0.01 : size;
+}
+
 export interface Palette {
   /** flat colour behind the drifting background blobs */
   bg: string;

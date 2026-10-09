@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LogoMark from '../components/LogoMark';
-import { COLUMN, FONT, Palette, RADIUS, useTheme } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, useTheme, wrapSafe } from '../theme';
 import { FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
 import { device } from '../device';
 
@@ -301,7 +301,7 @@ const makeStyles = (p: Palette) =>
     },
     title: {
       fontSize: 29,
-      lineHeight: 35,
+      lineHeight: wrapSafe(35),
       fontFamily: FONT.bold,
       color: p.ink,
       marginBottom: 14,
@@ -309,11 +309,11 @@ const makeStyles = (p: Palette) =>
       // rest are two. The block is centred, so without this that page's copy
       // sits lower than its neighbours' and the words step down as you swipe
       // onto it. The art box above holds its own height for the same reason.
-      minHeight: 70,
+      minHeight: 2 * wrapSafe(35),
     },
     body: {
       fontSize: 14,
-      lineHeight: 22,
+      lineHeight: wrapSafe(22),
       fontFamily: FONT.regular,
       color: p.inkSoft,
       // Five lines, which is what the longest of the four runs to on a phone of
@@ -322,7 +322,7 @@ const makeStyles = (p: Palette) =>
       // the whole thing and the words would step as you swipe onto it. On a
       // narrow enough screen a page can still outgrow this, and then it lifts —
       // but by the one line it has gained, not by the four the art used to.
-      minHeight: 110,
+      minHeight: 5 * wrapSafe(22),
     },
     footer: {
       ...COLUMN,

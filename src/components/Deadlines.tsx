@@ -5,7 +5,7 @@ import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * Tasks with a date on them, and how close that date is.
@@ -274,7 +274,7 @@ const makeStyles = (p: Palette) =>
     },
     empty: {
       fontSize: 13,
-      lineHeight: 19,
+      lineHeight: wrapSafe(19),
       fontFamily: FONT.regular,
       color: p.inkSoft,
     },

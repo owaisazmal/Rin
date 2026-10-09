@@ -12,6 +12,32 @@ export interface KeyGoal {
   done: boolean;
 }
 
+/** What a custom card holds: free text, plain lines, or lines that can be ticked. */
+export type CardKind = 'note' | 'list' | 'checklist';
+
+export const CARD_KINDS: readonly CardKind[] = ['note', 'list', 'checklist'];
+
+/** One line of a custom card. A note is a single item; only a checklist reads `done`. */
+export interface CardItem {
+  text: string;
+  done: boolean;
+}
+
+/**
+ * A custom card as a month stores it. Title and kind are kept so a restored
+ * month can rebuild its own cards.
+ */
+export interface CustomCard {
+  /** matches the layout's id for the card, so a rename never detaches its lines */
+  id: string;
+  title: string;
+  kind: CardKind;
+  items: CardItem[];
+}
+
+/** Enough of a card to file lines under it: which one, and what to call it */
+export type CardRef = Pick<CustomCard, 'id' | 'title' | 'kind'>;
+
 export interface MonthData {
   habits: Habit[];
   /** every habit was removed on purpose, so none are carried in from an earlier month */
@@ -20,6 +46,8 @@ export interface MonthData {
   grid: Record<string, CellState>;
   observations: string[];
   keyGoals: KeyGoal[];
+  /** Absent rather than empty when there are none, so older months serialize unchanged. */
+  cards?: CustomCard[];
 }
 
 /**
@@ -45,6 +73,41 @@ export const MAX_HABIT_NAME = 24;
 export const MAX_OBSERVATION_LEN = 280;
 export const MAX_OBSERVATIONS = 12;
 export const MAX_GOAL_LEN = 120;
+/** Sized so a month with every card full still fits under the backup cap. */
+export const MAX_CUSTOM_CARDS = 4;
+export const MAX_CARD_TITLE = 24;
+export const MAX_CARD_ITEMS = 12;
+export const MAX_CARD_ITEM_LEN = 160;
+export const MAX_CARD_NOTE_LEN = 1000;
+/** A month can hold leftovers of deleted cards, so its cap is above the live one. */
+export const MAX_MONTH_CARDS = 12;
+
+/** The shape every custom card id has; the parsers hold stored ids to it */
+const CARD_ID = /^c-[0-9a-z]{4,20}$/;
+
+export function isCardId(id: unknown): id is string {
+  return typeof id === 'string' && CARD_ID.test(id);
+}
+
+export function isCardKind(kind: unknown): kind is CardKind {
+  return CARD_KINDS.includes(kind as CardKind);
+}
+
+/** What a card shows in a month that has nothing filed under it yet */
+export function emptyCardItems(kind: CardKind): CardItem[] {
+  const blank = (): CardItem => ({ text: '', done: false });
+  return kind === 'note' ? [blank()] : [blank(), blank(), blank()];
+}
+
+/** The lines a month holds for one card, or the blank ones it starts with */
+export function cardItemsIn(data: MonthData, id: string, kind: CardKind): CardItem[] {
+  return data.cards?.find((c) => c.id === id)?.items ?? emptyCardItems(kind);
+}
+
+/** Whether a card holds anything somebody would miss */
+export function cardHasContent(items: readonly CardItem[]): boolean {
+  return items.some((item) => item.text.trim() !== '' || item.done);
+}
 
 export function emptyMonthData(): MonthData {
   return {

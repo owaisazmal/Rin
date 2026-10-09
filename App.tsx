@@ -13,6 +13,7 @@ import {
 } from './src/backupState';
 import { forgetLaunch } from './src/hooks/backupRuns';
 import { useAutoBackup } from './src/hooks/useAutoBackup';
+import type { PlannerLayout } from './src/layout';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import { Settings, loadSettings, saveSettings } from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
@@ -218,6 +219,17 @@ export default function App() {
     []
   );
 
+  /** Takes an updater so two changes in one tick both land. */
+  const changeLayout = useCallback(
+    (change: (prev: PlannerLayout) => PlannerLayout) =>
+      setSettings((prev) => {
+        if (!prev) return prev;
+        const layout = change(prev.layout);
+        return layout === prev.layout ? prev : { ...prev, layout };
+      }),
+    []
+  );
+
   const mode = settings?.theme ?? 'dark';
   const theme: Theme = useMemo(
     () => ({
@@ -247,6 +259,8 @@ export default function App() {
             backupStatus={backupStatus}
             chart={settings.chart}
             onSetChart={(chart) => updateSettings({ chart })}
+            layout={settings.layout}
+            onChangeLayout={changeLayout}
             onBackedUp={(_code, outcome) => {
               setHasCode(true);
               /**

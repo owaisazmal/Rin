@@ -109,11 +109,14 @@ export const withoutTabs = (text: string) => text.replace(/\t/g, '');
 interface Props extends ScrollViewProps {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** A sheet over this page has the keyboard: no padding and no done bar here. */
+  keyboardElsewhere?: boolean;
 }
 
 export default function KeyboardSafeScroll({
   children,
   style,
+  keyboardElsewhere = false,
   // Taken by name rather than left in the spread: every one of these is set
   // below, and a caller's copy would otherwise be dropped without a word.
   onLayout: alsoOnLayout,
@@ -336,7 +339,7 @@ export default function KeyboardSafeScroll({
   );
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior="padding">
+    <KeyboardAvoidingView style={styles.flex} behavior="padding" enabled={!keyboardElsewhere}>
       {Platform.OS === 'android' && (
         // After Tab, Android gives focus to the first focusable view when an edit
         // ends. This is that view, so the next keys don't land in another field.
@@ -394,7 +397,7 @@ export default function KeyboardSafeScroll({
       </ScrollView>
 
       {/* Last child of the avoiding view on purpose — see the note in the component */}
-      <KeyboardDoneBar />
+      {keyboardElsewhere ? null : <KeyboardDoneBar />}
     </KeyboardAvoidingView>
   );
 }

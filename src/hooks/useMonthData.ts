@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CardItem,
+  CardRef,
   CellState,
   Habit,
+  MAX_CARD_ITEMS,
+  MAX_MONTH_CARDS,
   MAX_OBSERVATIONS,
   MonthData,
   cellKey,
+  emptyCardItems,
   emptyMonthData,
   nextHabitId,
 } from '../types';
@@ -400,6 +405,97 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [edit]
   );
 
+  /**
+   * The first edit to a card also files it in this month, under its current title
+   * and kind. Declines when the month already holds the most cards it may.
+   */
+  const editCard = useCallback(
+    (card: CardRef, change: (items: CardItem[]) => CardItem[]) => {
+      edit((prev) => {
+        const held = prev.cards ?? [];
+        const at = held.findIndex((c) => c.id === card.id);
+        if (at < 0 && held.length >= MAX_MONTH_CARDS) return prev;
+        const before = at >= 0 ? held[at].items : emptyCardItems(card.kind);
+        const items = change(before);
+        if (items === before) return prev;
+        const next = { id: card.id, title: card.title, kind: card.kind, items };
+        return {
+          ...prev,
+          cards: at >= 0 ? held.map((c, i) => (i === at ? next : c)) : [...held, next],
+        };
+      });
+    },
+    [edit]
+  );
+
+  const setCardText = useCallback(
+    (card: CardRef, index: number, text: string) => {
+      editCard(card, (items) =>
+        items[index] && items[index].text !== text
+          ? items.map((item, i) => (i === index ? { ...item, text } : item))
+          : items
+      );
+    },
+    [editCard]
+  );
+
+  const toggleCardItem = useCallback(
+    (card: CardRef, index: number) => {
+      editCard(card, (items) =>
+        items[index]
+          ? items.map((item, i) => (i === index ? { ...item, done: !item.done } : item))
+          : items
+      );
+    },
+    [editCard]
+  );
+
+  /** Checked against the same limit the card's header hides its button on */
+  const addCardItem = useCallback(
+    (card: CardRef) => {
+      editCard(card, (items) =>
+        card.kind === 'note' || items.length >= MAX_CARD_ITEMS
+          ? items
+          : [...items, { text: '', done: false }]
+      );
+    },
+    [editCard]
+  );
+
+  const removeCardItem = useCallback(
+    (card: CardRef, index: number) => {
+      editCard(card, (items) =>
+        items.length > 1 && items[index] ? items.filter((_, i) => i !== index) : items
+      );
+    },
+    [editCard]
+  );
+
+  /** Keeps the title this month stores for a card in step with a rename. */
+  const retitleCard = useCallback(
+    (id: string, title: string) => {
+      edit((prev) =>
+        prev.cards?.some((c) => c.id === id && c.title !== title)
+          ? { ...prev, cards: prev.cards.map((c) => (c.id === id ? { ...c, title } : c)) }
+          : prev
+      );
+    },
+    [edit]
+  );
+
+  /** Takes a deleted card's lines out of this month; the key goes with the last of them */
+  const dropCard = useCallback(
+    (id: string) => {
+      edit((prev) => {
+        if (!prev.cards?.some((c) => c.id === id)) return prev;
+        const { cards, ...rest } = prev;
+        const left = cards.filter((c) => c.id !== id);
+        return left.length ? { ...rest, cards: left } : rest;
+      });
+    },
+    [edit]
+  );
+
   /** Whether removing this habit would take marks with it — the caller's cue to confirm */
   const habitHasMarks = useCallback(
     (id: string) => Object.keys(data.grid).some((k) => k.endsWith(`:${id}`)),
@@ -452,5 +548,11 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     setObservation,
     addObservation,
     removeObservation,
+    setCardText,
+    toggleCardItem,
+    addCardItem,
+    removeCardItem,
+    retitleCard,
+    dropCard,
   };
 }
