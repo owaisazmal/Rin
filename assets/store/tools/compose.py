@@ -2,7 +2,8 @@
 
 Usage: python3 compose.py slides.json
 Every path in the spec (sources and output folders) is resolved relative to the spec file.
-spec: {"out": {"play": dir, "appstore": dir}, "slides": [ {name, theme, eyebrow, headline, sub?, icon?, src: {play: path, appstore: path}, bars: {play: "android"|"ios-17promax"|"ios-16pro", appstore: ...}} ]}
+spec: {"out": {"play": dir, "appstore": dir, "ipad": dir, "duo-outer": dir, "duo-inner": dir}, "slides": [ {name, theme, eyebrow, headline, sub?, icon?, src: {play: path, appstore: path, ipad?: path, duo?: path}, bars: {play: "android"|"ios-17promax"|"ios-16pro"|"ipad-13"|[top, bottom], appstore: ...}} ]}
+A slide without a source for a store is left out of that store's set. frame_top and cap_top take a number or a per-store object.
 """
 import json, os, subprocess, sys, tempfile
 from PIL import Image
@@ -11,14 +12,21 @@ from PIL import Image
 R = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
 FONT = R + '/node_modules/@expo-google-fonts/josefin-sans'
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-SIZES = {'play': (1080, 1920), 'appstore': (1320, 2868)}
+SIZES = {'play': (1080, 1920), 'appstore': (1320, 2868), 'ipad': (2064, 2752),
+         'duo-outer': (1398, 2034), 'duo-inner': (2007, 2853)}
 
 # status bar / home indicator to cut, per capture source, in source pixels
 BARS = {
     'ios-17promax': (186, 102),   # 1320 x 2868, 3x: 62pt status area, 34pt home indicator
     'ios-16pro': (180, 100),      # 1206 x 2622, 3x
     'android': (90, 70),          # 1080 x 2400 emulator: status bar, gesture pill
+    'ipad-13': (64, 40),          # 2064 x 2752, 2x
 }
+# frame geometry in design units; the tablet is a close-up with no bezel, running off both sides and the bottom
+PHONE = dict(fw=860, bez=16, r=104, top=585, cap=150)
+DUO = dict(fw=800, bez=16, r=100, top=470, cap=96)   # the phone frame, running off the bottom
+FRAME = {'play': PHONE, 'appstore': PHONE, 'ipad': dict(fw=1340, bez=0, r=84, top=470, cap=96),
+         'duo-outer': DUO, 'duo-inner': DUO}
 THEME = {
     'dark': dict(bg='#0d0d0d', ink='#FFFFE3', accent='#8fa5ba', soft='#CBCBCB',
                  blobs='radial-gradient(90% 60% at 12% 4%, rgba(76,91,107,.30), transparent 70%), radial-gradient(95% 60% at 92% 62%, rgba(51,51,51,.95), transparent 70%)',
@@ -30,10 +38,15 @@ THEME = {
 
 def cut_bars(src, kind, out):
     im = Image.open(src).convert('RGB')
-    top, bottom = BARS[kind]
+    top, bottom = BARS[kind] if isinstance(kind, str) else kind
     im = im.crop((0, top, im.width, im.height - bottom))
     im.save(out)
     return im.size
+
+def per_store(value, store, default):
+    if isinstance(value, dict):
+        value = value.get(store)
+    return default if value is None else value
 
 def render(html, w, h, out):
     page = out + '.html'
@@ -50,11 +63,12 @@ def render(html, w, h, out):
 def slide_html(s, store, screen_path, screen_size, W, H):
     t = THEME[s['theme']]
     u = W / 1080                     # design unit: everything scales with width
-    fw = 860 * u                     # frame width incl. bezel
-    bez = 16 * u
+    g = FRAME[store]
+    fw = g['fw'] * u                 # frame width incl. bezel
+    bez = g['bez'] * u
     inner = fw - 2 * bez
     sh = screen_size[1] * inner / screen_size[0]
-    top = (s.get('frame_top', 585)) * u
+    top = per_store(s.get('frame_top'), store, g['top']) * u
     icon = ''
     if s.get('icon'):
         icon = f'<img class=icon src="file://{R}/assets/logo/mark-{s["theme"]}.svg">'
@@ -64,13 +78,13 @@ def slide_html(s, store, screen_path, screen_size, W, H):
 @font-face{{font-family:JR;src:url("file://{FONT}/400Regular/JosefinSans_400Regular.ttf")}}
 html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden;background:{t['bg']}}}
 .w{{position:absolute;inset:0;background:{t['blobs']}}}
-.cap{{position:absolute;left:{60*u}px;right:{60*u}px;top:{s.get('cap_top', 150)*u}px;text-align:center}}
+.cap{{position:absolute;left:{60*u}px;right:{60*u}px;top:{per_store(s.get('cap_top'), store, g['cap'])*u}px;text-align:center}}
 .icon{{display:block;width:{68*u}px;height:{68*u}px;margin:0 auto {26*u}px}}
 .eye{{font:700 {28*u}px JB;letter-spacing:{9*u}px;color:{t['accent']};margin-bottom:{24*u}px;padding-left:{9*u}px}}
 .head{{font:700 {s.get('head_px', 72)*u}px/1.12 JB;color:{t['ink']};letter-spacing:{0.5*u}px}}
 .sub{{font:400 {33*u}px/1.4 JR;color:{t['soft']};margin-top:{20*u}px}}
-.frame{{position:absolute;left:{(W-fw)/2}px;top:{top}px;width:{fw}px;height:{sh+2*bez}px;border-radius:{104*u}px;background:{t['bezel']};box-shadow:0 {36*u}px {90*u}px {t['shadow']}, inset 0 0 0 {2*u}px {t['edge']}}}
-.screen{{position:absolute;left:{bez}px;top:{bez}px;width:{inner}px;height:{sh}px;border-radius:{88*u}px;overflow:hidden;background:#000}}
+.frame{{position:absolute;left:{(W-fw)/2}px;top:{top}px;width:{fw}px;height:{sh+2*bez}px;border-radius:{g['r']*u}px;background:{t['bezel']};box-shadow:0 {36*u}px {90*u}px {t['shadow']}, inset 0 0 0 {2*u}px {t['edge']}}}
+.screen{{position:absolute;left:{bez}px;top:{bez}px;width:{inner}px;height:{sh}px;border-radius:{(g['r']-g['bez'])*u}px;overflow:hidden;background:#000}}
 .screen img{{display:block;width:100%;height:100%}}
 </style></head><body><div class=w></div>
 <div class=cap>{icon}<div class=eye>{s['eyebrow']}</div><div class=head>{s['headline']}</div>{sub}</div>
@@ -83,9 +97,14 @@ def main(spec_path):
     rel = lambda path: os.path.normpath(os.path.join(base, path))
     work = tempfile.mkdtemp(prefix='rin-store-')
     for store, (W, H) in SIZES.items():
+        if store not in spec['out']:
+            continue
         outdir = rel(spec['out'][store]); os.makedirs(outdir, exist_ok=True)
         for i, s in enumerate(spec['slides'], 1):
-            src = rel(s['src'][store]); kind = s['bars'][store]
+            key = store.split('-')[0]   # both Duo sizes share one source
+            if key not in s['src']:
+                continue
+            src = rel(s['src'][key]); kind = s['bars'][key]
             screen = os.path.join(work, f'{store}-{s["name"]}.png')
             size = cut_bars(src, kind, screen)
             out = os.path.join(outdir, f'{i:02d}-{s["name"]}.png')

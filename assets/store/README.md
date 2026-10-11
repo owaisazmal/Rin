@@ -1,12 +1,15 @@
 # Store screenshots
 
-Phone screenshots for both listings, built from the same seven compositions:
+Screenshots for both listings, built from the same seven compositions:
 
 | Folder | Size | For |
 | --- | --- | --- |
 | `google-play/` | 1080 × 1920 px, 9:16, 24-bit PNG | Google Play → Phone screenshots (2–8, ≤ 8 MB each, 16:9 or 9:16, sides 320–3,840 px) |
 | `app-store/` | 1320 × 2868 px, 24-bit PNG | App Store Connect → iPhone 6.9" display. Also accepted for 6.9" is 1290 × 2796. |
 | `app-store-65/` | 1284 × 2778 px, 24-bit PNG | App Store Connect → iPhone 6.5" display. The 6.9" set, resized. |
+| `app-store-ipad/` | 2064 × 2752 px, 24-bit PNG | App Store Connect → iPad 13" display. Slides 01–05 only. |
+| `app-store-duo/outer/` | 1398 × 2034 px, 24-bit PNG | App Store Connect → iPhone Duo, outer display. Slides 01–05 only. |
+| `app-store-duo/inner/` | 2007 × 2853 px, 24-bit PNG | App Store Connect → iPhone Duo, inner display. Slides 01–05 only. |
 
 Both stores want no alpha channel; every file here is flat RGB. Upload in the numbered order.
 
@@ -24,6 +27,17 @@ Slides 01–05 use the same iPhone captures on both stores. The widget slides di
 the Play set shows the Android launcher (`screenshots/*/android/widgets/page*.png`),
 the App Store set shows the iOS home screen. Status bars and home indicators are
 cut from every capture, so the phone frame is platform-neutral.
+
+The iPad set has its own captures, taken on an iPad Pro 13" (M5) simulator on
+10 Oct 2026, shown as a close-up with no bezel that runs off both sides and the bottom.
+An iPad screen holds most of the planner at once, so slide 02 is scrolled to the
+daily check and slide 05 was shot with the Deadlines card hidden and cropped to
+start under the habit list; the two no longer show the same cards. It has no
+widget slides.
+
+The Duo sets are not Duo captures. Xcode 27.0 has no iPhone Duo simulator (it
+arrives with 27.1), so they are the iPhone 17 Pro Max gallery shots in the phone
+frame at the two Duo sizes. Retake them on a Duo simulator before relying on them.
 
 ## Sample data
 
@@ -49,7 +63,8 @@ dataset, written into a throwaway emulator.
    into a `CAPTURES/` folder next to `tools/slides.json`, using the file names
    that file expects.
 3. `python3 assets/store/tools/compose.py assets/store/tools/slides.json` rewrites
-   both folders. It needs Google Chrome (rasterising), Pillow, and the Josefin
+   every folder above except the 6.5" one. The iPad captures go in `CAPTURES/` too, as `ipad-01-radial-dark.png`
+   and so on. It needs Google Chrome (rasterising), Pillow, and the Josefin
    Sans files from `node_modules`.
 4. The 6.5" set is the 6.9" one resized:
    ```bash
