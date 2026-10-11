@@ -287,7 +287,7 @@ export function damagedNotice(record: DamagedRecord, restorable = false): string
   // record nobody can edit is a record nobody can rescue, and the backup card
   // sends people here to do exactly that. What it must not do is let someone
   // type over the rest of it without knowing that is what they are doing.
-  return `Rin could not read ${subject} on this ${device()}, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen — which also lets go of the part that did not.${back}`;
+  return `Rin could not read ${subject} on this ${device()}, so what you see is only the part that survived. Opening ${it} changes nothing on the disk, but writing in it saves what is on screen, which also lets go of the part that did not.${back}`;
 }
 
 // --- the card in Settings ----------------------------------------------------
@@ -452,7 +452,7 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
       body:
         out === 'only-copy'
           ? `This ${device()}'s copy looks damaged, so nothing was sent. ${ending}${also}`
-          : `This ${device()}'s copy looks damaged, so nothing was sent and the copy in the backup is untouched — Rin is holding on to the good one rather than writing over it with this. ${ending}${also}`,
+          : `This ${device()}'s copy looks damaged, so nothing was sent and the copy in the backup is untouched. Rin is holding on to the good one rather than writing over it with this. ${ending}${also}`,
       attention: true,
       retry: true,
       restore: out === 'restore' ? lead.key : null,
@@ -475,8 +475,8 @@ function blockedCard(blocked: readonly Refused[], holds: BackupHolds): Card {
             // put a thin month on a server that held nothing, not deleted a
             // whole one. Still not sent, and for the same reason — a backup
             // made from this would hold no more than this phone can read.
-            `Reading it here, ${lost(lead.detail)} — so nothing was sent. ${onlyCopy()}${also}`
-          : `Reading it here, ${lost(lead.detail)} — so nothing was sent and the copy in the backup is untouched. Sending what was left would have dropped the rest from the backup too, without a word. ${out === 'restore' ? pullBack() : revive(lead.key)}${also}`,
+            `Reading it here, ${lost(lead.detail)}, so nothing was sent. ${onlyCopy()}${also}`
+          : `Reading it here, ${lost(lead.detail)}, so nothing was sent and the copy in the backup is untouched. Sending what was left would have dropped the rest from the backup too, without a word. ${out === 'restore' ? pullBack() : revive(lead.key)}${also}`,
       attention: true,
       retry: true,
       restore: out === 'restore' ? lead.key : null,
@@ -574,7 +574,7 @@ function damagedCard(
    * "part of it" for the second would be describing damage nobody measured.
    */
   const opening = lead.lost
-    ? `This ${device()}'s copy is damaged — ${lead.lost} did not survive.`
+    ? `This ${device()}'s copy is damaged: ${lead.lost} did not survive.`
     : `This ${device()}'s copy is damaged.`;
 
   return {
@@ -595,7 +595,7 @@ function damagedCard(
      */
     body:
       out === 'restore'
-        ? `${opening} The backup is holding a copy of its own, and it did not come from this one — Rin has never sent a record it could not read. ${pullBack()}${also}`
+        ? `${opening} The backup is holding a copy of its own, and it did not come from this one. Rin has never sent a record it could not read. ${pullBack()}${also}`
         : out === 'only-copy'
           ? `${opening} ${onlyCopy()}${also}`
           : `${opening} Rin has never sent a record it could not read, so nothing in the backup came from this damaged copy. ${revive(lead.key)}${also}`,
@@ -788,7 +788,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
    * from claiming it on behalf of the months that went up beside it.
    */
   if (pushed === 0 && blocked.every((doc) => doc.reason === 'rejected')) {
-    return `The backup server turned this app away, so nothing was sent. That is a setup problem at my end, not yours — nothing on this ${device()} was lost, and what is already in the backup is untouched.`;
+    return `The backup server turned this app away, so nothing was sent. That is a setup problem at my end, not yours. Nothing on this ${device()} was lost, and what is already in the backup is untouched.`;
   }
 
   const lead = leading(blocked);
@@ -808,7 +808,7 @@ function stuckSentence(blocked: readonly BlockedDoc[], pushed: number): string {
   // Without this the sentence fell through to the line below and told somebody
   // the server had turned down a document the server was never offered.
   if (lead.reason === 'incomplete') {
-    return `Rin could only read part of ${within} on this ${device()} — ${lost(lead.detail)} — so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
+    return `Rin could only read part of ${within} on this ${device()} (${lost(lead.detail)}), so it was not sent and the copy in the backup is untouched. ${revive(lead.key)}${also}`;
   }
   return `${name} ${pastVerbFor(lead.key)} turned down by the server. Backing up again will try it again.${also}`;
 }

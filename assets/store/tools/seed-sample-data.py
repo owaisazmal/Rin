@@ -45,7 +45,7 @@ for m in range(3, TODAY.month + 1):
     if m == TODAY.month:
         month["grid"]["3:3"] = 2
         month["grid"]["7:4"] = 2
-        month["observations"] = ["Travel weeks are hard — plan lighter.", "Reading before bed sticks better than mornings.",
+        month["observations"] = ["Travel weeks are hard, so plan lighter.", "Reading before bed sticks better than mornings.",
                                  "Sunday prep makes for calmer Mondays.", ""]
         month["keyGoals"] = [{"text": "Ship v1", "done": True}, {"text": "Run 50k", "done": False}, {"text": "Read 3 books", "done": False}]
     store[f"@monthly-planning/{TODAY.year}-{m:02d}"] = json.dumps(month, separators=(",", ":"), ensure_ascii=False)

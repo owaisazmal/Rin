@@ -190,7 +190,7 @@ export default function SettingsScreen({
   const confirmDelete = () =>
     Alert.alert(
       'Delete the backup?',
-      `Everything in the backup is erased for good, and no code can bring it back — not yours and not mine. What is on this ${device()} stays exactly as it is.`,
+      `Everything in the backup is erased for good, and no code can bring it back, not yours and not mine. What is on this ${device()} stays exactly as it is.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -220,7 +220,7 @@ export default function SettingsScreen({
   const confirmForget = () =>
     Alert.alert(
       'Forget the code?',
-      `This ${device()} stops backing up. The backup itself stays where it is — anyone with the code written down can still restore it.`,
+      `This ${device()} stops backing up. The backup itself stays where it is, and anyone with the code written down can still restore it.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Forget', style: 'destructive', onPress: onForgetBackup },
@@ -346,7 +346,7 @@ export default function SettingsScreen({
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Theme</Text>
               <Text style={styles.rowSub}>
-                {mode === 'dark' ? 'Dark — ivory on black' : 'Light — charcoal on ivory'}
+                {mode === 'dark' ? 'Dark: ivory on black' : 'Light: charcoal on ivory'}
               </Text>
             </View>
           </View>
@@ -367,7 +367,7 @@ export default function SettingsScreen({
         <View style={styles.colophon}>
           <Text style={styles.appName}>Rin</Text>
           <Text style={styles.appDefinition}>
-            凛 — dignity in showing up, day after day.
+            凛: dignity in showing up, day after day.
           </Text>
           <Text style={styles.madeBy}>
             Free and open-source. Made by Owais Khan. No team, no investors, and

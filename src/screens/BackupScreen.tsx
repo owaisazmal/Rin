@@ -267,7 +267,7 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
                 </View>
 
                 <Text style={styles.warning}>
-                  Write it down. Nobody can look it up for you — not me, not Google.
+                  Write it down. Nobody can look it up for you, not me and not Google.
                   Without it the backup stays encrypted forever.
                 </Text>
               </>

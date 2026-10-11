@@ -1,14 +1,14 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-dark.svg">
-    <img alt="Rin — Monthly Planning" src="assets/logo/logo-light.svg" width="440">
+    <img alt="Rin: Monthly Planning" src="assets/logo/logo-light.svg" width="440">
   </picture>
 </p>
 
 # Rin
-*凛 (rin) — dignity in showing up, day after day.*
+*凛 (rin): dignity in showing up, day after day.*
 
-Free and open-source. A digital version of the whiteboard "Monthly Planning" board — Rin's home screen — with a **radial habit tracker**, built with Expo / React Native for iOS and Android.
+Free and open-source. A digital version of the whiteboard "Monthly Planning" board, which is Rin's home screen, with a **radial habit tracker**, built with Expo / React Native for iOS and Android.
 
 | Planner | Year grid | Daily check | Widgets |
 | :-: | :-: | :-: | :-: |
@@ -28,7 +28,7 @@ analytics, no trackers, no crash reporters, no ad SDKs. Your habits, notes and
 goals live in local storage on the device. The one exception is a backup, which
 you turn on yourself: it is encrypted on the phone with a code only you hold,
 so what reaches the server is ciphertext filed under a number. There are no
-accounts — no name, no email, no password — and the app is fully usable
+accounts (no name, no email, no password), and the app is fully usable
 without ever making a backup.
 
 **The source stays public for as long as this app exists.** That is a promise
@@ -64,11 +64,11 @@ and the phone re-validates everything it reads back.
 - **Observations**: free-form note lines, add/remove as needed.
 - **Key Goals**: three goal boxes with a "mark done" toggle.
 - **Discipline quote**: rotates daily.
-- **Your cards**: everything below the daily check is yours to arrange. The pencil in the header hides the cards you don't use, reorders the rest, and makes up to four of your own — a note, a list, or a checklist, under whatever name you give it. What a card of your own holds is filed with the month, like observations and goals, so it is in the backup too.
+- **Your cards**: everything below the daily check is yours to arrange. The pencil in the header hides the cards you don't use, reorders the rest, and makes up to four of your own: a note, a list, or a checklist, under whatever name you give it. What a card of your own holds is filed with the month, like observations and goals, so it is in the backup too.
 - **Dark mode**: on by default, switched in Settings. The choice persists, and the home-screen widgets follow it.
 - **Widgets**: eight of them on both platforms (radial, year, streak, today, goals, progress, daily quote, deadlines), plus Lock Screen accessories on iOS.
 - **Reminders**: a few nudges a day, only while something is still unmarked, and a note when the day is done. Habit nudges and deadline reminders are rewritten together, within a budget, because iOS keeps only the 64 soonest pending local notifications.
-- **Backup**: optional. Once you make one, Rin sends what changed when you open the app, and after half a minute of it sitting still with something waiting. It never backs up while the app is closed. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. Nothing this phone cannot read is ever sent over a good copy: a month it cannot account for is named on the Settings card instead. No account, and no way to recover a lost code — which is the same sentence twice, and why the app says so before you rely on it.
+- **Backup**: optional. Once you make one, Rin sends what changed when you open the app, and after half a minute of it sitting still with something waiting. It never backs up while the app is closed. One code, generated on the device, encrypts everything before it leaves and is the only thing that can read it back. Nothing this phone cannot read is ever sent over a good copy: a month it cannot account for is named on the Settings card instead. No account, and no way to recover a lost code, which is the same sentence twice, and why the app says so before you rely on it.
 - **Month navigation**: every month keeps its own habits, grid, observations, goals, and custom cards, persisted on-device with AsyncStorage.
 
 ## Run it

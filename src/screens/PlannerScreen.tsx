@@ -256,7 +256,7 @@ export default function PlannerScreen({
       }
       Alert.alert(
         'Remove habit?',
-        `"${findHabit(id)?.name || 'This habit'}" has marks this month — they will be deleted.`,
+        `"${findHabit(id)?.name || 'This habit'}" has marks this month, and they will be deleted.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Remove', style: 'destructive', onPress: doRemove },

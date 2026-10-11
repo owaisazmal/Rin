@@ -139,7 +139,7 @@ struct RadialTrackerWidget: Widget {
       RadialWidgetView(entry: entry)
     }
     .configurationDisplayName("Radial Tracker")
-    .description("This month as rings — one ring per habit, one wedge per day.")
+    .description("This month as rings: one ring per habit, one wedge per day.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     // the view pads itself; the system's own margins on top left the rings
     // at barely half the square

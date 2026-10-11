@@ -38,7 +38,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
     eyebrow: 'BEFORE ANYTHING ELSE',
     title: 'Built for myself.\nOpen to everyone.',
     body:
-      `No analytics, no trackers, no account needed — your habits sit on your ${device()} and go nowhere else. The source is public and stays that way for as long as this app exists. If something here bothers you, read it, fork it, and build the version you would rather use.`,
+      `No analytics, no trackers, no account needed. Your habits sit on your ${device()} and go nowhere else. The source is public and stays that way for as long as this app exists. If something here bothers you, read it, fork it, and build the version you would rather use.`,
   },
   {
     kind: 'grid',
@@ -59,7 +59,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
     eyebrow: 'WHAT IT COSTS YOU',
     title: 'One mark a day.',
     body:
-      'Tick it or cross it — that is the entire ritual. The year fills in behind you, the streak keeps its own count, and widgets put it on your home screen so remembering is not your job.',
+      'Tick it or cross it. That is the entire ritual. The year fills in behind you, the streak keeps its own count, and widgets put it on your home screen so remembering is not your job.',
   },
 ];
 
