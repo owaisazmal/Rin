@@ -5,8 +5,9 @@ Screenshots for both listings, built from the same seven compositions:
 | Folder | Size | For |
 | --- | --- | --- |
 | `google-play/` | 1080 × 1920 px, 9:16, 24-bit PNG | Google Play → Phone screenshots (2–8, ≤ 8 MB each, 16:9 or 9:16, sides 320–3,840 px) |
-| `app-store/` | 1320 × 2868 px, 24-bit PNG | App Store Connect → iPhone 6.9" display. Also accepted for 6.9" is 1290 × 2796. |
-| `app-store-65/` | 1284 × 2778 px, 24-bit PNG | App Store Connect → iPhone 6.5" display. The 6.9" set, resized. |
+| `app-store/` | 1320 × 2868 px, 24-bit PNG | App Store Connect → iPhone with Dynamic Island (large display), the 6.9" phones. Smaller iPhone sizes scale down from this set. |
+| `app-store-65/` | 1284 × 2778 px, 24-bit PNG | App Store Connect → iPhone with Face ID (large display), 6.5". The 6.9" set, resized. |
+| `app-store-63/` | 1206 × 2622 px, 24-bit PNG | App Store Connect → iPhone with Dynamic Island (medium display), 6.3", the size Apple lists as required. The 6.9" set, resized; only needed if the scaled-down large set is not accepted. |
 | `app-store-ipad/` | 2064 × 2752 px, 24-bit PNG | App Store Connect → iPad 13" display. Slides 01–05 only. |
 | `app-store-duo/outer/` | 1398 × 2034 px, 24-bit PNG | App Store Connect → iPhone Duo, outer display. Slides 01–05 only. |
 | `app-store-duo/inner/` | 2007 × 2853 px, 24-bit PNG | App Store Connect → iPhone Duo, inner display. Slides 01–05 only. |
@@ -66,7 +67,8 @@ dataset, written into a throwaway emulator.
    every folder above except the 6.5" one. The iPad captures go in `CAPTURES/` too, as `ipad-01-radial-dark.png`
    and so on. It needs Google Chrome (rasterising), Pillow, and the Josefin
    Sans files from `node_modules`.
-4. The 6.5" set is the 6.9" one resized:
+4. The 6.5" and 6.3" sets are the 6.9" one resized:
    ```bash
    for f in assets/store/app-store/*.png; do sips -z 2778 1284 "$f" --out "assets/store/app-store-65/$(basename "$f")"; done
+   for f in assets/store/app-store/*.png; do sips -z 2622 1206 "$f" --out "assets/store/app-store-63/$(basename "$f")"; done
    ```
