@@ -40,7 +40,8 @@ card empty. The 17-week window reads better.
 Daily Quote shows one quote per day, chosen by day-of-year from the same list
 the app uses, so the widget and the app always agree. It rolls over at midnight
 on its own — the widget picks from the list rather than being handed today's
-quote, so it doesn't depend on the app being opened.
+quote, so it doesn't depend on the app being opened. The one exception is the
+Lock Screen, below, which never cuts a quote short.
 
 ## Lock Screen
 
@@ -59,7 +60,7 @@ quote, so it doesn't depend on the app being opened.
 | Today's Check | inline | `3 of 5 done today` |
 | Key Goals | rectangular | the month's goals with a filled or open circle each |
 | Key Goals | inline | `1 of 3 goals done` |
-| Daily Quote | rectangular | today's quote; a long one gives up the heading, and one that still won't fit keeps its first sentence |
+| Daily Quote | rectangular | today's quote, whole; a long one gives up the heading, and one that still won't fit gives way to the next quote in the rotation that does |
 | Deadlines | rectangular | the next deadline and the time left on it |
 | Deadlines | inline | `5h left · Send the tax return`, countdown first, so a long title loses its end rather than the countdown |
 
@@ -74,6 +75,13 @@ On the iPhone SE, the tightest Lock Screen on iOS 27, a slot is 68pt (circular)
 or 153 × 68pt (rectangular), and the system keeps a 6pt margin inside it, so the
 content gets 56pt or 141 × 56pt. Text may run into that margin without being
 cut, which the three-line layouts and the quote rely on.
+
+That rectangular slot holds about 80 characters of quote at a readable size,
+and custom quotes can run to 150. So on a day whose quote is too long, the Lock
+Screen shows the next quote in the rotation that fits, headed for whoever wrote
+it, while the app and the Home Screen widgets still show the day's quote in
+full. Only if every quote in the list is too long does it fall back to the
+shortest one, set smaller (down to about 9pt) so it still shows whole.
 
 ### Captures
 

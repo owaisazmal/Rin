@@ -1,8 +1,9 @@
 import { cellKey } from './types';
 import type { CellState, Habit } from './types';
 import type { MonthRecord } from './storage';
-import type { Task } from './tasks';
+import type { RepeatEvery, Task } from './tasks';
 import { DAY, DAY_ABBR, HOUR, MINUTE, MONTH_ABBR, monthLength, startOfDay } from './dates';
+import { repeatLabel } from './recurring';
 
 /**
  * What actually happened, day by day.
@@ -28,6 +29,8 @@ export interface DeadlineEvent {
   completedAt: number | null;
   /** finished after the deadline had passed */
   late: boolean;
+  /** the series this was one occurrence of, or null for a one-off */
+  repeat: RepeatEvery | null;
 }
 
 export interface HistoryDay {
@@ -120,6 +123,7 @@ export function buildHistory(
       due: task.due,
       completedAt: task.completedAt ?? null,
       late: finishedLate(task),
+      repeat: task.repeat?.every ?? null,
     });
   }
 
@@ -144,6 +148,13 @@ export function dayHeading(entry: HistoryDay, now: number): string {
   if (diff === 1) return 'YESTERDAY';
   const d = new Date(entry.key);
   return `${DAY_ABBR[d.getDay()].toUpperCase()} ${entry.day} ${MONTH_ABBR[entry.month].toUpperCase()}`;
+}
+
+/** Which occurrence of a series this was — "monthly · due Sat 31 Oct" — or null for a one-off */
+export function occurrenceLabel(event: DeadlineEvent): string | null {
+  if (!event.repeat) return null;
+  const d = new Date(event.due);
+  return `${repeatLabel(event.repeat)} · due ${DAY_ABBR[d.getDay()]} ${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`;
 }
 
 /** How late, in the coarsest unit that still says something — "2d late" */

@@ -25,7 +25,7 @@ export interface Task {
    * treats a missing value as "finished, time unknown" rather than guessing.
    */
   completedAt?: number;
-  /** only the open occurrence carries it; absent on a one-off deadline */
+  /** absent on a one-off; a finished occurrence keeps it to say which series it was */
   repeat?: Repeat;
 }
 
@@ -78,16 +78,18 @@ export function parseTasks(raw: unknown): Task[] {
 export function toggleDone(tasks: Task[], id: string, now: number): Task[] {
   const task = tasks.find((t) => t.id === id);
   if (!task) return tasks;
-  if (task.done || !task.repeat) {
-    return tasks.map((t) =>
-      t === task ? { ...t, done: !t.done, completedAt: t.done ? undefined : now } : t
-    );
+  if (task.done) {
+    // reopened as a one-off, so a finished occurrence can never start a second series
+    const { repeat: _rule, ...open } = task;
+    return tasks.map((t) => (t === task ? { ...open, done: false, completedAt: undefined } : t));
   }
-  // the open row keeps its id and rule and moves on; the finished one is filed under a new id
-  const { repeat, ...finished } = task;
+  const finished = { ...task, done: true, completedAt: now };
+  const { repeat } = task;
+  if (!repeat) return tasks.map((t) => (t === task ? finished : t));
+  // the open row keeps its id and moves on; the finished one is filed under a new id
   return [
     ...tasks.map((t) => (t === task ? { ...t, due: nextDue(t.due, repeat, now) } : t)),
-    { ...finished, id: nextTaskId(tasks), done: true, completedAt: now },
+    { ...finished, id: nextTaskId(tasks) },
   ];
 }
 

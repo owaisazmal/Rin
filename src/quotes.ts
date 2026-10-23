@@ -82,18 +82,41 @@ export function placeQuote(custom: string[], index: number | null, text: string)
   return index === null ? [...custom, clean] : custom.map((q, i) => (i === index ? clean : q));
 }
 
-/** The list the card and the widgets rotate through; "mine" with none added falls back to the built-in one */
-export function activeQuotes(prefs: QuotePrefs): string[] {
-  if (prefs.source === 'builtin' || prefs.custom.length === 0) return DISCIPLINE_QUOTES;
-  return prefs.source === 'mine' ? prefs.custom : [...DISCIPLINE_QUOTES, ...prefs.custom];
+/** What the card and the widgets rotate through, and where the user's own quotes begin in it */
+export interface QuoteList {
+  quotes: string[];
+  /** the list's length when it holds none of the user's */
+  ownFrom: number;
+}
+
+export const BUILT_IN_HEADING = 'DISCIPLINE.';
+export const OWN_HEADING = 'YOUR WORDS.';
+
+/** "mine" with none added falls back to the built-in list */
+export function activeQuotes(prefs: QuotePrefs): QuoteList {
+  const builtIn = DISCIPLINE_QUOTES.length;
+  if (prefs.source === 'builtin' || prefs.custom.length === 0) {
+    return { quotes: DISCIPLINE_QUOTES, ownFrom: builtIn };
+  }
+  return prefs.source === 'mine'
+    ? { quotes: prefs.custom, ownFrom: 0 }
+    : { quotes: [...DISCIPLINE_QUOTES, ...prefs.custom], ownFrom: builtIn };
+}
+
+// calendar dates, not elapsed time: a daylight-saving hour must not move the day
+function dayOfYear(date: Date): number {
+  const year = date.getFullYear();
+  return (Date.UTC(year, date.getMonth(), date.getDate()) - Date.UTC(year, 0, 0)) / DAY;
 }
 
 /** Stable quote for a given date — changes once per day. */
 export function quoteForDate(date: Date, quotes: readonly string[] = DISCIPLINE_QUOTES): string {
-  // calendar dates, not elapsed time: a daylight-saving hour must not move the day
-  const year = date.getFullYear();
-  const dayOfYear =
-    (Date.UTC(year, date.getMonth(), date.getDate()) - Date.UTC(year, 0, 0)) / DAY;
   const list = quotes.length ? quotes : DISCIPLINE_QUOTES;
-  return list[dayOfYear % list.length];
+  return list[dayOfYear(date) % list.length];
+}
+
+/** The heading over the day's quote, so the user's own words aren't filed under discipline */
+export function quoteHeading(date: Date, { quotes, ownFrom }: QuoteList): string {
+  const own = quotes.length > 0 && dayOfYear(date) % quotes.length >= ownFrom;
+  return own ? OWN_HEADING : BUILT_IN_HEADING;
 }

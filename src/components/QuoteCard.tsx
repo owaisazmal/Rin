@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { quoteForDate } from '../quotes';
+import { QuoteList, quoteForDate, quoteHeading } from '../quotes';
 import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /** The day's line from the active list, built-in or the user's own. It changes at midnight. */
-export default function QuoteCard({ date, quotes }: { date: Date; quotes: readonly string[] }) {
+export default function QuoteCard({ date, list }: { date: Date; list: QuoteList }) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -13,10 +13,10 @@ export default function QuoteCard({ date, quotes }: { date: Date; quotes: readon
       <View style={styles.head}>
         <View style={styles.accent} />
         <Text style={styles.label} maxFontSizeMultiplier={SCALE.heading}>
-          DISCIPLINE.
+          {quoteHeading(date, list)}
         </Text>
       </View>
-      <Text style={styles.quote}>“{quoteForDate(date, quotes)}”</Text>
+      <Text style={styles.quote}>“{quoteForDate(date, list.quotes)}”</Text>
     </View>
   );
 }

@@ -20,6 +20,7 @@ import {
   filterHistory,
   historyTotals,
   lateness,
+  occurrenceLabel,
 } from '../history';
 import { useHistory } from '../hooks/useHistory';
 import { useNow } from '../hooks/useNow';
@@ -309,12 +310,20 @@ const DayCard = React.memo(function DayCard({
 
       {day.deadlines.map((event, i) => {
         const late = lateness(event);
+        const occurrence = occurrenceLabel(event);
         return (
           <View key={i} style={styles.deadlineRow}>
             <View style={[styles.deadlineDot, { backgroundColor: late ? palette.missed : palette.done }]} />
-            <Text style={styles.deadlineText} maxFontSizeMultiplier={SCALE.row} numberOfLines={2}>
-              {event.text}
-            </Text>
+            <View style={styles.deadlineBody}>
+              <Text style={styles.deadlineText} maxFontSizeMultiplier={SCALE.row} numberOfLines={2}>
+                {event.text}
+              </Text>
+              {occurrence && (
+                <Text style={styles.deadlineOccurrence} maxFontSizeMultiplier={SCALE.figure}>
+                  {occurrence}
+                </Text>
+              )}
+            </View>
             <Text
               style={[styles.deadlineWhen, late ? { color: palette.missed } : null]}
               maxFontSizeMultiplier={SCALE.figure}
@@ -452,11 +461,19 @@ const makeStyles = (p: Palette) =>
       height: 7,
       borderRadius: RADIUS.pill,
     },
-    deadlineText: {
+    deadlineBody: {
       flex: 1,
+    },
+    deadlineText: {
       fontSize: wrapSafe(13),
       fontFamily: FONT.semibold,
       color: p.ink,
+    },
+    deadlineOccurrence: {
+      marginTop: 2,
+      fontSize: 11,
+      fontFamily: FONT.regular,
+      color: p.inkSoft,
     },
     deadlineWhen: {
       fontSize: 11,

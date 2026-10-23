@@ -18,7 +18,12 @@ data class Goal(val text: String, val done: Boolean)
  * a distance to it — the widget works out how far off it is against its own
  * clock, so the countdown stays true between snapshots.
  */
-data class DeadlineTask(val text: String, val due: Long)
+data class DeadlineTask(
+  val text: String,
+  val due: Long,
+  /** "weekly" / "monthly" / "yearly" on a recurring deadline, null on a one-off */
+  val repeats: String? = null,
+)
 
 data class PlannerSnapshot(
   /**
@@ -47,6 +52,8 @@ data class PlannerSnapshot(
   val yearHabitCounts: List<Int>,
   val yearTotal: Int,
   val quotes: List<String>,
+  /** where the user's own quotes begin in `quotes`; older snapshots hold none */
+  val ownQuotesFrom: Int = Int.MAX_VALUE,
   /** unfinished deadlines, soonest first — overdue ones included, and first */
   val tasks: List<DeadlineTask>,
 ) {
@@ -62,6 +69,10 @@ data class PlannerSnapshot(
   /** Same day-of-year rotation as quoteForDate in src/quotes.ts. */
   fun quote(dayOfYear: Int): String? =
     if (quotes.isEmpty()) null else quotes[dayOfYear % quotes.size]
+
+  /** Whether the day's quote is the user's own, which quoteHeading in src/quotes.ts heads "YOUR WORDS." */
+  fun quoteIsOwn(dayOfYear: Int): Boolean =
+    quotes.isNotEmpty() && dayOfYear % quotes.size >= ownQuotesFrom
 
   companion object {
     fun load(context: Context): PlannerSnapshot? {
@@ -104,7 +115,11 @@ data class PlannerSnapshot(
       val tasks = o.optJSONArray("tasks").let { arr ->
         (0 until (arr?.length() ?: 0)).map {
           val t = arr!!.getJSONObject(it)
-          DeadlineTask(t.optString("text"), t.optLong("due"))
+          DeadlineTask(
+            t.optString("text"),
+            t.optLong("due"),
+            if (t.isNull("repeats")) null else t.optString("repeats").ifEmpty { null },
+          )
         }
       }.sortedBy { it.due }
       return PlannerSnapshot(
@@ -131,6 +146,7 @@ data class PlannerSnapshot(
         },
         yearTotal = o.optInt("yearTotal"),
         quotes = quotes,
+        ownQuotesFrom = o.optInt("ownQuotesFrom", Int.MAX_VALUE),
         tasks = tasks,
       )
     }

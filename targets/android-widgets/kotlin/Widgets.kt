@@ -541,7 +541,7 @@ private fun QuoteContent() {
 
   WidgetScaffold(theme) {
     Column(modifier = GlanceModifier.fillMaxSize()) {
-      Heading("DISCIPLINE.", theme)
+      Heading(if (snap.quoteIsOwn(dayOfYear)) "YOUR WORDS." else "DISCIPLINE.", theme)
       // spacers either side keep a short quote centred instead of pooling all
       // the slack underneath it
       Spacer(GlanceModifier.defaultWeight())

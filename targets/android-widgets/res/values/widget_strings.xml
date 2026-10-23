@@ -16,6 +16,6 @@
     <string name="widget_streak_description">Consecutive days you\'ve checked in</string>
     <string name="widget_today_description">What\'s ticked off today</string>
     <string name="widget_goals_description">This month\'s three key goals</string>
-    <string name="widget_quote_description">One discipline quote a day</string>
+    <string name="widget_quote_description">One quote a day, built-in or your own</string>
     <string name="widget_deadlines_description">Tasks with a date on them, closest first</string>
 </resources>

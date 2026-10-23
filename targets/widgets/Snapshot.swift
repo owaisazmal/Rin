@@ -19,6 +19,8 @@ struct PlannerSnapshot: Codable {
     /// Storing the moment rather than the distance to it is what lets the
     /// widget stay accurate between snapshots.
     let due: Double
+    /// "weekly" / "monthly" / "yearly" on a recurring deadline, nil on a one-off
+    var repeats: String? = nil
 
     var date: Date { Date(timeIntervalSince1970: due / 1000) }
   }
@@ -52,6 +54,8 @@ struct PlannerSnapshot: Codable {
   /// Decoded leniently — snapshots written before the quote widget existed
   /// have no `quotes` key, and a missing one shouldn't fail the whole decode.
   let quotes: [String]?
+  /// Where the user's own quotes begin in `quotes`; absent from older snapshots, which hold none
+  let ownQuotesFrom: Int?
   /// Likewise optional: a snapshot written before deadlines existed carries no
   /// `tasks` key, and that must not fail the decode for every other widget.
   let tasks: [Task]?
@@ -69,6 +73,23 @@ struct PlannerSnapshot: Codable {
     let cal = Calendar.current
     guard let dayOfYear = cal.ordinality(of: .day, in: .year, for: date) else { return nil }
     return quotes[dayOfYear % quotes.count]
+  }
+
+  /// Whether the day's quote is one the user wrote, which `quoteHeading` in src/quotes.ts heads "YOUR WORDS."
+  func quoteIsOwn(on date: Date) -> Bool {
+    guard let quotes, !quotes.isEmpty, let ownQuotesFrom,
+          let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) else { return false }
+    return dayOfYear % quotes.count >= ownQuotesFrom
+  }
+
+  /// The day's quote and the ones after it in rotation order, each marked when the user wrote it.
+  func rotation(from date: Date) -> [(text: String, own: Bool)] {
+    guard let quotes, !quotes.isEmpty,
+          let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) else { return [] }
+    return (0..<quotes.count).map { step in
+      let i = (dayOfYear + step) % quotes.count
+      return (quotes[i], ownQuotesFrom.map { i >= $0 } ?? false)
+    }
   }
 
   /// 0 pending, 1 done, 2 missed
@@ -155,6 +176,7 @@ struct PlannerSnapshot: Codable {
         "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
         "You don't have to be extreme, just consistent.",
       ],
+      ownQuotesFrom: nil,
       tasks: [
         .init(text: "Send the tax return", due: now.addingTimeInterval(5 * 3600).timeIntervalSince1970 * 1000),
         .init(text: "Book the flights", due: now.addingTimeInterval(2 * 86400).timeIntervalSince1970 * 1000),

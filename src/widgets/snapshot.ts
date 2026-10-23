@@ -3,7 +3,9 @@ import { YearMonthSummary } from '../storage';
 import { ThemeMode } from '../theme';
 import { computeStreaks } from '../streaks';
 import { Task } from '../tasks';
+import type { QuoteList } from '../quotes';
 import { pendingTasks } from '../deadlines';
+import { repeatLabel } from '../recurring';
 import { MONTH_NAMES, monthLength } from '../dates';
 
 /**
@@ -23,6 +25,8 @@ export interface WidgetTask {
   text: string;
   /** the deadline, epoch milliseconds */
   due: number;
+  /** "weekly" / "monthly" / "yearly" on a recurring deadline; absent on a one-off */
+  repeats?: string;
 }
 
 /** More than any widget family can show, and few enough to stay cheap to encode */
@@ -62,6 +66,8 @@ export interface WidgetSnapshot {
   yearTotal: number;
   /** The whole active list, so the widget picks by day-of-year and rolls over without the app */
   quotes: string[];
+  /** where the user's own quotes begin in `quotes`, which take the "YOUR WORDS." heading */
+  ownQuotesFrom: number;
   /**
    * Deadlines still to hit, soonest first.
    *
@@ -103,7 +109,7 @@ export function buildSnapshot(
   now: Date,
   theme: ThemeMode,
   tasks: Task[],
-  quotes: string[]
+  quotes: QuoteList
 ): WidgetSnapshot {
   const daysInMonth = monthLength(year, month);
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
@@ -163,9 +169,14 @@ export function buildSnapshot(
     yearMissed,
     yearHabitCounts,
     yearTotal,
-    quotes,
+    quotes: quotes.quotes,
+    ownQuotesFrom: quotes.ownFrom,
     tasks: pendingTasks(tasks)
       .slice(0, MAX_WIDGET_TASKS)
-      .map((t) => ({ text: t.text.trim(), due: t.due })),
+      .map((t) => ({
+        text: t.text.trim(),
+        due: t.due,
+        ...(t.repeat && { repeats: repeatLabel(t.repeat.every) }),
+      })),
   };
 }

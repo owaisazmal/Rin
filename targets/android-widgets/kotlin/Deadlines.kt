@@ -86,6 +86,10 @@ object Deadline {
     return if (rem == "now") "due any moment" else "$rem left"
   }
 
+  /** The date line, with the series named on a recurring deadline */
+  fun dueLine(task: DeadlineTask, now: Long): String =
+    dueLabel(task.due, now) + (task.repeats?.let { " · $it" } ?: "")
+
   fun dueLabel(due: Long, now: Long): String {
     val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(due))
     val startOfDay = { ms: Long ->
@@ -200,6 +204,14 @@ private fun DeadlinesContent() {
                   fontWeight = FontWeight.Medium,
                 ),
               )
+              // without the date line, a mark after the title is all that says it repeats
+              if (task.repeats != null && !showDates) {
+                Text(
+                  text = " ↻",
+                  maxLines = 1,
+                  style = TextStyle(color = theme.provider(theme.inkSoft), fontSize = 11.sp),
+                )
+              }
               Spacer(GlanceModifier.defaultWeight())
               Text(
                 text = Deadline.timeLeft(task.due, now),
@@ -215,7 +227,7 @@ private fun DeadlinesContent() {
             // spare one; on a short widget the phrase above carries it alone
             if (showDates) {
               Text(
-                text = Deadline.dueLabel(task.due, now),
+                text = Deadline.dueLine(task, now),
                 maxLines = 1,
                 style = TextStyle(color = theme.provider(theme.inkSoft), fontSize = 10.sp),
               )

@@ -8,6 +8,7 @@ import { buildSnapshot } from '../widgets/snapshot';
 import { syncWidgets } from '../widgets/sync';
 import { syncReminders } from '../notifications';
 import type { NotificationPrefs } from '../settings';
+import type { QuoteList } from '../quotes';
 
 /**
  * Everything the planner pushes *out* of the app — to the home screen and to
@@ -69,7 +70,7 @@ export function useWidgetSync(
   yearMonths: YearMonthSummary[] | null,
   mode: ThemeMode,
   tasks: Task[],
-  quotes: string[]
+  quotes: QuoteList
 ) {
   useDebouncedPush(
     enabled && yearMonths

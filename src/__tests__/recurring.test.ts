@@ -2,6 +2,8 @@ import { clampNote, nextDue, parseRepeat, repeatFor, stepDue } from '../recurrin
 import { planReminders } from '../notifications';
 import { defaultNotifications } from '../settings';
 import { toggleDone } from '../tasks';
+import { buildSnapshot } from '../widgets/snapshot';
+import { emptyMonthData } from '../types';
 import type { Repeat, Task } from '../tasks';
 
 jest.mock('expo-notifications', () => ({
@@ -221,5 +223,29 @@ describe('reminders for a recurring deadline', () => {
     expect(planned).toEqual(deadlinesFor(open));
     expect(planned.length).toBeGreaterThan(0);
     expect(planned.every((n) => n.date.getTime() <= open[0].due)).toBe(true);
+  });
+});
+
+describe('the widget snapshot', () => {
+  const now = new Date(2026, 9, 22, 12);
+  const quotes = { quotes: ['Keep going.'], ownFrom: 1 };
+  const snap = (tasks: Task[]) =>
+    buildSnapshot(2026, 9, emptyMonthData(), [], now, 'dark', tasks, quotes).tasks;
+
+  it('names the series on a recurring deadline', () => {
+    const due = at(2026, 9, 31);
+    expect(snap([{ id: '0', text: 'Rent', due, done: false, repeat: monthlyOn(31) }])).toEqual([
+      { text: 'Rent', due, repeats: 'monthly' },
+    ]);
+  });
+
+  it('sends a one-off exactly as before, with no repeat key at all', () => {
+    const [task] = snap([{ id: '0', text: 'Essay', due: at(2026, 9, 30), done: false }]);
+    expect(JSON.stringify(task)).toBe(JSON.stringify({ text: 'Essay', due: at(2026, 9, 30) }));
+  });
+
+  it('leaves finished occurrences out, so only the next one shows', () => {
+    const tasks = toggleDone([{ id: '0', text: 'Report', due: at(2026, 9, 23), done: false, repeat: weekly }], '0', now.getTime());
+    expect(snap(tasks)).toEqual([{ text: 'Report', due: at(2026, 9, 30), repeats: 'weekly' }]);
   });
 });

@@ -4,6 +4,7 @@ import {
   filterHistory,
   historyTotals,
   lateness,
+  occurrenceLabel,
 } from '../history';
 import type { HistoryDay } from '../history';
 import type { MonthRecord } from '../storage';
@@ -134,8 +135,8 @@ describe('buildHistory', () => {
     tasks = toggleDone(tasks, '0', at(2026, 8, 12, 9)); // 11 Sep, a day late
     const days = buildHistory([], tasks, NOW);
     expect(days.map((d) => [d.day, d.deadlines])).toEqual([
-      [12, [{ text: 'Report', due: at(2026, 8, 11, 17), completedAt: at(2026, 8, 12, 9), late: true }]],
-      [4, [{ text: 'Report', due: at(2026, 8, 4, 17), completedAt: at(2026, 8, 4, 9), late: false }]],
+      [12, [{ text: 'Report', due: at(2026, 8, 11, 17), completedAt: at(2026, 8, 12, 9), late: true, repeat: 'week' }]],
+      [4, [{ text: 'Report', due: at(2026, 8, 4, 17), completedAt: at(2026, 8, 4, 9), late: false, repeat: 'week' }]],
     ]);
   });
 
@@ -144,7 +145,27 @@ describe('buildHistory', () => {
     tasks = toggleDone(tasks, '0', at(2026, 8, 10, 9));
     tasks = toggleDone(tasks, '0', at(2026, 8, 10, 10));
     const [day] = buildHistory([], tasks, NOW);
-    expect(day.deadlines.map((e) => e.due)).toEqual([at(2026, 8, 4, 17), at(2026, 8, 11, 17)]);
+    expect(day.deadlines.map(occurrenceLabel)).toEqual([
+      'weekly · due Fri 4 Sep',
+      'weekly · due Fri 11 Sep',
+    ]);
+  });
+
+  it('marks a one-off deadline as no series at all', () => {
+    const [day] = buildHistory([], [task({ completedAt: at(2026, 8, 12, 9) })], NOW);
+    expect(day.deadlines[0].repeat).toBeNull();
+    expect(occurrenceLabel(day.deadlines[0])).toBeNull();
+  });
+});
+
+describe('occurrenceLabel', () => {
+  const event = (repeat: 'week' | 'month' | 'year', due: number) => ({
+    text: 'Rent', due, completedAt: due, late: false, repeat,
+  });
+
+  it('names the series and the date that occurrence was due', () => {
+    expect(occurrenceLabel(event('month', at(2026, 10, 30, 18)))).toBe('monthly · due Mon 30 Nov');
+    expect(occurrenceLabel(event('year', at(2027, 1, 28, 9)))).toBe('yearly · due Sun 28 Feb');
   });
 });
 
@@ -200,6 +221,7 @@ describe('lateness', () => {
     due: NOW,
     completedAt: NOW + over,
     late: over > 0,
+    repeat: null,
   });
 
   it('is nothing at all when the deadline was met', () => {
@@ -217,7 +239,7 @@ describe('lateness', () => {
   });
 
   it('says nothing when the completion time is unknown', () => {
-    expect(lateness({ text: 'x', due: NOW, completedAt: null, late: true })).toBeNull();
+    expect(lateness({ text: 'x', due: NOW, completedAt: null, late: true, repeat: null })).toBeNull();
   });
 });
 

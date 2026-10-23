@@ -168,10 +168,9 @@ describe('toggleDone', () => {
       // same row, same rule, next date: 31 Oct clamps to 30 Nov
       { ...valid, id: '4', due: new Date(2026, 10, 30, 18).getTime(), repeat: { every: 'month', day: 31 } },
       list[1],
-      { ...valid, id: '8', due, done: true, completedAt: NOW },
+      // the finished copy keeps the rule, so history can say which series it was
+      { ...valid, id: '8', due, done: true, completedAt: NOW, repeat: { every: 'month', day: 31 } },
     ]);
-    // the finished copy carries no rule, so nothing else can spawn from it
-    expect(next[2]).not.toHaveProperty('repeat');
   });
 
   it('keeps every finished occurrence as its own record', () => {
@@ -186,9 +185,12 @@ describe('toggleDone', () => {
     expect(list.filter((t) => t.done).map((t) => new Date(t.due).getDate())).toEqual([31, 7, 14]);
   });
 
-  it('does not spawn anything when a finished occurrence is un-ticked and ticked again', () => {
+  it('reopens a finished occurrence as a one-off, so it cannot start a second series', () => {
     let list: Task[] = toggleDone([{ ...valid, due, repeat: { every: 'week' } }], '0', NOW);
-    list = toggleDone(toggleDone(list, '1', NOW), '1', NOW);
+    list = toggleDone(list, '1', NOW);
+    expect(list[1]).toEqual({ ...valid, id: '1', due, done: false });
+    expect(list[1]).not.toHaveProperty('repeat');
+    list = toggleDone(list, '1', NOW);
     expect(list).toHaveLength(2);
   });
 });

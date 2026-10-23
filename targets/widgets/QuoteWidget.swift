@@ -23,17 +23,19 @@ struct QuoteWidgetView: View {
   var body: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let quote = entry.snapshot.quote(on: entry.date)
+    let heading = entry.snapshot.quoteIsOwn(on: entry.date) ? "YOUR WORDS" : "DISCIPLINE"
 
     switch family {
     case .accessoryRectangular:
-      let full = quote ?? "Keep going."
-      let lead = Self.firstSentence(full)
-      // a long quote gives up the heading, then everything after its first sentence
+      let picks = Self.lockPicks(entry.snapshot.rotation(from: entry.date))
+      // never cut: a quote too long for the slot gives way to the next one that fits whole
       ViewThatFits(in: .vertical) {
-        lockLines(full, heading: true)
-        lockLines(full, heading: false)
-        lockLines(lead, heading: true)
-        lockLines(lead, heading: false).lineLimit(4).minimumScaleFactor(0.85)
+        ForEach(Array(picks.enumerated()), id: \.offset) { _, pick in
+          lockLines(pick.text, heading: pick.own ? "YOUR WORDS" : "DISCIPLINE")
+          lockLines(pick.text, heading: nil)
+        }
+        // every quote is too long: the shortest, made small enough to show whole
+        lockLines(picks.last?.text ?? "Keep going.", heading: nil).minimumScaleFactor(0.65)
       }
       // measured against the whole slot: the Lock Screen draws into its margin, and a quote needs the room
       .padding(.top, -margins.top)
@@ -44,7 +46,7 @@ struct QuoteWidgetView: View {
 
     default:
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 10) {
-        WidgetHeading(text: "DISCIPLINE.", theme: theme)
+        WidgetHeading(text: "\(heading).", theme: theme)
         // short quotes would otherwise pool all the slack under the text;
         // a spacer either side centres them in whatever room is left
         if family == .systemLarge { Spacer(minLength: 0) }
@@ -75,19 +77,21 @@ struct QuoteWidgetView: View {
     }
   }
 
-  private func lockLines(_ quote: String, heading: Bool) -> some View {
+  private func lockLines(_ quote: String, heading: String?) -> some View {
     VStack(alignment: .leading, spacing: 1) {
-      if heading {
-        Text("DISCIPLINE").font(.system(size: 11, weight: .bold)).kerning(1)
+      if let heading {
+        Text(heading).font(.system(size: 11, weight: .bold)).kerning(1)
       }
       Text(quote).font(.system(size: 13, weight: .medium))
     }
   }
 
-  /// "One. Two." → "One." A quote's opening sentence reads whole on its own.
-  static func firstSentence(_ quote: String) -> String {
-    guard let end = quote.range(of: ". ") else { return quote }
-    return String(quote[..<end.lowerBound]) + "."
+  /// The day's quote, the next few in the rotation, then the shortest of all as the one most likely to fit.
+  static func lockPicks(_ rotation: [(text: String, own: Bool)]) -> [(text: String, own: Bool)] {
+    guard let shortest = rotation.min(by: { $0.text.count < $1.text.count }) else {
+      return [("Keep going.", false)]
+    }
+    return Array(rotation.prefix(10)) + [shortest]
   }
 }
 
@@ -199,7 +203,7 @@ struct QuoteWidget: Widget {
       QuoteWidgetView(entry: entry)
     }
     .configurationDisplayName("Daily Quote")
-    .description("One discipline quote a day, changing at midnight.")
+    .description("One quote a day, built-in or your own, changing at midnight.")
     .supportedFamilies(families)
   }
 }

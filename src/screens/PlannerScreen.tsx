@@ -350,7 +350,7 @@ export default function PlannerScreen({
           />
         );
       case 'quote':
-        return <QuoteCard key={slot.id} date={now} quotes={quoteList} />;
+        return <QuoteCard key={slot.id} date={now} list={quoteList} />;
     }
     if (!slot.custom) return null;
     const card: CardRef = { id: slot.id, ...slot.custom };

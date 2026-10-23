@@ -58,6 +58,11 @@ enum Deadline {
     return rem == "now" ? "due any moment" : "\(rem) left"
   }
 
+  /// The date line, with the series named on a recurring deadline
+  static func dueLine(_ item: PlannerSnapshot.Task, at moment: Date) -> String {
+    dueLabel(item.date, at: moment) + (item.repeats.map { " · \($0)" } ?? "")
+  }
+
   static func dueLabel(_ due: Date, at moment: Date) -> String {
     let cal = Calendar.current
     let time = due.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute())
@@ -138,6 +143,12 @@ struct DeadlineRow: View {
           .font(.system(size: compact ? 12 : 13, weight: .semibold))
           .foregroundColor(theme.ink)
           .lineLimit(1)
+        // without the date line, a mark after the title is all that says it repeats
+        if compact, item.repeats != nil {
+          Image(systemName: "arrow.clockwise")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(theme.inkSoft)
+        }
         Spacer(minLength: 4)
         Text(Deadline.timeLeft(item.date, at: now))
           .font(.system(size: compact ? 10 : 11, weight: .bold))
@@ -146,7 +157,7 @@ struct DeadlineRow: View {
           .fixedSize()
       }
       if !compact {
-        Text(Deadline.dueLabel(item.date, at: now))
+        Text(Deadline.dueLine(item, at: now))
           .font(.system(size: 10))
           .foregroundColor(theme.inkSoft)
       }
@@ -207,7 +218,7 @@ struct DeadlineWidgetView: View {
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(theme.ink)
             .lineLimit(2)
-          Text(Deadline.dueLabel(next.date, at: now))
+          Text(Deadline.dueLine(next, at: now))
             .font(.system(size: 10))
             .foregroundColor(theme.inkSoft)
             .lineLimit(1)
@@ -248,8 +259,9 @@ struct AccessoryDeadline: View {
         Text(item.text.isEmpty ? "Untitled task" : item.text)
           .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
-        Text(Deadline.timeLeft(item.date, at: now))
+        Text(Deadline.timeLeft(item.date, at: now) + (item.repeats.map { " · \($0)" } ?? ""))
           .font(.system(size: 13, weight: .medium))
+          .lineLimit(1)
       } else {
         Text("Nothing due")
           .font(.system(size: 14, weight: .semibold))

@@ -2,6 +2,8 @@ import {
   DISCIPLINE_QUOTES,
   MAX_CUSTOM_QUOTES,
   MAX_QUOTE_LENGTH,
+  BUILT_IN_HEADING,
+  OWN_HEADING,
   QuotePrefs,
   activeQuotes,
   cleanQuote,
@@ -9,6 +11,7 @@ import {
   parseQuotePrefs,
   placeQuote,
   quoteForDate,
+  quoteHeading,
   quoteProblem,
 } from '../quotes';
 import { buildSnapshot } from '../widgets/snapshot';
@@ -79,22 +82,27 @@ function* daysOf2026() {
 
 describe('activeQuotes', () => {
   it('is the built-in list when nothing has been added, whatever the source', () => {
-    expect(activeQuotes(defaultQuotePrefs())).toBe(DISCIPLINE_QUOTES);
-    expect(activeQuotes(prefs('mine', []))).toBe(DISCIPLINE_QUOTES);
-    expect(activeQuotes(prefs('both', []))).toBe(DISCIPLINE_QUOTES);
+    const builtIn = { quotes: DISCIPLINE_QUOTES, ownFrom: DISCIPLINE_QUOTES.length };
+    expect(activeQuotes(defaultQuotePrefs())).toEqual(builtIn);
+    expect(activeQuotes(prefs('mine', []))).toEqual(builtIn);
+    expect(activeQuotes(prefs('both', []))).toEqual(builtIn);
+    expect(activeQuotes(defaultQuotePrefs()).quotes).toBe(DISCIPLINE_QUOTES);
   });
 
   it('follows the source once there are quotes of your own', () => {
-    expect(activeQuotes(prefs('builtin', MINE))).toBe(DISCIPLINE_QUOTES);
-    expect(activeQuotes(prefs('mine', MINE))).toEqual(MINE);
-    expect(activeQuotes(prefs('both', MINE))).toEqual([...DISCIPLINE_QUOTES, ...MINE]);
+    expect(activeQuotes(prefs('builtin', MINE)).quotes).toBe(DISCIPLINE_QUOTES);
+    expect(activeQuotes(prefs('mine', MINE))).toEqual({ quotes: MINE, ownFrom: 0 });
+    expect(activeQuotes(prefs('both', MINE))).toEqual({
+      quotes: [...DISCIPLINE_QUOTES, ...MINE],
+      ownFrom: DISCIPLINE_QUOTES.length,
+    });
   });
 });
 
 describe('quoteForDate with a list', () => {
   it('gives today’s quote unchanged with no custom quotes', () => {
     for (const { date } of daysOf2026()) {
-      expect(quoteForDate(date, activeQuotes(defaultQuotePrefs()))).toBe(quoteForDate(date));
+      expect(quoteForDate(date, activeQuotes(defaultQuotePrefs()).quotes)).toBe(quoteForDate(date));
     }
   });
 
@@ -114,8 +122,29 @@ describe('quoteForDate with a list', () => {
       const list = activeQuotes(quotes);
       const snap = buildSnapshot(2026, 9, emptyMonthData(), [], new Date(2026, 9, 9), 'dark', [], list);
       for (const { dayOfYear, date } of daysOf2026()) {
-        expect(snap.quotes[dayOfYear % snap.quotes.length]).toBe(quoteForDate(date, list));
+        const i = dayOfYear % snap.quotes.length;
+        expect(snap.quotes[i]).toBe(quoteForDate(date, list.quotes));
+        expect(i >= snap.ownQuotesFrom ? OWN_HEADING : BUILT_IN_HEADING).toBe(quoteHeading(date, list));
       }
+    }
+  });
+});
+
+describe('quoteHeading', () => {
+  it('stays on discipline with no quotes of your own', () => {
+    for (const { date } of daysOf2026()) {
+      expect(quoteHeading(date, activeQuotes(defaultQuotePrefs()))).toBe(BUILT_IN_HEADING);
+      expect(quoteHeading(date, activeQuotes(prefs('mine', [])))).toBe(BUILT_IN_HEADING);
+      expect(quoteHeading(date, activeQuotes(prefs('builtin', MINE)))).toBe(BUILT_IN_HEADING);
+    }
+  });
+
+  it('names your own words, and only those, whatever the source', () => {
+    const both = activeQuotes(prefs('both', MINE));
+    for (const { date } of daysOf2026()) {
+      expect(quoteHeading(date, activeQuotes(prefs('mine', MINE)))).toBe(OWN_HEADING);
+      const own = MINE.includes(quoteForDate(date, both.quotes));
+      expect(quoteHeading(date, both)).toBe(own ? OWN_HEADING : BUILT_IN_HEADING);
     }
   });
 });
