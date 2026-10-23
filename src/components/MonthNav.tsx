@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MONTH_NAMES } from '../dates';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
 
 /**
  * The month bar: an arrow either side of the name, and a swipe across the bar
@@ -45,7 +45,9 @@ export default function MonthNav({ year, month, onShift, anim, enterFrom }: Prop
         onPress={() => onShift(-1)}
         style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
       >
-        <Text style={styles.navArrow}>‹</Text>
+        <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+          ‹
+        </Text>
       </Pressable>
       <Animated.View
         style={[
@@ -63,8 +65,12 @@ export default function MonthNav({ year, month, onShift, anim, enterFrom }: Prop
           },
         ]}
       >
-        <Text style={styles.monthLabel}>{MONTH_NAMES[month]}</Text>
-        <Text style={styles.yearLabel}>{year}</Text>
+        <Text style={styles.monthLabel} maxFontSizeMultiplier={SCALE.heading}>
+          {MONTH_NAMES[month]}
+        </Text>
+        <Text style={styles.yearLabel} maxFontSizeMultiplier={SCALE.figure}>
+          {year}
+        </Text>
       </Animated.View>
       <Pressable
         hitSlop={10}
@@ -73,7 +79,9 @@ export default function MonthNav({ year, month, onShift, anim, enterFrom }: Prop
         onPress={() => onShift(1)}
         style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
       >
-        <Text style={styles.navArrow}>›</Text>
+        <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+          ›
+        </Text>
       </Pressable>
     </View>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AuroraBackground from './src/components/AuroraBackground';
 import LaunchIntro from './src/components/LaunchIntro';
@@ -15,7 +15,7 @@ import { forgetLaunch } from './src/hooks/backupRuns';
 import { useAutoBackup } from './src/hooks/useAutoBackup';
 import type { PlannerLayout } from './src/layout';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
-import { Settings, loadSettings, saveSettings } from './src/settings';
+import { Settings, loadSettings, resolveTheme, saveSettings } from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
 import { deleteBackup, listMonths, restoreMonth } from './src/sync';
@@ -230,14 +230,18 @@ export default function App() {
     []
   );
 
-  const mode = settings?.theme ?? 'dark';
+  // re-renders when the OS appearance changes, which is what `system` follows
+  const osScheme = useColorScheme();
+  const preference = settings?.theme ?? 'dark';
+  const mode = resolveTheme(preference, osScheme);
   const theme: Theme = useMemo(
     () => ({
       mode,
+      preference,
       palette: mode === 'dark' ? darkPalette : lightPalette,
-      setMode: (next) => updateSettings({ theme: next }),
+      setPreference: (next) => updateSettings({ theme: next }),
     }),
-    [mode, updateSettings]
+    [mode, preference, updateSettings]
   );
 
   // hold the first paint until the persisted theme, the backup state and the font

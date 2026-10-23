@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlannerLayout, defaultLayout, parseLayout } from './layout';
-import type { ThemeMode } from './theme';
+import type { ColorSchemeName } from 'react-native';
+import type { ThemeMode, ThemePreference } from './theme';
 
 /**
  * The three things the app remembers about how it is shown: which palette,
@@ -13,7 +14,7 @@ import type { ThemeMode } from './theme';
 export type ChartType = 'radial' | 'github';
 
 export interface Settings {
-  theme: ThemeMode;
+  theme: ThemePreference;
   chart: ChartType;
   layout: PlannerLayout;
 }
@@ -28,13 +29,19 @@ export async function loadSettings(): Promise<Settings> {
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
-      theme: parsed.theme === 'light' ? 'light' : 'dark',
+      theme: parsed.theme === 'light' || parsed.theme === 'system' ? parsed.theme : 'dark',
       chart: parsed.chart === 'github' ? 'github' : 'radial',
       layout: parseLayout(parsed.layout),
     };
   } catch {
     return DEFAULTS;
   }
+}
+
+/** The mode to draw in; `system` follows the OS and falls back to dark when it gives no answer */
+export function resolveTheme(preference: ThemePreference, os: ColorSchemeName | null | undefined): ThemeMode {
+  if (preference !== 'system') return preference;
+  return os === 'light' ? 'light' : 'dark';
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

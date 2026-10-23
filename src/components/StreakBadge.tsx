@@ -29,7 +29,13 @@ export default function StreakBadge({
       style={[styles.pill, { borderColor: p.lineFaint, backgroundColor: p.card }]}
     >
       <Flame lit={lit} color={p.ink} />
-      <Text style={[styles.count, { color: p.ink, opacity: lit ? 1 : DIM }]}>{days}</Text>
+      {/* capped so the header still fits at the largest text sizes; the label carries the number */}
+      <Text
+        maxFontSizeMultiplier={2}
+        style={[styles.count, { color: p.ink, opacity: lit ? 1 : DIM }]}
+      >
+        {days}
+      </Text>
     </View>
   );
 }

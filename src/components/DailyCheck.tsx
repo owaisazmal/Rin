@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useRevealOnFocus } from './KeyboardSafeScroll';
@@ -14,7 +15,7 @@ import MarkButton from './MarkButton';
 import SectionHeader from './SectionHeader';
 import { CellState, Habit, MAX_HABITS, MAX_HABIT_NAME, cellKey } from '../types';
 import { DayWhen } from '../marking';
-import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * The day's habits, and the habits themselves.
@@ -86,6 +87,7 @@ export default function DailyCheck({
   onRemove,
 }: Props) {
   const { palette } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const revealOnFocus = useRevealOnFocus();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -136,13 +138,19 @@ export default function DailyCheck({
                 (pressed || !canPrev) && { opacity: canPrev ? 0.6 : 0.35 },
               ]}
             >
-              <Text style={styles.navArrow}>‹</Text>
+              <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                ‹
+              </Text>
             </Pressable>
             <View>
-              <Text style={styles.dayLabel}>
+              <Text style={styles.dayLabel} maxFontSizeMultiplier={SCALE.figure}>
                 {monthName.slice(0, 3)} {day}
               </Text>
-              {when === 'today' && <Text style={styles.todayBadge}>TODAY</Text>}
+              {when === 'today' && (
+                <Text style={styles.todayBadge} maxFontSizeMultiplier={SCALE.figure}>
+                  TODAY
+                </Text>
+              )}
             </View>
             <Pressable
               hitSlop={8}
@@ -155,7 +163,9 @@ export default function DailyCheck({
                 (pressed || !canNext) && { opacity: canNext ? 0.6 : 0.35 },
               ]}
             >
-              <Text style={styles.navArrow}>›</Text>
+              <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                ›
+              </Text>
             </Pressable>
           </View>
         }
@@ -167,13 +177,16 @@ export default function DailyCheck({
         <View style={styles.editList}>
           {habits.map((h, i) => (
             <View key={h.id} style={styles.editRow}>
-              <Text style={styles.num}>{i + 1}</Text>
+              <Text style={styles.num} maxFontSizeMultiplier={SCALE.figure}>
+                {i + 1}
+              </Text>
               <TextInput
                 ref={(el) => {
                   if (el) inputs.current.set(h.id, el);
                   else inputs.current.delete(h.id);
                 }}
                 style={styles.input}
+                maxFontSizeMultiplier={SCALE.row}
                 value={h.name}
                 maxLength={MAX_HABIT_NAME}
                 onChangeText={(t) => onRename(h.id, t.slice(0, MAX_HABIT_NAME))}
@@ -211,7 +224,12 @@ export default function DailyCheck({
             const state = grid[cellKey(day, h.id)] ?? 0;
             return (
               <View key={h.id} style={styles.habitRow}>
-                <Text style={styles.habitName} numberOfLines={1}>
+                <Text
+                  style={styles.habitName}
+                  maxFontSizeMultiplier={SCALE.row}
+                  // one line at the default size, room to wrap once the text is enlarged
+                  numberOfLines={fontScale > 1 ? 2 : 1}
+                >
                   {h.name || 'Unnamed habit'}
                 </Text>
                 <MarkButton
@@ -246,12 +264,14 @@ export default function DailyCheck({
             style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.7 }]}
           >
             <PlusGlyph color={palette.accent} />
-            <Text style={styles.addText}>Add habit</Text>
+            <Text style={styles.addText} maxFontSizeMultiplier={SCALE.heading}>
+              Add habit
+            </Text>
           </Pressable>
         )}
         {(habits.length > 0 || editing) && (
           <View style={styles.footerRight}>
-            <Text style={styles.count}>
+            <Text style={styles.count} maxFontSizeMultiplier={SCALE.figure}>
               {habits.length}/{MAX_HABITS}
             </Text>
             <Pressable
@@ -265,7 +285,10 @@ export default function DailyCheck({
                 pressed && { opacity: 0.6 },
               ]}
             >
-              <Text style={[styles.toggleText, editing && styles.toggleTextActive]}>
+              <Text
+                style={[styles.toggleText, editing && styles.toggleTextActive]}
+                maxFontSizeMultiplier={SCALE.heading}
+              >
                 {editing ? 'DONE' : 'EDIT'}
               </Text>
             </Pressable>
@@ -397,6 +420,7 @@ const makeStyles = (p: Palette) =>
       color: p.accent,
     },
     limit: {
+      flexShrink: 1,
       fontSize: 12,
       fontFamily: FONT.regular,
       color: p.inkSoft,

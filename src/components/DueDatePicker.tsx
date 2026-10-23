@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MONTH_NAMES, monthLength, startOfDay } from '../dates';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, MODAL_ORIENTATIONS, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
  * Picking the moment a task is due.
@@ -94,6 +94,7 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
       animationType="fade"
       onRequestClose={onCancel}
       statusBarTranslucent
+      supportedOrientations={MODAL_ORIENTATIONS}
     >
       {/* tapping the dim area behind the sheet dismisses it, as a sheet should */}
       <Pressable style={styles.backdrop} onPress={onCancel}>

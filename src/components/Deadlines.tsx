@@ -5,7 +5,7 @@ import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
-import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * Tasks with a date on them, and how close that date is.
@@ -109,7 +109,10 @@ export default function Deadlines({
           <View style={styles.headerRight}>
             {ordered.length > 0 && (
               <View style={[styles.countBadge, overdue > 0 && styles.countBadgeLate]}>
-                <Text style={[styles.countText, overdue > 0 && styles.countTextLate]}>
+                <Text
+                  style={[styles.countText, overdue > 0 && styles.countTextLate]}
+                  maxFontSizeMultiplier={SCALE.figure}
+                >
                   {overdue > 0 ? `${overdue} OVERDUE` : `${ordered.length} DUE`}
                 </Text>
               </View>
@@ -154,6 +157,7 @@ export default function Deadlines({
                   />
                   <TextInput
                     style={styles.input}
+                    maxFontSizeMultiplier={SCALE.row}
                     value={t.text}
                     maxLength={MAX_TASK_TEXT}
                     onChangeText={(v) => onChangeText(t.id, withoutTabs(v).slice(0, MAX_TASK_TEXT))}
@@ -192,9 +196,17 @@ export default function Deadlines({
                       pressed && { opacity: 0.6 },
                     ]}
                   >
-                    <Text style={[styles.dueText, { color: tone }]}>{dueLabel(t.due, now)}</Text>
+                    <Text
+                      style={[styles.dueText, { color: tone }]}
+                      maxFontSizeMultiplier={SCALE.figure}
+                    >
+                      {dueLabel(t.due, now)}
+                    </Text>
                   </Pressable>
-                  <Text style={[styles.left, { color: tone }]}>
+                  <Text
+                    style={[styles.left, { color: tone }]}
+                    maxFontSizeMultiplier={SCALE.figure}
+                  >
                     {timeLeftLabel(t.due, now)}
                   </Text>
                 </View>
@@ -220,10 +232,12 @@ export default function Deadlines({
           onPress={onShowHistory}
           style={({ pressed }) => [styles.historyLink, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.historyCount}>
+          <Text style={styles.historyCount} maxFontSizeMultiplier={SCALE.figure}>
             {finished} finished
           </Text>
-          <Text style={styles.historyText}>SHOW HISTORY ›</Text>
+          <Text style={styles.historyText} maxFontSizeMultiplier={SCALE.heading}>
+            SHOW HISTORY ›
+          </Text>
         </Pressable>
       )}
     </View>
@@ -317,11 +331,13 @@ const makeStyles = (p: Palette) =>
     },
     meta: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       // clears the check circle, so the date lines up with the task text
       marginLeft: 32,
       marginBottom: 8,
-      gap: 10,
+      columnGap: 10,
+      rowGap: 4,
     },
     dueChip: {
       borderWidth: 1,
@@ -349,6 +365,7 @@ const makeStyles = (p: Palette) =>
       borderTopColor: p.lineFaint,
     },
     historyCount: {
+      flexShrink: 1,
       fontSize: 12,
       fontFamily: FONT.regular,
       color: p.inkSoft,

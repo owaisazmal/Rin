@@ -1,8 +1,8 @@
 """Store screenshots for Rin: caption block over a generic phone frame, exported per store size.
 
-Usage: python3 compose.py slides.json
+Usage: python3 compose.py slides.json [store ...]   (all stores in the spec when none are named)
 Every path in the spec (sources and output folders) is resolved relative to the spec file.
-spec: {"out": {"play": dir, "appstore": dir, "ipad": dir, "duo-outer": dir, "duo-inner": dir}, "slides": [ {name, theme, eyebrow, headline, sub?, icon?, src: {play: path, appstore: path, ipad?: path, duo?: path}, bars: {play: "android"|"ios-17promax"|"ios-16pro"|"ipad-13"|[top, bottom], appstore: ...}} ]}
+spec: {"out": {"play": dir, "appstore": dir, "ipad": dir, "duo-outer": dir, "duo-inner": dir}, "slides": [ {name, theme, eyebrow, headline, sub?, icon?, src: {play: path, appstore: path, ipad?: path, duo?: path, duo-outer?: path, duo-inner?: path}, bars: {play: "android"|"ios-17promax"|"ios-16pro"|"ipad-13"|[top, bottom], appstore: ...}} ]}
 A slide without a source for a store is left out of that store's set. frame_top and cap_top take a number or a per-store object.
 """
 import json, os, subprocess, sys, tempfile
@@ -22,10 +22,10 @@ BARS = {
     'android': (90, 70),          # 1080 x 2400 emulator: status bar, gesture pill
     'ipad-13': (64, 40),          # 2064 x 2752, 2x
 }
-# frame geometry in design units; the tablet is a close-up with no bezel, running off both sides and the bottom
+# frame geometry in design units; the tablet shows its whole width with no bezel, running off the bottom
 PHONE = dict(fw=860, bez=16, r=104, top=585, cap=150)
 DUO = dict(fw=800, bez=16, r=100, top=470, cap=96)   # the phone frame, running off the bottom
-FRAME = {'play': PHONE, 'appstore': PHONE, 'ipad': dict(fw=1340, bez=0, r=84, top=470, cap=96),
+FRAME = {'play': PHONE, 'appstore': PHONE, 'ipad': dict(fw=1000, bez=0, r=60, top=470, cap=96),
          'duo-outer': DUO, 'duo-inner': DUO}
 THEME = {
     'dark': dict(bg='#0d0d0d', ink='#FFFFE3', accent='#8fa5ba', soft='#CBCBCB',
@@ -91,17 +91,17 @@ html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden;background:{t['bg']
 <div class=frame><div class=screen><img src="file://{screen_path}"></div></div>
 </body></html>'''
 
-def main(spec_path):
+def main(spec_path, only=()):
     spec = json.load(open(spec_path))
     base = os.path.dirname(os.path.abspath(spec_path))
     rel = lambda path: os.path.normpath(os.path.join(base, path))
     work = tempfile.mkdtemp(prefix='rin-store-')
     for store, (W, H) in SIZES.items():
-        if store not in spec['out']:
+        if store not in spec['out'] or (only and store not in only):
             continue
         outdir = rel(spec['out'][store]); os.makedirs(outdir, exist_ok=True)
         for i, s in enumerate(spec['slides'], 1):
-            key = store.split('-')[0]   # both Duo sizes share one source
+            key = store if store in s['src'] else store.split('-')[0]   # a Duo size may share one 'duo' source
             if key not in s['src']:
                 continue
             src = rel(s['src'][key]); kind = s['bars'][key]
@@ -112,4 +112,4 @@ def main(spec_path):
             print(store, out, Image.open(out).size, os.path.getsize(out) // 1024, 'KB')
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2:])

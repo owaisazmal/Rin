@@ -7,6 +7,7 @@ dark/ · light/
 ├── ios/
 │   ├── phone/     iPhone SE (3rd gen), 13 mini, 17, 17 Pro Max, and the SE at the largest text size
 │   ├── tablet/    iPad mini (A17 Pro), iPad (A16), iPad Pro 11" and 13" (M5), and the 13" in landscape
+│   ├── duo/       iPhone Duo: the outer screen, the inner screen on its side, and the inner screen upright
 │   └── widgets/   home screen widgets
 └── android/
     ├── phone/     720×1280, 1080×2400 and 1344×2992 phones, and the small one at 1.3× font
@@ -19,6 +20,8 @@ A device's dark folder holds shots 01–09 and its light folder holds 10–13, s
 - dark: `01-intro` · `02-welcome` · `03-planner-empty` · `04-planner` · `05-daily-check` · `06-deadlines-goals` · `07-notes` · `08-year-grid` · `09-settings`
 - light: `10-settings-light` · `11-history-light` · `12-year-grid-light` · `13-planner-light`
 
+On the iPads other than the mini, and the 10-inch Android tablet held upright, the two-column planner barely scrolls, so `07-notes` is shot with the Deadlines card hidden to bring goals and notes to the top.
+
 [`widgets.md`](widgets.md) says what each widget shot shows, and [`readme/`](readme/) holds the four images the main README uses.
 
-Taken on 9 Oct 2026 from debug builds on iOS 27.0 simulators and an Android 16 emulator, with the sample data in [`assets/store/tools/seed-sample-data.py`](../assets/store/tools/seed-sample-data.py). Device shots are JPEG to keep the repo light. Store listing images live in [`assets/store/`](../assets/store/).
+Taken on 9 Oct 2026 from debug builds on iOS 27.0 simulators and an Android 16 emulator (the `duo/` shots, the iPad shots other than the mini and the Android tablet shots other than the 7-inch on 22 Oct 2026, the Duo's on an iPhone Duo simulator running iOS 27.1), with the sample data in [`assets/store/tools/seed-sample-data.py`](../assets/store/tools/seed-sample-data.py). Device shots are JPEG to keep the repo light. Store listing images live in [`assets/store/`](../assets/store/).

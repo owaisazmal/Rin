@@ -47,6 +47,11 @@ export interface HistoryDay {
 
 export type HistoryFilter = 'all' | 'habits' | 'deadlines';
 
+/** Ticked off after the deadline; a task with no completion time counts as on time */
+export function finishedLate(task: Task): boolean {
+  return task.done && task.completedAt != null && task.completedAt > task.due;
+}
+
 function marksFor(habits: Habit[], grid: Record<string, CellState>, day: number): HabitMark[] {
   const out: HabitMark[] = [];
   for (const h of habits) {
@@ -114,7 +119,7 @@ export function buildHistory(
       text: task.text.trim() || 'Untitled task',
       due: task.due,
       completedAt: task.completedAt ?? null,
-      late: task.completedAt != null && task.completedAt > task.due,
+      late: finishedLate(task),
     });
   }
 

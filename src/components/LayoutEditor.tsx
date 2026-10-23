@@ -12,13 +12,23 @@ import {
   TextInput,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckGlyph, ChevronGlyph, CloseGlyph } from './Glyphs';
 import SegmentedControl from './SegmentedControl';
 import { BUILTIN_TITLES, PlannerLayout, canAddCard, isBuiltinCard } from '../layout';
 import { CardKind, MAX_CARD_TITLE, MAX_CUSTOM_CARDS } from '../types';
-import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
+import {
+  FONT,
+  MODAL_ORIENTATIONS,
+  Palette,
+  RADIUS,
+  SCALE,
+  cardSurface,
+  useTheme,
+  wrapSafe,
+} from '../theme';
 
 /**
  * The sheet for showing, ordering and creating the cards below the daily check.
@@ -122,6 +132,10 @@ export default function LayoutEditor({
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
   const list = useRef<ScrollView>(null);
+  // at large text the whole sheet scrolls, or the hint and the form squeeze the list out
+  const stacked = useWindowDimensions().fontScale > 1;
+  /** where the rows start in the scroller, which is below the hint when stacked */
+  const rowsTop = useRef(0);
 
   const [name, setName] = useState('');
   const [kind, setKind] = useState<CardKind>('list');
@@ -146,14 +160,173 @@ export default function LayoutEditor({
   /** The keyboard shrinks the list, so scroll the row being renamed back into view. */
   const reveal = useCallback(() => {
     const row = renaming.current;
-    if (row !== null) list.current?.scrollTo({ y: row * ROW_STEP, animated: true });
-  }, []);
+    const top = stacked ? rowsTop.current : 0;
+    if (row !== null) list.current?.scrollTo({ y: top + row * ROW_STEP, animated: true });
+    // otherwise it is the name field, which is at the bottom when stacked
+    else if (stacked) list.current?.scrollToEnd({ animated: true });
+  }, [stacked]);
 
   useEffect(() => {
     // not before the keyboard has settled: the list is still shrinking until then
     const shown = Keyboard.addListener('keyboardDidShow', reveal);
     return () => shown.remove();
   }, [reveal]);
+
+  const head = (
+    <>
+      <Text style={styles.title} maxFontSizeMultiplier={SCALE.heading}>
+        YOUR CARDS
+      </Text>
+      <Text style={styles.hint}>
+        What sits below your habits, top to bottom. Switch off what you don’t use.
+      </Text>
+    </>
+  );
+
+  const rows = layout.slots.map((slot, i) => {
+    const title = isBuiltinCard(slot.id) ? BUILTIN_TITLES[slot.id] : (slot.custom?.title ?? '');
+    const spoken = title.trim() || 'untitled card';
+    return (
+      <SlideRow key={slot.id} index={i} lifted={slot.id === moved} style={styles.row}>
+        <Pressable
+          hitSlop={10}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: slot.shown }}
+          accessibilityLabel={`Show ${spoken}`}
+          onPress={() => onToggle(slot.id)}
+          style={({ pressed }) => [
+            styles.toggle,
+            slot.shown && styles.toggleOn,
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          {slot.shown && <CheckGlyph color={palette.onAccent} size={13} />}
+        </Pressable>
+
+        <View style={[styles.name, !slot.shown && styles.nameOff]}>
+          {slot.custom ? (
+            <>
+              <TextInput
+                style={styles.nameInput}
+                maxFontSizeMultiplier={SCALE.heading}
+                value={slot.custom.title}
+                maxLength={MAX_CARD_TITLE}
+                onChangeText={(t) => onRename(slot.id, t.slice(0, MAX_CARD_TITLE))}
+                onFocus={() => {
+                  renaming.current = i;
+                  if (Keyboard.isVisible()) reveal();
+                }}
+                onBlur={() => {
+                  renaming.current = null;
+                }}
+                placeholder="card name"
+                placeholderTextColor={palette.inkSoft}
+                accessibilityLabel={`Name of ${spoken}`}
+                returnKeyType="done"
+              />
+              <Text style={styles.kind} maxFontSizeMultiplier={SCALE.heading}>
+                {KIND_LABEL[slot.custom.kind]}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.nameText} maxFontSizeMultiplier={SCALE.heading} numberOfLines={1}>
+              {title}
+            </Text>
+          )}
+        </View>
+
+        <Pressable
+          hitSlop={4}
+          disabled={i === 0}
+          accessibilityRole="button"
+          accessibilityLabel={`Move ${spoken} up`}
+          onPress={() => move(slot.id, -1)}
+          style={({ pressed }) => [
+            styles.arrow,
+            i === 0 && styles.arrowOff,
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <ChevronGlyph up color={palette.ink} />
+        </Pressable>
+        <Pressable
+          hitSlop={4}
+          disabled={i === layout.slots.length - 1}
+          accessibilityRole="button"
+          accessibilityLabel={`Move ${spoken} down`}
+          onPress={() => move(slot.id, 1)}
+          style={({ pressed }) => [
+            styles.arrow,
+            i === layout.slots.length - 1 && styles.arrowOff,
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <ChevronGlyph color={palette.ink} />
+        </Pressable>
+        {slot.custom && (
+          <Pressable
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${spoken}`}
+            onPress={() => onRemove(slot.id)}
+            style={({ pressed }) => [styles.remove, pressed && { opacity: 0.5 }]}
+          >
+            <CloseGlyph color={palette.missed} />
+          </Pressable>
+        )}
+      </SlideRow>
+    );
+  });
+  const rowsHeight = layout.slots.length * ROW_STEP - ROW_GAP;
+
+  const foot = (
+    <>
+      <View style={styles.divider} />
+
+      {canAddCard(layout) ? (
+        <>
+          <Text style={styles.label} maxFontSizeMultiplier={SCALE.heading}>
+            MAKE YOUR OWN
+          </Text>
+          <View style={styles.addRow}>
+            <TextInput
+              style={styles.addInput}
+              maxFontSizeMultiplier={SCALE.row}
+              value={name}
+              maxLength={MAX_CARD_TITLE}
+              onChangeText={(t) => setName(t.slice(0, MAX_CARD_TITLE))}
+              placeholder="name it…"
+              placeholderTextColor={palette.inkSoft}
+              accessibilityLabel="Name for a new card"
+              returnKeyType="done"
+              onSubmitEditing={add}
+            />
+            <Pressable
+              disabled={!ready}
+              accessibilityRole="button"
+              accessibilityLabel="Add card"
+              onPress={add}
+              style={({ pressed }) => [
+                styles.addBtn,
+                !ready && styles.addBtnOff,
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Text style={styles.addText} maxFontSizeMultiplier={SCALE.heading}>
+                ADD
+              </Text>
+            </Pressable>
+          </View>
+          <SegmentedControl options={KINDS} value={kind} onChange={setKind} />
+        </>
+      ) : (
+        <Text style={styles.hint}>
+          {MAX_CUSTOM_CARDS} cards of your own is the most the planner holds. Delete one to
+          make another.
+        </Text>
+      )}
+    </>
+  );
 
   return (
     <Modal
@@ -162,6 +335,7 @@ export default function LayoutEditor({
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
+      supportedOrientations={MODAL_ORIENTATIONS}
     >
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         {/* tapping the dim area behind the sheet dismisses it, as a sheet should */}
@@ -177,151 +351,38 @@ export default function LayoutEditor({
           onPress={onClose}
         >
           <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.title}>YOUR CARDS</Text>
-            <Text style={styles.hint}>
-              What sits below your habits, top to bottom. Switch off what you don’t use.
-            </Text>
-
-            <ScrollView
-              ref={list}
-              style={styles.list}
-              contentContainerStyle={{ height: layout.slots.length * ROW_STEP - ROW_GAP }}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {layout.slots.map((slot, i) => {
-                const title = isBuiltinCard(slot.id)
-                  ? BUILTIN_TITLES[slot.id]
-                  : (slot.custom?.title ?? '');
-                const spoken = title.trim() || 'untitled card';
-                return (
-                  <SlideRow key={slot.id} index={i} lifted={slot.id === moved} style={styles.row}>
-                    <Pressable
-                      hitSlop={10}
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: slot.shown }}
-                      accessibilityLabel={`Show ${spoken}`}
-                      onPress={() => onToggle(slot.id)}
-                      style={({ pressed }) => [
-                        styles.toggle,
-                        slot.shown && styles.toggleOn,
-                        pressed && { opacity: 0.6 },
-                      ]}
-                    >
-                      {slot.shown && <CheckGlyph color={palette.onAccent} size={13} />}
-                    </Pressable>
-
-                    <View style={[styles.name, !slot.shown && styles.nameOff]}>
-                      {slot.custom ? (
-                        <>
-                          <TextInput
-                            style={styles.nameInput}
-                            value={slot.custom.title}
-                            maxLength={MAX_CARD_TITLE}
-                            onChangeText={(t) => onRename(slot.id, t.slice(0, MAX_CARD_TITLE))}
-                            onFocus={() => {
-                              renaming.current = i;
-                              if (Keyboard.isVisible()) reveal();
-                            }}
-                            onBlur={() => {
-                              renaming.current = null;
-                            }}
-                            placeholder="card name"
-                            placeholderTextColor={palette.inkSoft}
-                            accessibilityLabel={`Name of ${spoken}`}
-                            returnKeyType="done"
-                          />
-                          <Text style={styles.kind}>{KIND_LABEL[slot.custom.kind]}</Text>
-                        </>
-                      ) : (
-                        <Text style={styles.nameText} numberOfLines={1}>
-                          {title}
-                        </Text>
-                      )}
-                    </View>
-
-                    <Pressable
-                      hitSlop={4}
-                      disabled={i === 0}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Move ${spoken} up`}
-                      onPress={() => move(slot.id, -1)}
-                      style={({ pressed }) => [
-                        styles.arrow,
-                        i === 0 && styles.arrowOff,
-                        pressed && { opacity: 0.6 },
-                      ]}
-                    >
-                      <ChevronGlyph up color={palette.ink} />
-                    </Pressable>
-                    <Pressable
-                      hitSlop={4}
-                      disabled={i === layout.slots.length - 1}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Move ${spoken} down`}
-                      onPress={() => move(slot.id, 1)}
-                      style={({ pressed }) => [
-                        styles.arrow,
-                        i === layout.slots.length - 1 && styles.arrowOff,
-                        pressed && { opacity: 0.6 },
-                      ]}
-                    >
-                      <ChevronGlyph color={palette.ink} />
-                    </Pressable>
-                    {slot.custom && (
-                      <Pressable
-                        hitSlop={6}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Delete ${spoken}`}
-                        onPress={() => onRemove(slot.id)}
-                        style={({ pressed }) => [styles.remove, pressed && { opacity: 0.5 }]}
-                      >
-                        <CloseGlyph color={palette.missed} />
-                      </Pressable>
-                    )}
-                  </SlideRow>
-                );
-              })}
-            </ScrollView>
-
-            <View style={styles.divider} />
-
-            {canAddCard(layout) ? (
-              <>
-                <Text style={styles.label}>MAKE YOUR OWN</Text>
-                <View style={styles.addRow}>
-                  <TextInput
-                    style={styles.addInput}
-                    value={name}
-                    maxLength={MAX_CARD_TITLE}
-                    onChangeText={(t) => setName(t.slice(0, MAX_CARD_TITLE))}
-                    placeholder="name it…"
-                    placeholderTextColor={palette.inkSoft}
-                    accessibilityLabel="Name for a new card"
-                    returnKeyType="done"
-                    onSubmitEditing={add}
-                  />
-                  <Pressable
-                    disabled={!ready}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add card"
-                    onPress={add}
-                    style={({ pressed }) => [
-                      styles.addBtn,
-                      !ready && styles.addBtnOff,
-                      pressed && { opacity: 0.85 },
-                    ]}
-                  >
-                    <Text style={styles.addText}>ADD</Text>
-                  </Pressable>
+            {stacked ? (
+              <ScrollView
+                ref={list}
+                style={styles.scroll}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {head}
+                <View
+                  style={[styles.rows, { height: rowsHeight }]}
+                  onLayout={(e) => {
+                    rowsTop.current = e.nativeEvent.layout.y;
+                  }}
+                >
+                  {rows}
                 </View>
-                <SegmentedControl options={KINDS} value={kind} onChange={setKind} />
-              </>
+                {foot}
+              </ScrollView>
             ) : (
-              <Text style={styles.hint}>
-                {MAX_CUSTOM_CARDS} cards of your own is the most the planner holds. Delete one to
-                make another.
-              </Text>
+              <>
+                {head}
+                <ScrollView
+                  ref={list}
+                  style={styles.list}
+                  contentContainerStyle={{ height: rowsHeight }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {rows}
+                </ScrollView>
+                {foot}
+              </>
             )}
 
             <Pressable
@@ -329,7 +390,9 @@ export default function LayoutEditor({
               onPress={onClose}
               style={({ pressed }) => [styles.done, pressed && { opacity: 0.85 }]}
             >
-              <Text style={styles.doneText}>DONE</Text>
+              <Text style={styles.doneText} maxFontSizeMultiplier={SCALE.heading}>
+                DONE
+              </Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -374,6 +437,12 @@ const makeStyles = (p: Palette) =>
     },
     list: {
       flexShrink: 1,
+      marginTop: 14,
+    },
+    scroll: {
+      flexShrink: 1,
+    },
+    rows: {
       marginTop: 14,
     },
     row: {

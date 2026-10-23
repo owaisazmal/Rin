@@ -7,10 +7,11 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { MONTH_ABBR } from '../dates';
 import { YearBlock, YearSpan, YearSpanStats, blockShape, columnDays } from '../yearGrid';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, MODAL_ORIENTATIONS, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
 
 const CELL = 12;
 const GAP = 3;
@@ -54,6 +55,7 @@ export default function YearChart({
   onSelectDate,
 }: Props) {
   const { palette } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const scrollRef = useRef<ScrollView>(null);
   const [picking, setPicking] = useState(false);
@@ -145,7 +147,11 @@ export default function YearChart({
     <View style={styles.wrap}>
       <View style={styles.headRow}>
         <View style={styles.headline}>
-          <Text style={styles.headlineText} numberOfLines={1}>
+          <Text
+            style={styles.headlineText}
+            maxFontSizeMultiplier={SCALE.heading}
+            numberOfLines={fontScale > 1 ? 2 : 1}
+          >
             <Text style={styles.headlineNum}>{stats.total}</Text> {totalLabel}
           </Text>
           <Pressable
@@ -160,7 +166,12 @@ export default function YearChart({
               pressed && { opacity: 0.6 },
             ]}
           >
-            <Text style={[styles.infoGlyph, legend && styles.infoGlyphOn]}>i</Text>
+            <Text
+              style={[styles.infoGlyph, legend && styles.infoGlyphOn]}
+              maxFontSizeMultiplier={SCALE.glyph}
+            >
+              i
+            </Text>
           </Pressable>
         </View>
         <Pressable
@@ -169,7 +180,9 @@ export default function YearChart({
           onPress={() => setPicking(true)}
           style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.chipText}>{spanLabel}</Text>
+          <Text style={styles.chipText} maxFontSizeMultiplier={SCALE.heading}>
+            {spanLabel}
+          </Text>
           {/* drawn rather than typed: no caret glyph in Josefin, and a fallback
               one lands at a different height on each platform */}
           <View style={styles.caret} />
@@ -177,11 +190,13 @@ export default function YearChart({
       </View>
 
       <View style={styles.statsRow}>
-        <Text style={styles.stat}>
+        <Text style={styles.stat} maxFontSizeMultiplier={SCALE.heading}>
           Active days: <Text style={styles.statNum}>{stats.activeDays}</Text>
         </Text>
-        <Text style={styles.statDot}>·</Text>
-        <Text style={styles.stat}>
+        <Text style={styles.statDot} maxFontSizeMultiplier={SCALE.heading}>
+          ·
+        </Text>
+        <Text style={styles.stat} maxFontSizeMultiplier={SCALE.heading}>
           Max streak: <Text style={styles.statNum}>{stats.maxStreak}</Text>
         </Text>
       </View>
@@ -259,6 +274,7 @@ export default function YearChart({
                 })}
               </View>
               <Text
+                maxFontSizeMultiplier={SCALE.heading}
                 style={[
                   styles.monthLabel,
                   { width: shape.width },
@@ -278,13 +294,19 @@ export default function YearChart({
           accessible
           accessibilityLabel="Colour key: the greens run from one habit kept to all of them; red is a day marked missed."
         >
-          <Text style={styles.legendText}>less</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
+            less
+          </Text>
           {palette.ghLevels.map((c, i) => (
             <View key={i} style={[styles.legendCell, { backgroundColor: c }]} />
           ))}
-          <Text style={styles.legendText}>more</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
+            more
+          </Text>
           <View style={[styles.legendCell, styles.legendMissed]} />
-          <Text style={styles.legendText}>missed</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
+            missed
+          </Text>
         </View>
       ) : null}
 
@@ -300,10 +322,13 @@ export default function YearChart({
         animationType="fade"
         onRequestClose={() => setPicking(false)}
         statusBarTranslucent
+        supportedOrientations={MODAL_ORIENTATIONS}
       >
         <Pressable style={styles.backdrop} onPress={() => setPicking(false)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>SHOW</Text>
+            <Text style={styles.sheetTitle} maxFontSizeMultiplier={SCALE.heading}>
+              SHOW
+            </Text>
             <ScrollView
               style={styles.sheetList}
               showsVerticalScrollIndicator={false}
@@ -332,8 +357,17 @@ export default function YearChart({
                       pressed && { opacity: 0.6 },
                     ]}
                   >
-                    <Text style={[styles.optionText, on && styles.optionTextOn]}>{label}</Text>
-                    {on ? <Text style={styles.optionTick}>✓</Text> : null}
+                    <Text
+                      style={[styles.optionText, on && styles.optionTextOn]}
+                      maxFontSizeMultiplier={SCALE.heading}
+                    >
+                      {label}
+                    </Text>
+                    {on ? (
+                      <Text style={styles.optionTick} maxFontSizeMultiplier={SCALE.heading}>
+                        ✓
+                      </Text>
+                    ) : null}
                   </Pressable>
                 );
               })}

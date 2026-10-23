@@ -29,16 +29,19 @@ the Play set shows the Android launcher (`screenshots/*/android/widgets/page*.pn
 the App Store set shows the iOS home screen. Status bars and home indicators are
 cut from every capture, so the phone frame is platform-neutral.
 
-The iPad set has its own captures, taken on an iPad Pro 13" (M5) simulator on
-10 Oct 2026, shown as a close-up with no bezel that runs off both sides and the bottom.
-An iPad screen holds most of the planner at once, so slide 02 is scrolled to the
-daily check and slide 05 was shot with the Deadlines card hidden and cropped to
-start under the habit list; the two no longer show the same cards. It has no
-widget slides.
+The iPad set comes from the iPad Pro 13" (M5) gallery shots in
+`screenshots/*/ios/tablet/ipad-pro-13-m5` (22 Oct 2026), shown at full width with no
+bezel, running off the bottom. The whole two-column planner fits that screen, so
+slide 02 uses the year-grid planner, where the daily check sits fully in view, and
+slide 05 uses `07-notes`, shot with the Deadlines card hidden so goals and notes
+come to the top. It has no widget slides.
 
-The Duo sets are not Duo captures. Xcode 27.0 has no iPhone Duo simulator (it
-arrives with 27.1), so they are the iPhone 17 Pro Max gallery shots in the phone
-frame at the two Duo sizes. Retake them on a Duo simulator before relying on them.
+The Duo sets are iPhone Duo simulator captures (iOS 27.1, 22 Oct 2026) from
+`screenshots/*/ios/duo/`: the outer slides from `iphone-duo-outer`, the inner ones
+from `iphone-duo-inner-portrait`, held upright to fit the portrait store size. Only
+the home indicator is cut from the outer captures, since their status bar sits in
+the right-hand column beside the planner's buttons. Rebuild just these two sets with
+`python3 assets/store/tools/compose.py assets/store/tools/slides.json duo-outer duo-inner`.
 
 ## Sample data
 
@@ -64,8 +67,9 @@ dataset, written into a throwaway emulator.
    into a `CAPTURES/` folder next to `tools/slides.json`, using the file names
    that file expects.
 3. `python3 assets/store/tools/compose.py assets/store/tools/slides.json` rewrites
-   every folder above except the 6.5" one. The iPad captures go in `CAPTURES/` too, as `ipad-01-radial-dark.png`
-   and so on. It needs Google Chrome (rasterising), Pillow, and the Josefin
+   every folder above except the 6.5" one; the iPad and Duo sets read the gallery
+   instead of `CAPTURES/`. Name stores after the spec to rebuild only those, e.g.
+   `… slides.json ipad`. It needs Google Chrome (rasterising), Pillow, and the Josefin
    Sans files from `node_modules`.
 4. The 6.5" and 6.3" sets are the 6.9" one resized:
    ```bash

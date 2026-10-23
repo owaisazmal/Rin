@@ -9,10 +9,10 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { FONT, Palette, RADIUS, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
 
 /**
- * The two-up switch used for the tracker, the sign-in tabs and the theme.
+ * The segmented switch used for the tracker, the sign-in tabs and the theme.
  *
  * The filled state used to jump between options. Here it is a single pill that
  * slides, so the control shows the move it just made — and the labels cross-fade
@@ -110,7 +110,10 @@ export default function SegmentedControl<T extends string>({
             onPress={() => onChange(option.value)}
             style={styles.btn}
           >
-            <Animated.Text style={[styles.label, { opacity: Animated.subtract(1, filled) }]}>
+            <Animated.Text
+              style={[styles.label, { opacity: Animated.subtract(1, filled) }]}
+              maxFontSizeMultiplier={SCALE.heading}
+            >
               {option.label}
             </Animated.Text>
             {/* the filled copy, stacked exactly over the resting one */}
@@ -118,7 +121,12 @@ export default function SegmentedControl<T extends string>({
               pointerEvents="none"
               style={[StyleSheet.absoluteFill, styles.center, { opacity: filled }]}
             >
-              <Text style={[styles.label, styles.labelFilled]}>{option.label}</Text>
+              <Text
+                style={[styles.label, styles.labelFilled]}
+                maxFontSizeMultiplier={SCALE.heading}
+              >
+                {option.label}
+              </Text>
             </Animated.View>
           </Pressable>
         );

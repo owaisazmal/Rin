@@ -1,8 +1,11 @@
 import { createContext, useContext } from 'react';
 import { Platform } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import type { ModalProps, ViewStyle } from 'react-native';
+import { COLUMN_MAX } from './fit';
 
 export type ThemeMode = 'dark' | 'light';
+/** What Settings stores; `system` is resolved to a ThemeMode from the OS before anything draws */
+export type ThemePreference = ThemeMode | 'system';
 
 /**
  * The four brand colours the whole app is built from. Every other value in the
@@ -55,6 +58,9 @@ export const FONT = {
 export function wrapSafe(size: number): number {
   return Platform.OS === 'ios' ? size + 0.01 : size;
 }
+
+/** maxFontSizeMultiplier caps; `row` is text squeezed beside controls, and body text has none */
+export const SCALE = { heading: 1.4, figure: 1.6, row: 2, glyph: 1 } as const;
 
 export interface Palette {
   /** flat colour behind the drifting background blobs */
@@ -200,7 +206,10 @@ export const RADIUS = {
 } as const;
 
 /** The content column: full width on a phone, centred at a readable width on iPads and tablets */
-export const COLUMN = { width: '100%', maxWidth: 640, alignSelf: 'center' } as const;
+export const COLUMN = { width: '100%', maxWidth: COLUMN_MAX, alignSelf: 'center' } as const;
+
+/** iPhone modals default to portrait only, but an unfolded Duo shows the app on its side */
+export const MODAL_ORIENTATIONS: ModalProps['supportedOrientations'] = ['portrait', 'landscape'];
 
 /**
  * The shadow as one CSS colour. iOS wants the tint and the strength as two
@@ -253,15 +262,18 @@ export function cardSurface(p: Palette): ViewStyle {
 }
 
 export interface Theme {
+  /** resolved, so everything that draws sees only dark or light */
   mode: ThemeMode;
+  preference: ThemePreference;
   palette: Palette;
-  setMode: (mode: ThemeMode) => void;
+  setPreference: (preference: ThemePreference) => void;
 }
 
 export const ThemeContext = createContext<Theme>({
   mode: 'dark',
+  preference: 'dark',
   palette: darkPalette,
-  setMode: () => {},
+  setPreference: () => {},
 });
 
 export function useTheme(): Theme {

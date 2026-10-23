@@ -7,7 +7,8 @@
     "development": {
       "distribution": "internal",
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "image": "macos-tahoe-26.6-xcode-27.1"
       },
       "android": {
         "buildType": "apk"
@@ -16,6 +17,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -23,6 +27,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      },
       "android": {
         "buildType": "app-bundle"
       },

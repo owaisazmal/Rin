@@ -10,7 +10,7 @@ import {
   MAX_CARD_ITEM_LEN,
   MAX_CARD_NOTE_LEN,
 } from '../types';
-import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
 
 /** A user-made card: a note, a list, or a checklist. */
 
@@ -51,7 +51,7 @@ export default function CustomCard({
             <View style={styles.headerRight}>
               {kind === 'checklist' && written.length > 0 && (
                 <View style={styles.countBadge}>
-                  <Text style={styles.countText}>
+                  <Text style={styles.countText} maxFontSizeMultiplier={SCALE.figure}>
                     {ticked}/{written.length}
                   </Text>
                 </View>

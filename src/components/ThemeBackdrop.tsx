@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { COLUMN, Palette, ThemeMode, useTheme } from '../theme';
 
@@ -52,7 +53,9 @@ export default function ThemeBackdrop() {
   const { mode, palette } = useTheme();
   // past the gutter and any room beside a capped column, so the band has no side edges
   const { width } = useWindowDimensions();
-  const bleed = 16 + Math.max(0, (width - COLUMN.maxWidth) / 2);
+  const insets = useSafeAreaInsets();
+  const beside = 16 + Math.max(0, (width - insets.left - insets.right - COLUMN.maxWidth) / 2);
+  const bleed = { left: -(beside + insets.left), right: -(beside + insets.right) };
 
   /**
    * The clip lags the palette on purpose.
@@ -113,7 +116,7 @@ export default function ThemeBackdrop() {
   const blend = cut === 'dark' ? styles.onDark : styles.onLight;
 
   return (
-    <View style={[styles.fill, IOS && { left: -bleed, right: -bleed }]} pointerEvents="none">
+    <View style={[styles.fill, IOS && bleed]} pointerEvents="none">
       <VideoView
         style={IOS ? styles.fill : [styles.fill, blend]}
         player={player}

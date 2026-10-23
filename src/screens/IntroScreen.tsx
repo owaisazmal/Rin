@@ -12,7 +12,7 @@ import {
   ViewStyle,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LogoMark from '../components/LogoMark';
 import { COLUMN, FONT, Palette, RADIUS, useTheme, wrapSafe } from '../theme';
 import { FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
@@ -71,7 +71,11 @@ const THUMB = 20;
 
 export default function IntroScreen({ onDone }: { onDone: () => void }) {
   const { palette } = useTheme();
-  const { width, height } = useWindowDimensions();
+  const windowSize = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // the pager's own width: the safe area takes the side insets off the window's
+  const width = windowSize.width - insets.left - insets.right;
+  const height = windowSize.height;
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
   /**
@@ -134,6 +138,8 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onMomentumEnd}
+        // unfolding or turning the phone resizes the pages; stay on the same one
+        onContentSizeChange={() => scrollRef.current?.scrollTo({ x: page * width, animated: false })}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
           useNativeDriver: true,
         })}

@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import SectionHeader from './SectionHeader';
 import SegmentedControl from './SegmentedControl';
 import type { ChartType } from '../settings';
-import { FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * The card around whichever chart is showing: the switch between the two, the
@@ -124,11 +124,17 @@ export default function TrackerCard({
       {chart === 'radial' && hasHabits && (
         <View style={styles.legend}>
           <View style={[styles.legendSwatch, { backgroundColor: palette.done }]} />
-          <Text style={styles.legendText}>done</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
+            done
+          </Text>
           <View style={[styles.legendSwatch, { backgroundColor: palette.missed }]} />
-          <Text style={styles.legendText}>missed</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
+            missed
+          </Text>
           <View style={[styles.legendSwatch, styles.legendEmpty]} />
-          <Text style={styles.legendText}>pending</Text>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
+            pending
+          </Text>
         </View>
       )}
     </View>

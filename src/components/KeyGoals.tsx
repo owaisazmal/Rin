@@ -3,7 +3,7 @@ import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { KeyGoal, MAX_GOAL_LEN } from '../types';
-import { useTheme, cardSurface, RADIUS, FONT, wrapSafe } from '../theme';
+import { useTheme, cardSurface, RADIUS, FONT, SCALE, wrapSafe } from '../theme';
 
 interface Props {
   goals: KeyGoal[];
@@ -92,7 +92,7 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
         title="KEY GOALS"
         right={
           <View style={styles.countBadge}>
-            <Text style={styles.countText}>
+            <Text style={styles.countText} maxFontSizeMultiplier={SCALE.figure}>
               {doneCount}/{goals.length}
             </Text>
           </View>
@@ -103,6 +103,8 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
           <View key={i} style={[styles.goalBox, g.done && styles.goalBoxDone]}>
             <TextInput
               style={[styles.input, g.done && styles.inputDone]}
+              // a third of the card, so it stops with the headings
+              maxFontSizeMultiplier={SCALE.heading}
               value={g.text}
               maxLength={MAX_GOAL_LEN}
               onChangeText={(t) => onChangeText(i, withoutTabs(t).slice(0, MAX_GOAL_LEN))}

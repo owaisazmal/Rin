@@ -3,6 +3,7 @@ import { BackHandler } from 'react-native';
 import PlannerScreen from '../screens/PlannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
+import SummaryScreen, { SummarySource } from '../screens/SummaryScreen';
 import BackupScreen, { BackupOutcome } from '../screens/BackupScreen';
 import IntroScreen from '../screens/IntroScreen';
 import { ScreenLayer, useScreenTransition } from './ScreenLayer';
@@ -13,7 +14,7 @@ import { HistoryFilter } from '../history';
 import type { PlannerLayout } from '../layout';
 import { ChartType } from '../settings';
 
-type Screen = 'planner' | 'settings' | 'history' | 'backup' | 'intro';
+type Screen = 'planner' | 'settings' | 'history' | 'summary' | 'backup' | 'intro';
 type BackupVariant = 'onboarding' | 'standalone';
 
 export default function Navigator({
@@ -35,7 +36,7 @@ export default function Navigator({
   onSkipOnboarding,
   onIntroDone,
 }: {
-  initialScreen: Exclude<Screen, 'settings' | 'history'>;
+  initialScreen: Exclude<Screen, 'settings' | 'history' | 'summary'>;
   hasBackup: boolean;
   lastBackupAt: number | null;
   /** what is still waiting to go, and what the server would not take */
@@ -81,6 +82,13 @@ export default function Navigator({
     setHistoryFilter(filter);
     setScreen('history');
   };
+  // kept after closing, so the summary still has its month while it slides away
+  const [summarySource, setSummarySource] = useState<SummarySource | null>(null);
+
+  const openSummary = (source: SummarySource) => {
+    setSummarySource(source);
+    setScreen('summary');
+  };
   // Frozen at the moment the backup screen opens rather than derived from
   // whether a backup exists, which changes the instant one is made — mid-exit,
   // that would swap the screen's back button in behind the animation.
@@ -105,6 +113,7 @@ export default function Navigator({
   );
   const backupLayer = useScreenTransition(screen === 'backup' || screen === 'intro');
   const historyLayer = useScreenTransition(screen === 'history');
+  const summaryLayer = useScreenTransition(screen === 'summary');
 
   const dismissBackup = () => {
     if (backupVariant === 'standalone') {
@@ -125,7 +134,7 @@ export default function Navigator({
    */
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (screen === 'settings' || screen === 'history') {
+      if (screen === 'settings' || screen === 'history' || screen === 'summary') {
         setScreen('planner');
         return true;
       }
@@ -158,7 +167,10 @@ export default function Navigator({
       <ScreenLayer
         coveredBy={settingsLayer.progress}
         hidden={
-          settingsLayer.settledOpen || backupLayer.settledOpen || historyLayer.settledOpen
+          settingsLayer.settledOpen ||
+          backupLayer.settledOpen ||
+          historyLayer.settledOpen ||
+          summaryLayer.settledOpen
         }
       >
         <PlannerScreen
@@ -168,6 +180,7 @@ export default function Navigator({
           onChangeLayout={onChangeLayout}
           onOpenSettings={() => setScreen('settings')}
           onOpenHistory={openHistory}
+          onOpenSummary={openSummary}
           taskStore={taskStore}
           restorableMonth={restorableMonth}
         />
@@ -192,6 +205,17 @@ export default function Navigator({
           // screen with nothing on it yet, showing straight through.
           active={historyLayer.settledOpen}
           initialFilter={historyFilter}
+          onClose={() => setScreen('planner')}
+        />
+      </ScreenLayer>
+
+      <ScreenLayer
+        transition={summaryLayer}
+        onSwipeBack={() => setScreen('planner')}
+      >
+        <SummaryScreen
+          source={summarySource}
+          tasks={taskStore.tasks}
           onClose={() => setScreen('planner')}
         />
       </ScreenLayer>

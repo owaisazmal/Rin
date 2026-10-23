@@ -9,11 +9,22 @@ import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
 import type { BackupHolds, RestoreFailure } from './backupWording';
-import { COLUMN, FONT, Palette, RADIUS, ThemeMode, cardSurface, useTheme, wrapSafe } from '../theme';
+import {
+  COLUMN,
+  FONT,
+  Palette,
+  RADIUS,
+  SCALE,
+  ThemePreference,
+  cardSurface,
+  useTheme,
+  wrapSafe,
+} from '../theme';
 
 const THEME_OPTIONS = [
-  { value: 'dark' as ThemeMode, label: 'DARK' },
-  { value: 'light' as ThemeMode, label: 'LIGHT' },
+  { value: 'dark' as ThemePreference, label: 'DARK' },
+  { value: 'light' as ThemePreference, label: 'LIGHT' },
+  { value: 'system' as ThemePreference, label: 'SYSTEM' },
 ] as const;
 
 const REPO_URL = 'https://github.com/owaisazmal/monthly-planning';
@@ -91,7 +102,7 @@ export default function SettingsScreen({
   onForgetBackup,
   onClose,
 }: Props) {
-  const { mode, palette, setMode } = useTheme();
+  const { mode, preference, palette, setPreference } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   /**
    * The card is told what the backup holds only when there is something this
@@ -243,13 +254,19 @@ export default function SettingsScreen({
         onContentSizeChange={(_, h) => setContentHeight(h)}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>SETTINGS</Text>
+          <Text style={styles.title} maxFontSizeMultiplier={SCALE.heading}>
+            SETTINGS
+          </Text>
           <Pressable
             hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close settings"
             onPress={onClose}
             style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.closeGlyph}>✕</Text>
+            <Text style={styles.closeGlyph} maxFontSizeMultiplier={SCALE.glyph}>
+              ✕
+            </Text>
           </Pressable>
         </View>
 
@@ -267,7 +284,9 @@ export default function SettingsScreen({
                 onPress={onOpenBackup}
                 style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
               >
-                <Text style={styles.primaryText}>BACK UP NOW</Text>
+                <Text style={styles.primaryText} maxFontSizeMultiplier={SCALE.heading}>
+                  BACK UP NOW
+                </Text>
               </Pressable>
               {/*
                 Above the generic retry, because it is the answer to the
@@ -283,7 +302,10 @@ export default function SettingsScreen({
                   onPress={() => restore(damagedMonth)}
                   style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={[styles.ghostText, styles.retryText]}>
+                  <Text
+                    style={[styles.ghostText, styles.retryText]}
+                    maxFontSizeMultiplier={SCALE.heading}
+                  >
                     {restoring ? 'RESTORING…' : 'RESTORE THIS MONTH'}
                   </Text>
                 </Pressable>
@@ -294,7 +316,10 @@ export default function SettingsScreen({
                   onPress={retry}
                   style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={[styles.ghostText, styles.retryText]}>
+                  <Text
+                    style={[styles.ghostText, styles.retryText]}
+                    maxFontSizeMultiplier={SCALE.heading}
+                  >
                     {retrying ? 'TRYING…' : 'TRY IT AGAIN NOW'}
                   </Text>
                 </Pressable>
@@ -303,7 +328,9 @@ export default function SettingsScreen({
                 onPress={confirmForget}
                 style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
               >
-                <Text style={styles.ghostText}>FORGET THE CODE</Text>
+                <Text style={styles.ghostText} maxFontSizeMultiplier={SCALE.heading}>
+                  FORGET THE CODE
+                </Text>
               </Pressable>
               {/*
                 Last, and worded as the heavier thing it is. Forgetting the code
@@ -315,7 +342,10 @@ export default function SettingsScreen({
                 onPress={confirmDelete}
                 style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
               >
-                <Text style={[styles.ghostText, styles.dangerText]}>
+                <Text
+                  style={[styles.ghostText, styles.dangerText]}
+                  maxFontSizeMultiplier={SCALE.heading}
+                >
                   {deleting ? 'DELETING…' : 'DELETE THE BACKUP'}
                 </Text>
               </Pressable>
@@ -331,7 +361,9 @@ export default function SettingsScreen({
                 onPress={onOpenBackup}
                 style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
               >
-                <Text style={styles.primaryText}>SET ONE UP</Text>
+                <Text style={styles.primaryText} maxFontSizeMultiplier={SCALE.heading}>
+                  SET ONE UP
+                </Text>
               </Pressable>
             </>
           )}
@@ -344,16 +376,22 @@ export default function SettingsScreen({
               <ThemeIcon mode={mode} color={palette.accent} size={18} />
             </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Theme</Text>
-              <Text style={styles.rowSub}>
-                {mode === 'dark' ? 'Dark: ivory on black' : 'Light: charcoal on ivory'}
+              <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+                Theme
+              </Text>
+              <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+                {preference === 'system'
+                  ? `System: ${mode}, like this ${device()}`
+                  : mode === 'dark'
+                    ? 'Dark: ivory on black'
+                    : 'Light: charcoal on ivory'}
               </Text>
             </View>
           </View>
           <SegmentedControl
             options={THEME_OPTIONS}
-            value={mode}
-            onChange={setMode}
+            value={preference}
+            onChange={setPreference}
             verticalPadding={9}
           />
         </View>
@@ -416,8 +454,10 @@ const makeStyles = (p: Palette) =>
       justifyContent: 'space-between',
       marginBottom: 22,
       paddingHorizontal: 4,
+      gap: 12,
     },
     title: {
+      flexShrink: 1,
       fontSize: 26,
       fontFamily: FONT.bold,
       letterSpacing: 2,
@@ -591,6 +631,8 @@ const makeStyles = (p: Palette) =>
       fontFamily: FONT.semibold,
       color: p.accent,
       textDecorationLine: 'underline',
+      // the link wraps at its slashes at large text sizes
+      textAlign: 'center',
     },
     footer: {
       textAlign: 'center',

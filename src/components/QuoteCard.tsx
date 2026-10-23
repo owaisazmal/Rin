@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { quoteForDate } from '../quotes';
-import { FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /** The day's line on discipline. It changes at midnight and holds nothing of the user's. */
 export default function QuoteCard({ date }: { date: Date }) {
@@ -12,7 +12,9 @@ export default function QuoteCard({ date }: { date: Date }) {
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={styles.accent} />
-        <Text style={styles.label}>DISCIPLINE.</Text>
+        <Text style={styles.label} maxFontSizeMultiplier={SCALE.heading}>
+          DISCIPLINE.
+        </Text>
       </View>
       <Text style={styles.quote}>“{quoteForDate(date)}”</Text>
     </View>

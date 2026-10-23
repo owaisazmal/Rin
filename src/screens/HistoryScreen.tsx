@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
@@ -16,7 +24,7 @@ import {
 import { useHistory } from '../hooks/useHistory';
 import { useNow } from '../hooks/useNow';
 import { startOfDay } from '../dates';
-import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
  * What has already happened — habits ticked or missed, deadlines finished —
@@ -82,7 +90,9 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
   const header = (
     <>
       <View style={styles.header}>
-        <Text style={styles.title}>HISTORY</Text>
+        <Text style={styles.title} maxFontSizeMultiplier={SCALE.heading}>
+          HISTORY
+        </Text>
         <Pressable
           hitSlop={10}
           accessibilityRole="button"
@@ -90,7 +100,9 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
           onPress={onClose}
           style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.closeGlyph}>✕</Text>
+          <Text style={styles.closeGlyph} maxFontSizeMultiplier={SCALE.glyph}>
+            ✕
+          </Text>
         </Pressable>
       </View>
 
@@ -142,7 +154,13 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
         onPress={loadMore}
         style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.7 }]}
       >
-        {loadingMore ? <Spinner size={18} /> : <Text style={styles.moreText}>OLDER</Text>}
+        {loadingMore ? (
+          <Spinner size={18} />
+        ) : (
+          <Text style={styles.moreText} maxFontSizeMultiplier={SCALE.heading}>
+            OLDER
+          </Text>
+        )}
       </Pressable>
     ) : null;
 
@@ -207,8 +225,12 @@ function Summary({
 }) {
   return (
     <View style={styles.summaryCell}>
-      <Text style={[styles.summaryValue, { color: tone }]}>{value}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={[styles.summaryValue, { color: tone }]} maxFontSizeMultiplier={SCALE.figure}>
+        {value}
+      </Text>
+      <Text style={styles.summaryLabel} maxFontSizeMultiplier={SCALE.figure}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -232,6 +254,7 @@ const DayCard = React.memo(function DayCard({
   palette: Palette;
   styles: ReturnType<typeof makeStyles>;
 }) {
+  const { fontScale } = useWindowDimensions();
   const tally =
     day.habitCount > 0 && day.marks.length > 0 ? `${day.done}/${day.habitCount}` : undefined;
 
@@ -242,7 +265,9 @@ const DayCard = React.memo(function DayCard({
         right={
           tally ? (
             <View style={styles.tallyBadge}>
-              <Text style={styles.tallyText}>{tally}</Text>
+              <Text style={styles.tallyText} maxFontSizeMultiplier={SCALE.figure}>
+                {tally}
+              </Text>
             </View>
           ) : undefined
         }
@@ -263,10 +288,17 @@ const DayCard = React.memo(function DayCard({
                   },
                 ]}
               >
-                <Text style={[styles.chipMark, { color: isDone ? palette.done : palette.missed }]}>
+                <Text
+                  style={[styles.chipMark, { color: isDone ? palette.done : palette.missed }]}
+                  maxFontSizeMultiplier={SCALE.row}
+                >
                   {isDone ? '✓' : '✕'}
                 </Text>
-                <Text style={styles.chipText} numberOfLines={1}>
+                <Text
+                  style={styles.chipText}
+                  maxFontSizeMultiplier={SCALE.row}
+                  numberOfLines={fontScale > 1 ? 2 : 1}
+                >
                   {m.name}
                 </Text>
               </View>
@@ -280,10 +312,13 @@ const DayCard = React.memo(function DayCard({
         return (
           <View key={i} style={styles.deadlineRow}>
             <View style={[styles.deadlineDot, { backgroundColor: late ? palette.missed : palette.done }]} />
-            <Text style={styles.deadlineText} numberOfLines={2}>
+            <Text style={styles.deadlineText} maxFontSizeMultiplier={SCALE.row} numberOfLines={2}>
               {event.text}
             </Text>
-            <Text style={[styles.deadlineWhen, late ? { color: palette.missed } : null]}>
+            <Text
+              style={[styles.deadlineWhen, late ? { color: palette.missed } : null]}
+              maxFontSizeMultiplier={SCALE.figure}
+            >
               {late ?? 'on time'}
             </Text>
           </View>
@@ -309,8 +344,10 @@ const makeStyles = (p: Palette) =>
       justifyContent: 'space-between',
       marginBottom: 18,
       paddingHorizontal: 4,
+      gap: 12,
     },
     title: {
+      flexShrink: 1,
       fontSize: 26,
       fontFamily: FONT.bold,
       letterSpacing: 2,
