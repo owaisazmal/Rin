@@ -60,11 +60,7 @@ export interface WidgetSnapshot {
   yearMissed: number[][];
   yearHabitCounts: number[];
   yearTotal: number;
-  /**
-   * The whole active list (`activeQuotes`), not just today's. The quote widget
-   * picks its own by day-of-year, so it rolls over at midnight even if the app is
-   * never opened — and `quotes.ts` stays the single source of truth.
-   */
+  /** The whole active list, so the widget picks by day-of-year and rolls over without the app */
   quotes: string[];
   /**
    * Deadlines still to hit, soonest first.

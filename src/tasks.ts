@@ -67,8 +67,7 @@ export function parseTasks(raw: unknown): Task[] {
       const rule = parseRepeat(repeat, t.due);
       return {
         ...t,
-        // an unfinished task has no completion time, whatever an older or
-        // hand-edited record might claim
+        // an unfinished task has no completion time, whatever an old record claims
         completedAt: t.done && typeof t.completedAt === 'number' ? t.completedAt : undefined,
         ...(rule && { repeat: rule }),
       };

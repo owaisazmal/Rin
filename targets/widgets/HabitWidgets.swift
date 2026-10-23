@@ -52,6 +52,7 @@ struct StreakWidgetView: View {
           .font(.system(size: 20, weight: .bold, design: .rounded))
         ViewThatFits(in: .horizontal) {
           Text("best \(snap.bestStreak) · \(snap.monthPct)% this month")
+          Text("best \(snap.bestStreak) · \(snap.monthPct)% of \(snap.monthName.prefix(3).capitalized)")
           Text("best \(snap.bestStreak) · \(snap.monthPct)%")
         }
         .font(.system(size: 12, weight: .medium))

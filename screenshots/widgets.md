@@ -24,16 +24,16 @@ The iOS shots are in [`dark/ios/widgets/`](dark/ios/widgets/) and [`light/ios/wi
 
 | Widget | small | medium | large | Lock Screen |
 | --- | :-: | :-: | :-: | :-: |
-| Radial Tracker | ● | ● | ● | |
-| Year Tracker | | ● | | |
-| Month Progress | ● | ● | | |
+| Radial Tracker | ● | ● | ● | ● circular |
+| Year Tracker | | ● | | ● rectangular |
+| Month Progress | ● | ● | | ● circular · rectangular · inline |
 | Streak | ● | ● | | ● circular · rectangular · inline |
-| Today's Check | ● | ● | ● | |
-| Key Goals | | ● | ● | |
+| Today's Check | ● | ● | ● | ● circular · rectangular · inline |
+| Key Goals | | ● | ● | ● rectangular · inline |
 | Daily Quote | ● | ● | ● | ● rectangular |
 | Deadlines | ● | ● | ● | ● rectangular · inline |
 
-Year Tracker is medium-only: a full year needs ~53 columns, which at a large
+On the Home Screen, Year Tracker is medium-only: a full year needs ~53 columns, which at a large
 widget's width forces cells down to ~5pt — a stripe of confetti with most of the
 card empty. The 17-week window reads better.
 
@@ -46,33 +46,59 @@ quote, so it doesn't depend on the app being opened.
 
 | Widget | Slot | Shows |
 | --- | --- | --- |
+| Radial Tracker | circular | the month's rings, done bright, missed dimmer, pending faint |
+| Year Tracker | rectangular | the last 16 weeks of the year grid |
+| Month Progress | circular | a ring with the month's percentage |
+| Month Progress | rectangular | the percentage, a bar, and how many check-ins of the month's total |
+| Month Progress | inline | `42% of October done` |
 | Streak | circular | the current streak in days, under a flame |
 | Streak | rectangular | the current streak, the best this year, and how much of the month is done |
 | Streak | inline | `9d streak · 42%` |
+| Today's Check | circular | a ring with today's tally, `3/5` |
+| Today's Check | rectangular | today's tally and the habits still open; past three, the last line counts the rest |
+| Today's Check | inline | `3 of 5 done today` |
+| Key Goals | rectangular | the month's goals with a filled or open circle each |
+| Key Goals | inline | `1 of 3 goals done` |
+| Daily Quote | rectangular | today's quote; a long one gives up the heading, and one that still won't fit keeps its first sentence |
 | Deadlines | rectangular | the next deadline and the time left on it |
 | Deadlines | inline | `5h left · Send the tax return`, countdown first, so a long title loses its end rather than the countdown |
-| Daily Quote | rectangular | today's quote; a long one gives up the heading for a fourth line |
 
-The Lock Screen draws every accessory in one colour, so the states are shapes:
-the flame is filled once today is marked and an outline while the streak is
-waiting on today, and an overdue deadline swaps the hourglass for an
-exclamation mark. Accessories don't follow the app's theme either, which is
-why they are only in the dark folder.
+The Lock Screen draws every accessory in one colour, so the states are shapes
+or shades: the flame is filled once today is marked and an outline while the
+streak is waiting on today, open habits and goals are open circles, an overdue
+deadline swaps the hourglass for an exclamation mark, and the charts use
+brightness for done, missed and pending. Accessories don't follow the app's
+theme either, which is why they are only in the dark folder.
+
+On the iPhone SE, the tightest Lock Screen on iOS 27, a slot is 68pt (circular)
+or 153 × 68pt (rectangular), and the system keeps a 6pt margin inside it, so the
+content gets 56pt or 141 × 56pt. Text may run into that margin without being
+cut, which the three-line layouts and the quote rely on.
+
+### Captures
+
+[`lock-screen-se-1.png`](dark/ios/widgets/lock-screen-se-1.png),
+[`lock-screen-se-2.png`](dark/ios/widgets/lock-screen-se-2.png) and
+[`lock-screen-se-3.png`](dark/ios/widgets/lock-screen-se-3.png) are the real Lock
+Screen of an iPhone SE simulator on iOS 27.0, with the widgets placed through
+the Lock Screen editor. The first is in the default style with the gallery's
+sample data. The second and third are tinted, with long names, an overdue task
+and the longest single-sentence quote. Every family was also checked in the
+editor's widget gallery, which WidgetKit draws with the same data.
+
+### Renders
 
 [`lock-screen-vibrant.png`](dark/ios/widgets/lock-screen-vibrant.png),
 [`lock-screen-tinted.png`](dark/ios/widgets/lock-screen-tinted.png) and
 [`lock-screen-always-on.png`](dark/ios/widgets/lock-screen-always-on.png) show
-every accessory at the iPhone SE's slot sizes, the tightest on iOS 27, with
-four sets of data: typical, long text and big numbers, a streak still waiting
-on today, and nothing at all.
-
-These are renders, not captures. The simulator can't place Lock Screen widgets
-from a script and has no always-on display, so the views are drawn headlessly
-and given the system's treatment by hand: brightness becomes the opacity of
-white (vibrant) or of a tint colour (tinted), and always-on dims the wallpaper
-and the widget. Layout, size and truncation are faithful; the system's own
-material and dimming differ in detail. The longest quote still loses its last
-few words in the SE's slot.
+every accessory at those content sizes with four sets of data: typical, long
+text and big numbers, a streak still waiting on today, and nothing at all.
+They are drawn headlessly and given the system's treatment by hand:
+brightness becomes the opacity of white (vibrant) or of a tint colour
+(tinted), and always-on dims the wallpaper and the widget. Their layout,
+wrapping and truncation match the captures. The always-on page is the only
+look at that mode: the simulator has no always-on display, so it still needs a
+check on an iPhone that has one.
 
 ## Android
 

@@ -10,6 +10,7 @@ struct QuoteWidgetView: View {
   var entry: SnapshotEntry
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.widgetContentMargins) private var margins
 
   private var fontSize: CGFloat {
     switch family {
@@ -32,8 +33,11 @@ struct QuoteWidgetView: View {
         lockLines(full, heading: true)
         lockLines(full, heading: false)
         lockLines(lead, heading: true)
-        lockLines(lead, heading: false).lineLimit(4).minimumScaleFactor(0.9)
+        lockLines(lead, heading: false).lineLimit(4).minimumScaleFactor(0.85)
       }
+      // measured against the whole slot: the Lock Screen draws into its margin, and a quote needs the room
+      .padding(.top, -margins.top)
+      .padding(.bottom, -margins.bottom)
       .frame(maxWidth: .infinity, alignment: .leading)
       .widgetAccentable()
       .widgetBackground(.clear)
@@ -52,7 +56,8 @@ struct QuoteWidgetView: View {
             .lineSpacing(family == .systemLarge ? 5 : 3)
             // long quotes shrink rather than getting cut off mid-thought
             .minimumScaleFactor(0.6)
-            .fixedSize(horizontal: false, vertical: true)
+            // first claim on the room, but no more than there is, so a long custom quote shrinks
+            .layoutPriority(1)
         } else {
           Text("Open the app to sync today's quote.")
             .font(.system(size: 12))

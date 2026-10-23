@@ -64,6 +64,21 @@ function CloseGlyph({ color }: { color: string }) {
   );
 }
 
+function RepeatGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={11} height={11} viewBox="0 0 24 24">
+      <Path
+        d="M19 12a7 7 0 1 1-2.05-4.95M17.5 3v4.5H13"
+        stroke={color}
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 /**
  * One colour per band, drawn from the palette the rest of the app already uses:
  * green means finished, red means the deadline has arrived or gone, slate means
@@ -212,9 +227,12 @@ export default function Deadlines({
                     {timeLeftLabel(t.due, now)}
                   </Text>
                   {repeats && (
-                    <Text style={styles.repeats} maxFontSizeMultiplier={SCALE.figure}>
-                      {`↻ ${repeats}`}
-                    </Text>
+                    <View style={styles.repeats}>
+                      <RepeatGlyph color={palette.inkSoft} />
+                      <Text style={styles.repeatsText} maxFontSizeMultiplier={SCALE.figure}>
+                        {repeats}
+                      </Text>
+                    </View>
                   )}
                 </View>
 
@@ -362,6 +380,11 @@ const makeStyles = (p: Palette) =>
       letterSpacing: 0.3,
     },
     repeats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    repeatsText: {
       fontSize: 11,
       fontFamily: FONT.semibold,
       color: p.inkSoft,

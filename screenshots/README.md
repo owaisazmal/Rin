@@ -8,7 +8,7 @@ dark/ · light/
 │   ├── phone/     iPhone SE (3rd gen), 13 mini, 17, 17 Pro Max, and the SE at the largest text size
 │   ├── tablet/    iPad mini (A17 Pro), iPad (A16), iPad Pro 11" and 13" (M5), and the 13" in landscape
 │   ├── duo/       iPhone Duo: the outer screen, the inner screen on its side, and the inner screen upright
-│   └── widgets/   home screen widgets
+│   └── widgets/   home screen widgets, and in dark only the Lock Screen set
 └── android/
     ├── phone/     720×1280, 1080×2400 and 1344×2992 phones, and the small one at 1.3× font
     ├── tablet/    a foldable's inner screen, a 7" tablet, and a 10" tablet held both ways
