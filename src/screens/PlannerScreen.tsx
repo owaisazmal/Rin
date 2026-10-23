@@ -12,9 +12,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import CustomCard from '../components/CustomCard';
 import DailyCheck from '../components/DailyCheck';
+import DayBars from '../components/DayBars';
 import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
 import EditIcon from '../components/EditIcon';
+import HabitBars from '../components/HabitBars';
 import HistoryIcon from '../components/HistoryIcon';
 import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import KeyGoals from '../components/KeyGoals';
@@ -28,6 +30,8 @@ import SettingsIcon from '../components/SettingsIcon';
 import StreakBadge from '../components/StreakBadge';
 import SummaryIcon from '../components/SummaryIcon';
 import TrackerCard from '../components/TrackerCard';
+import WeekdayHeat from '../components/WeekdayHeat';
+import WeekTrend from '../components/WeekTrend';
 import YearChart from '../components/YearChart';
 import { useChartTransition } from '../hooks/useChartTransition';
 import { useCurrentStreak } from '../hooks/useCurrentStreak';
@@ -54,7 +58,7 @@ import { damagedNotice } from './backupWording';
 import type { SummarySource } from './SummaryScreen';
 import { ChartType, NotificationPrefs } from '../settings';
 import { QuotePrefs, activeQuotes } from '../quotes';
-import { RAIL_TOP, SPLIT_MAX, plannerFit, usesSideRail } from '../fit';
+import { CARD_PADDING, RAIL_TOP, SPLIT_MAX, plannerFit, usesSideRail } from '../fit';
 import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 import { CardKind, CardRef, cardItemsIn } from '../types';
 
@@ -217,7 +221,7 @@ export default function PlannerScreen({
   useWidgetSync(loaded && tasksLoaded, year, month, data, yearMonths, mode, tasks, quoteList);
   useReminderSync(loaded && tasksLoaded, data, today, tasks, notifications);
 
-  const { chartAnim, monthAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
+  const { chartAnim, monthAnim, growAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
 
   // Opening a month lands on today when it's the current one, on the 1st
   // otherwise — unless a date was picked from the year grid on the way in.
@@ -381,6 +385,49 @@ export default function PlannerScreen({
   const columnStyle = split ? [styles.column, { width: fit.column }] : styles.stack;
   const rail = usesSideRail(insets);
 
+  /** The tracker's chart; the month charts with no single day to land on keep their taps to themselves */
+  const renderChart = () => {
+    const shared = { year, month, data, today: todayRef, grow: growAnim, width: fit.column - 2 * CARD_PADDING };
+    switch (chart) {
+      case 'radial':
+        return (
+          <RadialTracker
+            size={fit.chart}
+            daysInMonth={daysInMonth}
+            habits={data.habits}
+            grid={data.grid}
+            today={today}
+            canMark={canMarkCell}
+            selectedDay={selectedDay}
+            onToggle={cycleCell}
+            onSelectDay={setSelectedDay}
+          />
+        );
+      case 'github':
+        return yearWindow.blocks ? (
+          <YearChart
+            blocks={yearWindow.blocks}
+            span={yearWindow.span}
+            onSetSpan={yearWindow.setSpan}
+            years={yearWindow.years}
+            stats={yearWindow.stats}
+            focus={{ year, month }}
+            now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
+            selected={{ year, month, day: selectedDay }}
+            onSelectDate={gotoDate}
+          />
+        ) : null;
+      case 'days':
+        return <DayBars {...shared} selectedDay={selectedDay} onSelectDay={setSelectedDay} />;
+      case 'habits':
+        return <HabitBars {...shared} />;
+      case 'weeks':
+        return <WeekTrend {...shared} selectedDay={selectedDay} onSelectDay={setSelectedDay} />;
+      case 'weekdays':
+        return <WeekdayHeat {...shared} />;
+    }
+  };
+
   const logo = (
     <View accessible accessibilityRole="image" accessibilityLabel="Rin">
       <LogoMark size={36} />
@@ -499,31 +546,7 @@ export default function PlannerScreen({
                 stats={stats}
                 hasHabits={data.habits.length > 0}
               >
-                {chart === 'radial' ? (
-                  <RadialTracker
-                    size={fit.chart}
-                    daysInMonth={daysInMonth}
-                    habits={data.habits}
-                    grid={data.grid}
-                    today={today}
-                    canMark={canMarkCell}
-                    selectedDay={selectedDay}
-                    onToggle={cycleCell}
-                    onSelectDay={setSelectedDay}
-                  />
-                ) : yearWindow.blocks ? (
-                  <YearChart
-                    blocks={yearWindow.blocks}
-                    span={yearWindow.span}
-                    onSetSpan={yearWindow.setSpan}
-                    years={yearWindow.years}
-                    stats={yearWindow.stats}
-                    focus={{ year, month }}
-                    now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
-                    selected={{ year, month, day: selectedDay }}
-                    onSelectDate={gotoDate}
-                  />
-                ) : null}
+                {renderChart()}
               </TrackerCard>
 
               <DailyCheck

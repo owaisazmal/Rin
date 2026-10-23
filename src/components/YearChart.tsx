@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,7 +10,9 @@ import {
 } from 'react-native';
 import { MONTH_ABBR } from '../dates';
 import { YearBlock, YearSpan, YearSpanStats, blockShape, columnDays } from '../yearGrid';
-import { FONT, MODAL_ORIENTATIONS, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
+import { heatLevel } from '../trackerCharts';
+import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
+import { PickerChip, PickerSheet } from './Picker';
 
 const CELL = 12;
 const GAP = 3;
@@ -122,15 +123,8 @@ export default function YearChart({
 
   const colorFor = (block: YearBlock, day: number): string => {
     const { habitCount, tallies } = block.summary;
-    const tally = tallies[day];
-    if (!tally || habitCount === 0) return palette.ghLevels[0];
-    if (tally.done > 0) {
-      const ratio = tally.done / habitCount;
-      const level = ratio <= 0.25 ? 1 : ratio <= 0.5 ? 2 : ratio <= 0.75 ? 3 : 4;
-      return palette.ghLevels[level];
-    }
-    if (tally.missed > 0) return palette.ghMissed;
-    return palette.ghLevels[0];
+    const level = heatLevel(tallies[day]?.done ?? 0, tallies[day]?.missed ?? 0, habitCount);
+    return level === 'missed' ? palette.ghMissed : palette.ghLevels[level];
   };
 
   const labelFor = (block: YearBlock, day: number): string => {
@@ -174,19 +168,11 @@ export default function YearChart({
             </Text>
           </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
+        <PickerChip
+          label={spanLabel}
           accessibilityLabel={`Showing ${spanLabel}. Change the year shown.`}
           onPress={() => setPicking(true)}
-          style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={styles.chipText} maxFontSizeMultiplier={SCALE.heading}>
-            {spanLabel}
-          </Text>
-          {/* drawn rather than typed: no caret glyph in Josefin, and a fallback
-              one lands at a different height on each platform */}
-          <View style={styles.caret} />
-        </Pressable>
+        />
       </View>
 
       <View style={styles.statsRow}>
@@ -310,71 +296,50 @@ export default function YearChart({
         </View>
       ) : null}
 
-      {/*
-        A Modal, not an overlay drawn in place. The planner's back handler
-        hands an unclaimed Android back press to the system, which closes the
-        app — and a panel this tall would hang outside the planner's scroll
-        view, where Android draws it but won't route a touch to it.
-      */}
-      <Modal
-        visible={picking}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPicking(false)}
-        statusBarTranslucent
-        supportedOrientations={MODAL_ORIENTATIONS}
-      >
-        <Pressable style={styles.backdrop} onPress={() => setPicking(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.sheetTitle} maxFontSizeMultiplier={SCALE.heading}>
-              SHOW
-            </Text>
-            <ScrollView
-              style={styles.sheetList}
-              showsVerticalScrollIndicator={false}
-              overScrollMode="never"
-            >
-              {options.map((option) => {
-                // the same word the chip shows, so the menu never renames what it is
-                // already displaying
-                const label = option.kind === 'rolling' ? 'Current' : String(option.year);
-                const on =
-                  option.kind === 'rolling'
-                    ? span.kind === 'rolling'
-                    : span.kind === 'calendar' && span.year === option.year;
-                return (
-                  <Pressable
-                    key={label}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    onPress={() => {
-                      onSetSpan(option);
-                      setPicking(false);
-                    }}
-                    style={({ pressed }) => [
-                      styles.option,
-                      on && styles.optionOn,
-                      pressed && { opacity: 0.6 },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.optionText, on && styles.optionTextOn]}
-                      maxFontSizeMultiplier={SCALE.heading}
-                    >
-                      {label}
-                    </Text>
-                    {on ? (
-                      <Text style={styles.optionTick} maxFontSizeMultiplier={SCALE.heading}>
-                        ✓
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <PickerSheet visible={picking} title="SHOW" onClose={() => setPicking(false)}>
+        <ScrollView
+          style={styles.sheetList}
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+        >
+          {options.map((option) => {
+            // the chip's own word, so the menu never renames what it shows
+            const label = option.kind === 'rolling' ? 'Current' : String(option.year);
+            const on =
+              option.kind === 'rolling'
+                ? span.kind === 'rolling'
+                : span.kind === 'calendar' && span.year === option.year;
+            return (
+              <Pressable
+                key={label}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => {
+                  onSetSpan(option);
+                  setPicking(false);
+                }}
+                style={({ pressed }) => [
+                  styles.option,
+                  on && styles.optionOn,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Text
+                  style={[styles.optionText, on && styles.optionTextOn]}
+                  maxFontSizeMultiplier={SCALE.heading}
+                >
+                  {label}
+                </Text>
+                {on ? (
+                  <Text style={styles.optionTick} maxFontSizeMultiplier={SCALE.heading}>
+                    ✓
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </PickerSheet>
     </View>
   );
 }
@@ -432,33 +397,6 @@ const makeStyles = (p: Palette) =>
       includeFontPadding: false,
     },
     infoGlyphOn: { color: p.accent },
-
-    chip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 7,
-      paddingLeft: 10,
-      paddingRight: 9,
-      paddingVertical: 6,
-      borderRadius: RADIUS.chip,
-      backgroundColor: p.chip,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-    },
-    chipText: {
-      fontSize: 12,
-      fontFamily: FONT.semibold,
-      color: p.ink,
-      includeFontPadding: false,
-    },
-    caret: {
-      width: 6,
-      height: 6,
-      borderRightWidth: 1.5,
-      borderBottomWidth: 1.5,
-      borderColor: p.inkSoft,
-      transform: [{ rotate: '45deg' }, { translateY: -1 }],
-    },
 
     statsRow: {
       flexDirection: 'row',
@@ -522,30 +460,6 @@ const makeStyles = (p: Palette) =>
     legendCell: { width: 10, height: 10, borderRadius: 2 },
     legendMissed: { backgroundColor: p.ghMissed, marginLeft: 6 },
 
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 22,
-    },
-    sheet: {
-      // the same surface the due-date sheet uses, shadow and all — and for the
-      // reason given there: it floats over a dimmed page rather than over the
-      // aurora, so it takes the solid background, not the translucent card
-      ...cardSurface(p),
-      backgroundColor: p.bg,
-      width: '100%',
-      maxWidth: 260,
-      padding: 16,
-    },
-    sheetTitle: {
-      fontSize: 13,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.ink,
-      marginBottom: 10,
-    },
     // capped so a phone that has been kept for years can't push the list off
     // the bottom of the screen
     sheetList: { maxHeight: 260 },

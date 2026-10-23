@@ -65,7 +65,9 @@ enum Deadline {
 
   static func dueLabel(_ due: Date, at moment: Date) -> String {
     let cal = Calendar.current
-    let time = due.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+    // Always 24-hour, like the app and the Android widget
+    let hm = cal.dateComponents([.hour, .minute], from: due)
+    let time = String(format: "%02d:%02d", hm.hour ?? 0, hm.minute ?? 0)
     if cal.isDateInToday(due) { return "Today · \(time)" }
     if cal.isDateInTomorrow(due) { return "Tomorrow · \(time)" }
     if cal.isDateInYesterday(due) { return "Yesterday · \(time)" }

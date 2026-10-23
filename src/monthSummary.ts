@@ -133,7 +133,8 @@ export function monthTotals(
   };
 }
 
-function habitRates(year: number, month: number, data: MonthData, today: DayRef): HabitRate[] {
+/** Each habit's month, in the order the habits were added */
+export function habitRates(year: number, month: number, data: MonthData, today: DayRef): HabitRate[] {
   const len = monthLength(year, month);
   return data.habits.map((h) => {
     let done = 0;

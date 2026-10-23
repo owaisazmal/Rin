@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultLayout } from '../layout';
 import { defaultQuotePrefs } from '../quotes';
 import {
+  CHART_TYPES,
   MAX_SLOTS,
   defaultNotifications,
   loadSettings,
@@ -33,6 +34,20 @@ describe('loadSettings', () => {
   it('only accepts values it knows, one field at a time', async () => {
     store.getItem.mockResolvedValue(JSON.stringify({ theme: 'sepia', chart: 'github' }));
     await expect(loadSettings()).resolves.toEqual({ ...DEFAULTS, chart: 'github' });
+  });
+
+  it('keeps every chart the tracker offers', async () => {
+    for (const chart of CHART_TYPES) {
+      store.getItem.mockResolvedValue(JSON.stringify({ chart }));
+      await expect(loadSettings()).resolves.toEqual({ ...DEFAULTS, chart });
+    }
+  });
+
+  it('opens on the radial chart when the stored one is unknown', async () => {
+    for (const chart of ['bars', 'year', 'Radial', 7, null]) {
+      store.getItem.mockResolvedValue(JSON.stringify({ chart }));
+      await expect(loadSettings()).resolves.toEqual(DEFAULTS);
+    }
   });
 
   it('gives settings saved before the cards could be arranged the layout they always had', async () => {

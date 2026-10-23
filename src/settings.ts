@@ -12,7 +12,13 @@ import type { ThemeMode, ThemePreference } from './theme';
  * per month there.
  */
 
-export type ChartType = 'radial' | 'github';
+/** Every chart the tracker offers, in the picker's order; `github` is the year grid */
+export const CHART_TYPES = ['radial', 'github', 'days', 'habits', 'weeks', 'weekdays'] as const;
+export type ChartType = (typeof CHART_TYPES)[number];
+
+export function isChartType(value: unknown): value is ChartType {
+  return CHART_TYPES.includes(value as ChartType);
+}
 
 export interface ReminderSlot {
   on: boolean;
@@ -128,7 +134,7 @@ export async function loadSettings(): Promise<Settings> {
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
       theme: parsed.theme === 'light' || parsed.theme === 'system' ? parsed.theme : 'dark',
-      chart: parsed.chart === 'github' ? 'github' : 'radial',
+      chart: isChartType(parsed.chart) ? parsed.chart : 'radial',
       layout: parseLayout(parsed.layout),
       notifications: parseNotifications(parsed.notifications),
       quotes: parseQuotePrefs(parsed.quotes),

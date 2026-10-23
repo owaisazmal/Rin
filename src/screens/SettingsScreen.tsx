@@ -21,6 +21,19 @@ import { CheckGlyph, CloseGlyph } from '../components/Glyphs';
 import { DeadlineLead, MAX_SLOTS, NotificationPrefs, placeSlot } from '../settings';
 import { DISCIPLINE_QUOTES, MAX_CUSTOM_QUOTES, QuotePrefs, QuoteSource, placeQuote } from '../quotes';
 import { notificationsBlocked } from '../notifications';
+import { listStoredMonths } from '../storage';
+import {
+  ExportFile,
+  ExportFormat,
+  ExportScope,
+  exportCsv,
+  exportFileName,
+  exportJson,
+  exportNotice,
+  gatherExport,
+  scopeTitle,
+} from '../exportData';
+import { shareExport } from '../exportFile';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
@@ -55,6 +68,17 @@ const SOURCE_OPTIONS = [
   { value: 'builtin' as QuoteSource, label: 'BUILT-IN' },
   { value: 'mine' as QuoteSource, label: 'MINE' },
   { value: 'both' as QuoteSource, label: 'BOTH' },
+] as const;
+
+const FORMAT_OPTIONS = [
+  { value: 'json' as ExportFormat, label: 'JSON' },
+  { value: 'csv' as ExportFormat, label: 'CSV' },
+] as const;
+
+const SCOPE_OPTIONS = [
+  { value: 'month' as ExportScope['kind'], label: 'MONTH' },
+  { value: 'year' as ExportScope['kind'], label: 'YEAR' },
+  { value: 'all' as ExportScope['kind'], label: 'ALL' },
 ] as const;
 
 function quoteSummary({ source, custom }: QuotePrefs): string {
@@ -200,6 +224,78 @@ export default function SettingsScreen({
       ],
       { cancelable: true }
     );
+
+  // the months the export can pick from, oldest first as the store lists them
+  const [stored, setStored] = useState<{ year: number; month: number }[]>([]);
+  const years = useMemo(() => [...new Set(stored.map((m) => m.year))], [stored]);
+  const [format, setFormat] = useState<ExportFormat>('json');
+  const [scopeKind, setScopeKind] = useState<ExportScope['kind']>('month');
+  const [monthAt, setMonthAt] = useState(0);
+  const [yearAt, setYearAt] = useState(0);
+  useEffect(() => {
+    listStoredMonths().then((list) => {
+      const now = new Date();
+      const month = list.findIndex(
+        (m) => m.year === now.getFullYear() && m.month === now.getMonth()
+      );
+      const yearList = [...new Set(list.map((m) => m.year))];
+      const year = yearList.indexOf(now.getFullYear());
+      setStored(list);
+      setMonthAt(month >= 0 ? month : list.length - 1);
+      setYearAt(year >= 0 ? year : yearList.length - 1);
+    });
+  }, []);
+  const picked = stored[monthAt];
+  const scope: ExportScope | null =
+    scopeKind === 'all'
+      ? { kind: 'all' }
+      : scopeKind === 'month'
+        ? picked
+          ? { kind: 'month', year: picked.year, month: picked.month }
+          : null
+        : years[yearAt] !== undefined
+          ? { kind: 'year', year: years[yearAt] }
+          : null;
+  const stepAt = scopeKind === 'month' ? monthAt : yearAt;
+  const stepCount = scopeKind === 'month' ? stored.length : years.length;
+  const step = (delta: number) =>
+    (scopeKind === 'month' ? setMonthAt : setYearAt)((at) =>
+      Math.min(stepCount - 1, Math.max(0, at + delta))
+    );
+
+  const [exporting, setExporting] = useState(false);
+  const send = async (file: ExportFile, chosen: ExportScope, as: ExportFormat) => {
+    try {
+      const body = as === 'json' ? exportJson(file) : exportCsv(file);
+      await shareExport(exportFileName(chosen, as, Date.now()), body, as);
+    } catch {
+      Alert.alert('Nothing was exported', `Rin could not make the file on this ${device()}.`);
+    }
+  };
+  /** Reads everything first, so the warning can name any month that is damaged */
+  const startExport = async () => {
+    if (exporting || !scope) return;
+    setExporting(true);
+    let file: ExportFile;
+    try {
+      file = await gatherExport(scope);
+    } catch {
+      Alert.alert('Nothing was exported', `Rin could not read this ${device()}'s data. Try again.`);
+      return;
+    } finally {
+      setExporting(false);
+    }
+    Alert.alert(
+      'This file is not encrypted',
+      exportNotice(file, format),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Export', onPress: () => send(file, scope, format) },
+      ],
+      { cancelable: true }
+    );
+  };
+
   /**
    * The card is told what the backup holds only when there is something this
    * screen could do about the answer. Without a handler there is no button to
@@ -463,6 +559,91 @@ export default function SettingsScreen({
               </Pressable>
             </>
           )}
+        </View>
+
+        <SectionHeader title="EXPORT" />
+        <View style={styles.card}>
+          <View style={styles.quoteHead}>
+            <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+              Export to a file
+            </Text>
+            <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+              {format === 'json'
+                ? 'Months, deadlines, settings and quotes, in full'
+                : 'One row per habit per day, for spreadsheets'}
+            </Text>
+          </View>
+          <SegmentedControl
+            options={FORMAT_OPTIONS}
+            value={format}
+            onChange={setFormat}
+            verticalPadding={9}
+          />
+          <SegmentedControl
+            options={SCOPE_OPTIONS}
+            value={scopeKind}
+            onChange={setScopeKind}
+            verticalPadding={9}
+            style={styles.scopeControl}
+          />
+          {scopeKind !== 'all' ? (
+            <View style={[styles.slotRow, styles.stepper]}>
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={scopeKind === 'month' ? 'Earlier month' : 'Earlier year'}
+                disabled={stepAt <= 0}
+                onPress={() => step(-1)}
+                style={({ pressed }) => [
+                  styles.removeBtn,
+                  stepAt <= 0 && styles.off,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                  ‹
+                </Text>
+              </Pressable>
+              <Text style={styles.stepLabel} maxFontSizeMultiplier={SCALE.row}>
+                {scope ? scopeTitle(scope) : 'No months yet'}
+              </Text>
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={scopeKind === 'month' ? 'Later month' : 'Later year'}
+                disabled={stepAt >= stepCount - 1}
+                onPress={() => step(1)}
+                style={({ pressed }) => [
+                  styles.removeBtn,
+                  stepAt >= stepCount - 1 && styles.off,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                  ›
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <Pressable
+            disabled={exporting || !scope}
+            onPress={startExport}
+            style={({ pressed }) => [
+              styles.ghostBtn,
+              !scope && styles.off,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text
+              style={[styles.ghostText, styles.retryText]}
+              maxFontSizeMultiplier={SCALE.heading}
+            >
+              {exporting ? 'READING…' : 'EXPORT'}
+            </Text>
+          </Pressable>
+          <Text style={[styles.rowSub, styles.exportNote]} maxFontSizeMultiplier={SCALE.row}>
+            The file is not encrypted. Rin uploads nothing; it goes only where you send it.
+          </Text>
         </View>
 
         <SectionHeader title="NOTIFICATIONS" />
@@ -771,7 +952,8 @@ export default function SettingsScreen({
           <Text style={styles.madeBy}>
             App is public, and staying that way. No trackers, no analytics, no
             data collection. Nothing leaves this {device()} unless you ask for a
-            backup, and what leaves then is encrypted with a code I never see.
+            backup, and what leaves then is encrypted with a code I never see. An
+            export goes only where you send it.
           </Text>
           <Pressable
             hitSlop={10}
@@ -1065,6 +1247,30 @@ const makeStyles = (p: Palette) =>
     },
     quoteCap: {
       marginTop: 12,
+    },
+    scopeControl: {
+      marginTop: 8,
+    },
+    stepper: {
+      paddingLeft: 6,
+    },
+    stepArrow: {
+      fontSize: 22,
+      fontFamily: FONT.medium,
+      color: p.ink,
+      lineHeight: 26,
+    },
+    stepLabel: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 15,
+      fontFamily: FONT.semibold,
+      letterSpacing: 0.5,
+      color: p.ink,
+    },
+    exportNote: {
+      marginTop: 10,
+      textAlign: 'center',
     },
     chips: {
       flexDirection: 'row',

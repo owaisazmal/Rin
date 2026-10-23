@@ -7,7 +7,8 @@ export const SPLIT_MAX = 980;
 
 const GUTTER = 16;
 const GAP = 14;
-const CARD_PADDING = 16;
+/** the tracker card's side padding */
+export const CARD_PADDING = 16;
 const MIN_COLUMN = 360;
 const CHART_MAX = 420;
 // of the window's height, so a short screen still fits the whole tracker card

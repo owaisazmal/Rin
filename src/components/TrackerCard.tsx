@@ -1,21 +1,20 @@
-import React, { ReactNode, useEffect, useMemo, useRef } from 'react';
+import React, { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import ChartPicker, { CHART_INFO, ChartGlyph } from './ChartPicker';
+import { PickerChip } from './Picker';
 import SectionHeader from './SectionHeader';
-import SegmentedControl from './SegmentedControl';
 import type { ChartType } from '../settings';
 import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
- * The card around whichever chart is showing: the switch between the two, the
+ * The card around whichever chart is showing: the picker between them, the
  * animated slot the chart arrives in, the month's progress bar, and the
  * legend. The chart itself is handed in as children — the screen owns the
  * data and the taps; this owns the frame.
  */
 
-const CHART_OPTIONS = [
-  { value: 'radial' as ChartType, label: 'RADIAL' },
-  { value: 'github' as ChartType, label: 'YEAR' },
-] as const;
+/** The done, missed and pending key, for the charts that fill cells or bars */
+const KEYED: ChartType[] = ['radial', 'days', 'habits'];
 
 interface Props {
   chart: ChartType;
@@ -41,6 +40,7 @@ export default function TrackerCard({
 }: Props) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const [picking, setPicking] = useState(false);
 
   // the bar eases to its new width rather than jumping there
   const pctAnim = useRef(new Animated.Value(0)).current;
@@ -57,14 +57,19 @@ export default function TrackerCard({
       <SectionHeader
         title="TRACKER"
         right={
-          <SegmentedControl
-            options={CHART_OPTIONS}
-            value={chart}
-            onChange={onSetChart}
-            verticalPadding={6}
-            style={styles.segment}
+          <PickerChip
+            label={CHART_INFO[chart].label}
+            icon={<ChartGlyph type={chart} width={21} palette={palette} />}
+            accessibilityLabel={`Showing the ${CHART_INFO[chart].label.toLowerCase()} chart. Change the chart.`}
+            onPress={() => setPicking(true)}
           />
         }
+      />
+      <ChartPicker
+        visible={picking}
+        value={chart}
+        onPick={onSetChart}
+        onClose={() => setPicking(false)}
       />
 
       <Animated.View
@@ -94,7 +99,9 @@ export default function TrackerCard({
 
       {!hasHabits ? (
         <Text style={styles.hint}>
-          Add habits below, then tap chart cells or use the daily check to fill them in.
+          {chart === 'radial'
+            ? 'Add habits below, then tap chart cells or use the daily check to fill them in.'
+            : 'Add habits below, then use the daily check to fill them in.'}
         </Text>
       ) : (
         <View style={styles.statsRow}>
@@ -121,7 +128,7 @@ export default function TrackerCard({
         </View>
       )}
 
-      {chart === 'radial' && hasHabits && (
+      {KEYED.includes(chart) && hasHabits && (
         <View style={styles.legend}>
           <View style={[styles.legendSwatch, { backgroundColor: palette.done }]} />
           <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
@@ -137,6 +144,24 @@ export default function TrackerCard({
           </Text>
         </View>
       )}
+
+      {chart === 'weekdays' && hasHabits && (
+        <View style={styles.legend}>
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
+            less
+          </Text>
+          {palette.ghLevels.map((c, i) => (
+            <View key={i} style={[styles.legendSwatch, styles.rampSwatch, { backgroundColor: c }]} />
+          ))}
+          <Text style={[styles.legendText, styles.rampMore]} maxFontSizeMultiplier={SCALE.figure}>
+            more
+          </Text>
+          <View style={[styles.legendSwatch, { backgroundColor: palette.ghMissed }]} />
+          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
+            missed
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -147,12 +172,6 @@ const makeStyles = (p: Palette) =>
       ...cardSurface(p),
       paddingVertical: 18,
       paddingHorizontal: 16,
-    },
-    // The options share the width evenly so the sliding pill is one size in
-    // both positions; that needs a definite width here, since the header row
-    // sizes itself to its content.
-    segment: {
-      width: 152,
     },
     slot: {
       alignItems: 'center',
@@ -210,6 +229,8 @@ const makeStyles = (p: Palette) =>
       borderWidth: 1,
       borderColor: p.line,
     },
+    rampSwatch: { marginHorizontal: -2 },
+    rampMore: { marginLeft: 2 },
     legendText: {
       fontSize: 12,
       fontFamily: FONT.regular,

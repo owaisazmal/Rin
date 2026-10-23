@@ -15,6 +15,8 @@ import type { ChartType } from '../settings';
 export function useChartTransition(chart: ChartType, monthIndex: number) {
   const chartAnim = useRef(new Animated.Value(1)).current;
   const monthAnim = useRef(new Animated.Value(1)).current;
+  // slower, for the bars, cells and line a chart draws itself in with
+  const growAnim = useRef(new Animated.Value(1)).current;
   const [enterFrom, setEnterFrom] = useState(0);
   const prevKey = useRef({ chart, monthIndex });
 
@@ -35,8 +37,9 @@ export function useChartTransition(chart: ChartType, monthIndex: number) {
       }).start();
     };
     replay(chartAnim, 260);
+    replay(growAnim, 760);
     if (moved) replay(monthAnim, 240);
-  }, [chart, monthIndex, chartAnim, monthAnim]);
+  }, [chart, monthIndex, chartAnim, monthAnim, growAnim]);
 
-  return { chartAnim, monthAnim, enterFrom };
+  return { chartAnim, monthAnim, growAnim, enterFrom };
 }

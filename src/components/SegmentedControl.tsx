@@ -12,7 +12,7 @@ import {
 import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
 
 /**
- * The segmented switch used for the tracker, the sign-in tabs and the theme.
+ * The segmented switch for short choices, such as the sign-in tabs and the theme.
  *
  * The filled state used to jump between options. Here it is a single pill that
  * slides, so the control shows the move it just made — and the labels cross-fade
