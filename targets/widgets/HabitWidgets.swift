@@ -16,6 +16,13 @@ struct StreakWidgetView: View {
     return (first...today).map { ($0, snap.doneCount(day: $0) > 0) }
   }
 
+  /// Lock Screen flame: filled once today is marked, an outline while the streak waits on today.
+  private var flame: String {
+    let snap = entry.snapshot
+    let marked = snap.today.map { snap.doneCount(day: $0) > 0 } ?? (snap.currentStreak > 0)
+    return marked ? "flame.fill" : "flame"
+  }
+
   var body: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
@@ -24,26 +31,43 @@ struct StreakWidgetView: View {
     case .accessoryCircular:
       ZStack {
         AccessoryWidgetBackground()
-        VStack(spacing: -2) {
+        VStack(spacing: -1) {
+          Image(systemName: flame).font(.system(size: 12, weight: .semibold))
           Text("\(snap.currentStreak)")
-            .font(.system(size: 22, weight: .bold, design: .rounded))
-          Text("days").font(.system(size: 9))
+            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+          Text(snap.currentStreak == 1 ? "day" : "days")
+            .font(.system(size: 11, weight: .semibold))
         }
+        .padding(.horizontal, 6)
+        .widgetAccentable()
       }
-      .widgetAccentable()
+      .widgetBackground(.clear)
 
     case .accessoryRectangular:
-      VStack(alignment: .leading, spacing: 1) {
-        Text("STREAK").font(.system(size: 10, weight: .bold)).kerning(1)
-        Text("\(snap.currentStreak) days")
-          .font(.system(size: 18, weight: .bold, design: .rounded))
-        Text("best \(snap.bestStreak) · \(snap.monthPct)% this month")
-          .font(.system(size: 10))
+      VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 3) {
+          Image(systemName: flame)
+          Text("STREAK").kerning(1)
+        }
+        .font(.system(size: 12, weight: .bold))
+        Text(snap.currentStreak == 1 ? "1 day" : "\(snap.currentStreak) days")
+          .font(.system(size: 20, weight: .bold, design: .rounded))
+        ViewThatFits(in: .horizontal) {
+          Text("best \(snap.bestStreak) · \(snap.monthPct)% this month")
+          Text("best \(snap.bestStreak) · \(snap.monthPct)%")
+        }
+        .font(.system(size: 12, weight: .medium))
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
       .widgetAccentable()
+      .widgetBackground(.clear)
 
     case .accessoryInline:
-      Text("🔥 \(snap.currentStreak)d streak · \(snap.monthPct)%")
+      // a symbol rather than an emoji, which the Lock Screen greys into a blob
+      Label("\(snap.currentStreak)d streak · \(snap.monthPct)%", systemImage: flame)
+        .widgetBackground(.clear)
 
     case .systemMedium:
       HStack(spacing: 16) {

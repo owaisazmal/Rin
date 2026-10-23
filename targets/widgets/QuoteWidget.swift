@@ -25,13 +25,19 @@ struct QuoteWidgetView: View {
 
     switch family {
     case .accessoryRectangular:
-      VStack(alignment: .leading, spacing: 1) {
-        Text("DISCIPLINE").font(.system(size: 10, weight: .bold)).kerning(1)
-        Text(quote ?? "Keep going.")
-          .font(.system(size: 12))
-          .lineLimit(2)
+      let text = Text(quote ?? "Keep going.").font(.system(size: 13, weight: .medium))
+      // a long quote gives up the heading for a fourth line before it shrinks
+      ViewThatFits(in: .vertical) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text("DISCIPLINE").font(.system(size: 11, weight: .bold)).kerning(1)
+          text
+        }
+        text
+        text.lineLimit(4).minimumScaleFactor(0.9)
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
       .widgetAccentable()
+      .widgetBackground(.clear)
 
     default:
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 10) {

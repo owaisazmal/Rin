@@ -180,6 +180,8 @@ struct DeadlineWidgetView: View {
     switch family {
     case .accessoryRectangular:
       AccessoryDeadline(item: tasks.first, now: now)
+    case .accessoryInline:
+      InlineDeadline(item: tasks.first, now: now)
     default:
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 9) {
         WidgetHeading(
@@ -242,16 +244,38 @@ struct AccessoryDeadline: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
       Text("NEXT DUE")
-        .font(.system(size: 10, weight: .bold))
+        .font(.system(size: 12, weight: .bold))
       if let item {
         Text(item.text.isEmpty ? "Untitled task" : item.text)
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
         Text(Deadline.timeLeft(item.date, at: now))
-          .font(.system(size: 12))
+          .font(.system(size: 13, weight: .medium))
       } else {
         Text("Nothing due")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: 14, weight: .semibold))
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .widgetBackground(.clear)
+  }
+}
+
+/// The line above the clock. Countdown first, since the system cuts the end off a long one.
+struct InlineDeadline: View {
+  var item: PlannerSnapshot.Task?
+  var now: Date
+
+  var body: some View {
+    Group {
+      if let item {
+        let title = item.text.isEmpty ? "Untitled task" : item.text
+        Label(
+          "\(Deadline.timeLeft(item.date, at: now)) · \(title)",
+          systemImage: item.date <= now ? "exclamationmark.circle" : "hourglass"
+        )
+      } else {
+        Label("Nothing due", systemImage: "checkmark.circle")
       }
     }
     .widgetBackground(.clear)
@@ -261,7 +285,7 @@ struct AccessoryDeadline: View {
 struct DeadlineWidget: Widget {
   private var families: [WidgetFamily] {
     if #available(iOS 16.0, *) {
-      return [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular]
+      return [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
     }
     return [.systemSmall, .systemMedium, .systemLarge]
   }

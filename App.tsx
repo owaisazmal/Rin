@@ -15,7 +15,13 @@ import { forgetLaunch } from './src/hooks/backupRuns';
 import { useAutoBackup } from './src/hooks/useAutoBackup';
 import type { PlannerLayout } from './src/layout';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
-import { Settings, loadSettings, resolveTheme, saveSettings } from './src/settings';
+import {
+  NotificationPrefs,
+  Settings,
+  loadSettings,
+  resolveTheme,
+  saveSettings,
+} from './src/settings';
 import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
 import { deleteBackup, listMonths, restoreMonth } from './src/sync';
@@ -230,6 +236,12 @@ export default function App() {
     []
   );
 
+  const changeNotifications = useCallback(
+    (change: (prev: NotificationPrefs) => NotificationPrefs) =>
+      setSettings((prev) => (prev ? { ...prev, notifications: change(prev.notifications) } : prev)),
+    []
+  );
+
   // re-renders when the OS appearance changes, which is what `system` follows
   const osScheme = useColorScheme();
   const preference = settings?.theme ?? 'dark';
@@ -265,6 +277,8 @@ export default function App() {
             onSetChart={(chart) => updateSettings({ chart })}
             layout={settings.layout}
             onChangeLayout={changeLayout}
+            notifications={settings.notifications}
+            onChangeNotifications={changeNotifications}
             onBackedUp={(_code, outcome) => {
               setHasCode(true);
               /**

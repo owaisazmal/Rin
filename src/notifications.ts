@@ -4,6 +4,7 @@ import { CellState, Habit, cellKey } from './types';
 import { Task } from './tasks';
 import { dueLabel, pendingTasks } from './deadlines';
 import { DAY, HOUR } from './dates';
+import { DeadlineLead, NotificationPrefs, ReminderSlot } from './settings';
 
 /**
  * Daily nudges for habits you haven't ticked off yet.
@@ -15,19 +16,15 @@ import { DAY, HOUR } from './dates';
  * so reminders still arrive if the app is never opened.
  */
 
-/** Times of day to nudge, as [hour, minute]. */
-const SLOTS: [number, number][] = [
-  [12, 30],
-  [17, 30],
-  [20, 45],
-];
-
 /** How many days of nudges to keep queued, so silence never means "app unopened". */
 const DAYS_AHEAD = 7;
 
 const TITLES = ['Still pending', 'Evening check', 'Last call'];
 
-/** One voice per slot: nudge at midday, firmer by evening, cheerfully doomed at night. */
+/** Where each voice starts, in minutes past midnight; the default 12:30, 17:30 and 20:45 get one each */
+const VOICE_FROM = [0, 17 * 60, 20 * 60];
+
+/** One voice per time of day: nudge at midday, firmer by evening, cheerfully doomed at night. */
 const LINES: string[][] = [
   [
     "Your habits are sitting there untouched. They have feelings, you know.",
@@ -68,12 +65,12 @@ const DEADLINE_CHANNEL = 'deadlines';
  * further out than three days is left alone — a reminder a fortnight ahead
  * teaches you to swipe reminders away.
  */
-const LEADS: { before: number; line: string }[] = [
-  { before: 3 * DAY, line: 'Three days out. Comfortable. Enjoy that while it lasts.' },
-  { before: DAY, line: 'One day left. This is the part where it stops being theoretical.' },
-  { before: 3 * HOUR, line: 'Three hours. No longer a tomorrow problem.' },
-  { before: HOUR, line: 'One hour. Whatever the plan was, this is it.' },
-  { before: 0, line: 'Deadline reached. How did that go?' },
+const LEADS: { id: DeadlineLead; before: number; line: string }[] = [
+  { id: '3d', before: 3 * DAY, line: 'Three days out. Comfortable. Enjoy that while it lasts.' },
+  { id: '1d', before: DAY, line: 'One day left. This is the part where it stops being theoretical.' },
+  { id: '3h', before: 3 * HOUR, line: 'Three hours. No longer a tomorrow problem.' },
+  { id: '1h', before: HOUR, line: 'One hour. Whatever the plan was, this is it.' },
+  { id: 'due', before: 0, line: 'Deadline reached. How did that go?' },
 ];
 
 const OVERDUE_LINE =
@@ -86,9 +83,9 @@ const OVERDUE_HOUR = 9;
  * How many notifications the deadline reminders may claim.
  *
  * iOS keeps only the 64 soonest pending local notifications and silently drops
- * everything past that, and the habit nudges above already hold up to 22. This
+ * everything past that, and the habit nudges above already hold up to 35. This
  * cap stops a long task list from quietly evicting them — whatever else is on,
- * a full week of habit reminders still fits.
+ * a full week of habit reminders still fits, even at `MAX_SLOTS` a day.
  */
 const DEADLINE_BUDGET = 28;
 
@@ -101,56 +98,56 @@ function titleFor(task: Task): string {
   return text.length > 44 ? `${text.slice(0, 43)}…` : text;
 }
 
+/** One notification to queue */
+export interface Planned {
+  title: string;
+  body: string;
+  date: Date;
+  channelId: string;
+}
+
 /**
- * Queues the run-up for every task with a deadline still ahead of it, soonest
- * first, until the allowance runs out. Returns nothing — like the rest of this
- * module it is best-effort, and a task that doesn't fit simply gets its
+ * The run-up for every task with a deadline still ahead of it, soonest first,
+ * until the allowance runs out. A task that doesn't fit simply gets its
  * reminders on the next sync, once the ones ahead of it have fired.
  */
-async function scheduleDeadlines(tasks: Task[], now: Date): Promise<void> {
+function planDeadlines(tasks: Task[], now: Date, leads: Record<DeadlineLead, boolean>): Planned[] {
   const nowMs = now.getTime();
-  let budget = DEADLINE_BUDGET;
+  const planned: Planned[] = [];
+  const run = LEADS.filter((lead) => leads[lead.id]);
 
   for (const task of pendingTasks(tasks)) {
-    if (budget <= 0) return;
+    if (planned.length >= DEADLINE_BUDGET) break;
 
     // Already missed: one nag the next morning, not a replay of the run-up.
     if (task.due <= nowMs) {
       const at = new Date(now);
       at.setHours(OVERDUE_HOUR, 0, 0, 0);
       if (at.getTime() <= nowMs) at.setDate(at.getDate() + 1);
-      await Notifications.scheduleNotificationAsync({
-        content: { title: titleFor(task), body: `${dueLabel(task.due, at.getTime())}. ${OVERDUE_LINE}` },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: at,
-          channelId: DEADLINE_CHANNEL,
-        },
+      planned.push({
+        title: titleFor(task),
+        body: `${dueLabel(task.due, at.getTime())}. ${OVERDUE_LINE}`,
+        date: at,
+        channelId: DEADLINE_CHANNEL,
       });
-      budget--;
       continue;
     }
 
     let used = 0;
-    for (const lead of LEADS) {
-      if (budget <= 0 || used >= MAX_PER_TASK) break;
+    for (const lead of run) {
+      if (planned.length >= DEADLINE_BUDGET || used >= MAX_PER_TASK) break;
       const at = new Date(task.due - lead.before);
       if (at.getTime() <= nowMs) continue; // that moment has already gone by
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: titleFor(task),
-          body: `Due ${dueLabel(task.due, at.getTime())}. ${lead.line}`,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: at,
-          channelId: DEADLINE_CHANNEL,
-        },
+      planned.push({
+        title: titleFor(task),
+        body: `Due ${dueLabel(task.due, at.getTime())}. ${lead.line}`,
+        date: at,
+        channelId: DEADLINE_CHANNEL,
       });
-      budget--;
       used++;
     }
   }
+  return planned;
 }
 
 async function ensurePermission(): Promise<boolean> {
@@ -182,10 +179,14 @@ function pendingCount(habits: Habit[], grid: Record<string, CellState>, day: num
   return habits.filter((h) => (grid[cellKey(day, h.id)] ?? 0) === 0).length;
 }
 
-function bodyFor(slot: number, dayOffset: number, pending: number): string {
-  const lines = LINES[slot];
+function voiceAt(minutes: number): number {
+  return VOICE_FROM.filter((from) => minutes >= from).length - 1;
+}
+
+function bodyFor(voice: number, position: number, dayOffset: number, pending: number): string {
+  const lines = LINES[voice];
   // vary by day so the same line doesn't land two days running
-  const line = lines[(dayOffset + slot) % lines.length];
+  const line = lines[(dayOffset + position) % lines.length];
   if (dayOffset === 0 && pending > 0) {
     const noun = pending === 1 ? 'habit' : 'habits';
     return `${pending} ${noun} still unticked. ${line}`;
@@ -193,7 +194,14 @@ function bodyFor(slot: number, dayOffset: number, pending: number): string {
   return line;
 }
 
-export async function syncReminders(opts: {
+/** The switched-on slots in the order they ring, one per distinct time */
+function ringTimes(slots: ReminderSlot[]): ReminderSlot[] {
+  const byMinute = new Map<number, ReminderSlot>();
+  for (const s of slots) if (s.on) byMinute.set(s.hour * 60 + s.minute, s);
+  return [...byMinute.entries()].sort(([a], [b]) => a - b).map(([, s]) => s);
+}
+
+interface ReminderInput {
   habits: Habit[];
   grid: Record<string, CellState>;
   /** current day-of-month, or null when the open month isn't the live one */
@@ -201,66 +209,74 @@ export async function syncReminders(opts: {
   /** tasks with deadlines — not month-scoped, so they survive browsing */
   tasks: Task[];
   now: Date;
-}): Promise<void> {
-  const { habits, grid, today, tasks, now } = opts;
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    // Nothing to say at all — don't provoke the permission prompt for it.
-    if (habits.length === 0 && pendingTasks(tasks).length === 0) return;
-    if (!(await ensurePermission())) return;
+  prefs: NotificationPrefs;
+}
 
-    await scheduleDeadlines(tasks, now);
-    if (habits.length === 0) return;
+/** Everything the schedule should hold right now, deadlines first */
+export function planReminders(opts: ReminderInput): Planned[] {
+  const { habits, grid, today, tasks, now, prefs } = opts;
+  const planned = prefs.deadlines ? planDeadlines(tasks, now, prefs.leads) : [];
+  const times = prefs.habits ? ringTimes(prefs.slots) : [];
+  if (habits.length === 0 || times.length === 0) return planned;
 
-    // Only the live month tells us anything about what's pending right now.
-    const pendingToday = today !== null ? pendingCount(habits, grid, today) : habits.length;
+  // Only the live month tells us anything about what's pending right now.
+  const pendingToday = today !== null ? pendingCount(habits, grid, today) : habits.length;
 
-    // Day already finished: swap the remaining nags for a single well-done.
-    if (today !== null && pendingToday === 0) {
-      const nextSlot = SLOTS.map(([hour, minute]) => {
+  // Day already finished: swap the remaining nags for a single well-done.
+  if (prefs.allDone && today !== null && pendingToday === 0) {
+    const nextSlot = times
+      .map(({ hour, minute }) => {
         const at = new Date(now);
         at.setHours(hour, minute, 0, 0);
         return at;
-      }).find((at) => at.getTime() > now.getTime());
+      })
+      .find((at) => at.getTime() > now.getTime());
 
-      if (nextSlot) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'All done today',
-            body: CONGRATS[today % CONGRATS.length],
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: nextSlot,
-            channelId: HABIT_CHANNEL,
-          },
-        });
-      }
+    if (nextSlot) {
+      planned.push({
+        title: 'All done today',
+        body: CONGRATS[today % CONGRATS.length],
+        date: nextSlot,
+        channelId: HABIT_CHANNEL,
+      });
     }
+  }
 
-    for (let dayOffset = 0; dayOffset < DAYS_AHEAD; dayOffset++) {
-      // nothing left to nag about today — skip straight to tomorrow
-      if (dayOffset === 0 && pendingToday === 0) continue;
+  for (let dayOffset = 0; dayOffset < DAYS_AHEAD; dayOffset++) {
+    // nothing left to nag about today — skip straight to tomorrow
+    if (dayOffset === 0 && pendingToday === 0) continue;
 
-      for (let slot = 0; slot < SLOTS.length; slot++) {
-        const [hour, minute] = SLOTS[slot];
-        const when = new Date(now);
-        when.setDate(when.getDate() + dayOffset);
-        when.setHours(hour, minute, 0, 0);
-        if (when.getTime() <= now.getTime()) continue; // already passed today
+    times.forEach(({ hour, minute }, position) => {
+      const when = new Date(now);
+      when.setDate(when.getDate() + dayOffset);
+      when.setHours(hour, minute, 0, 0);
+      if (when.getTime() <= now.getTime()) return; // already passed today
 
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: TITLES[slot],
-            body: bodyFor(slot, dayOffset, pendingToday),
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: when,
-            channelId: HABIT_CHANNEL,
-          },
-        });
-      }
+      const voice = voiceAt(hour * 60 + minute);
+      planned.push({
+        title: TITLES[voice],
+        body: bodyFor(voice, position, dayOffset, pendingToday),
+        date: when,
+        channelId: HABIT_CHANNEL,
+      });
+    });
+  }
+  return planned;
+}
+
+export async function syncReminders(opts: ReminderInput): Promise<void> {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    const planned = planReminders(opts);
+    // Nothing to say at all — don't provoke the permission prompt for it.
+    if (planned.length === 0) return;
+    if (!(await ensurePermission())) return;
+
+    for (const { title, body, date, channelId } of planned) {
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId },
+      });
     }
   } catch {
     // reminders are a nicety; never let scheduling failure surface in the app

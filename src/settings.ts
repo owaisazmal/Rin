@@ -4,23 +4,114 @@ import type { ColorSchemeName } from 'react-native';
 import type { ThemeMode, ThemePreference } from './theme';
 
 /**
- * The three things the app remembers about how it is shown: which palette,
- * which chart the tracker opens on, and which cards the planner carries below
- * the daily check. Kept apart from the month store because they change for
+ * What the app remembers about how it is shown: which palette, which chart the
+ * tracker opens on, which cards the planner carries below the daily check, and
+ * when it sends reminders. Kept apart from the month store because they change for
  * different reasons and are read at different times — once at launch here, once
  * per month there.
  */
 
 export type ChartType = 'radial' | 'github';
 
+export interface ReminderSlot {
+  on: boolean;
+  hour: number;
+  minute: number;
+}
+
+/** The deadline run-up points, in the order `LEADS` in notifications.ts fires them */
+export const DEADLINE_LEADS = ['3d', '1d', '3h', '1h', 'due'] as const;
+export type DeadlineLead = (typeof DEADLINE_LEADS)[number];
+
+export interface NotificationPrefs {
+  habits: boolean;
+  slots: ReminderSlot[];
+  allDone: boolean;
+  deadlines: boolean;
+  leads: Record<DeadlineLead, boolean>;
+}
+
+/** 5 a day for 7 days is 35, which fits beside the 28 deadline reminders under iOS's 64 */
+export const MAX_SLOTS = 5;
+
+export function defaultNotifications(): NotificationPrefs {
+  return {
+    habits: true,
+    slots: [
+      { on: true, hour: 12, minute: 30 },
+      { on: true, hour: 17, minute: 30 },
+      { on: true, hour: 20, minute: 45 },
+    ],
+    allDone: true,
+    deadlines: true,
+    leads: { '3d': true, '1d': true, '3h': true, '1h': true, due: true },
+  };
+}
+
 export interface Settings {
   theme: ThemePreference;
   chart: ChartType;
   layout: PlannerLayout;
+  notifications: NotificationPrefs;
 }
 
 const SETTINGS_KEY = '@monthly-planning/settings';
-const DEFAULTS: Settings = { theme: 'dark', chart: 'radial', layout: defaultLayout() };
+const DEFAULTS: Settings = {
+  theme: 'dark',
+  chart: 'radial',
+  layout: defaultLayout(),
+  notifications: defaultNotifications(),
+};
+
+const minutesOf = (s: ReminderSlot) => s.hour * 60 + s.minute;
+const byTime = (a: ReminderSlot, b: ReminderSlot) => minutesOf(a) - minutesOf(b);
+
+function isClock(n: unknown, max: number): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
+}
+
+function parseSlots(raw: unknown): ReminderSlot[] {
+  if (!Array.isArray(raw)) return defaultNotifications().slots;
+  const slots: ReminderSlot[] = [];
+  for (const s of raw as Partial<ReminderSlot>[]) {
+    if (!s || !isClock(s.hour, 23) || !isClock(s.minute, 59)) continue;
+    slots.push({ on: s.on !== false, hour: s.hour, minute: s.minute });
+  }
+  return slots.length ? slots.slice(0, MAX_SLOTS) : defaultNotifications().slots;
+}
+
+/** Same rule as `loadSettings`: anything missing or unknown takes its own default */
+export function parseNotifications(raw: unknown): NotificationPrefs {
+  const d = defaultNotifications();
+  if (!raw || typeof raw !== 'object') return d;
+  const p = raw as Partial<Record<keyof NotificationPrefs, unknown>>;
+  const flag = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  const leads = (p.leads && typeof p.leads === 'object' ? p.leads : {}) as Record<string, unknown>;
+  return {
+    habits: flag(p.habits, d.habits),
+    slots: parseSlots(p.slots),
+    allDone: flag(p.allDone, d.allDone),
+    deadlines: flag(p.deadlines, d.deadlines),
+    leads: Object.fromEntries(
+      DEADLINE_LEADS.map((id) => [id, flag(leads[id], d.leads[id])])
+    ) as Record<DeadlineLead, boolean>,
+  };
+}
+
+/** Sets slot `index`, or adds one when null; a time already taken switches that slot on instead */
+export function placeSlot(
+  slots: ReminderSlot[],
+  index: number | null,
+  hour: number,
+  minute: number
+): ReminderSlot[] {
+  const rest = index === null ? slots : slots.filter((_, i) => i !== index);
+  const clash = rest.findIndex((s) => s.hour === hour && s.minute === minute);
+  if (clash >= 0) return rest.map((s, i) => (i === clash ? { ...s, on: true } : s));
+  if (index === null && slots.length >= MAX_SLOTS) return slots;
+  const on = index === null ? true : (slots[index]?.on ?? true);
+  return [...rest, { on, hour, minute }].sort(byTime);
+}
 
 /** Coerced field by field, so an unknown value falls back on its own rather than taking the rest with it */
 export async function loadSettings(): Promise<Settings> {
@@ -32,6 +123,7 @@ export async function loadSettings(): Promise<Settings> {
       theme: parsed.theme === 'light' || parsed.theme === 'system' ? parsed.theme : 'dark',
       chart: parsed.chart === 'github' ? 'github' : 'radial',
       layout: parseLayout(parsed.layout),
+      notifications: parseNotifications(parsed.notifications),
     };
   } catch {
     return DEFAULTS;

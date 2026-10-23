@@ -7,6 +7,7 @@ import { ThemeMode } from '../theme';
 import { buildSnapshot } from '../widgets/snapshot';
 import { syncWidgets } from '../widgets/sync';
 import { syncReminders } from '../notifications';
+import type { NotificationPrefs } from '../settings';
 
 /**
  * Everything the planner pushes *out* of the app — to the home screen and to
@@ -88,12 +89,14 @@ export function useReminderSync(
   enabled: boolean,
   data: MonthData,
   today: number | null,
-  tasks: Task[]
+  tasks: Task[],
+  prefs: NotificationPrefs
 ) {
   useDebouncedPush(
     enabled
-      ? () => syncReminders({ habits: data.habits, grid: data.grid, today, tasks, now: new Date() })
+      ? () =>
+          syncReminders({ habits: data.habits, grid: data.grid, today, tasks, now: new Date(), prefs })
       : null,
-    [enabled, data, today, tasks]
+    [enabled, data, today, tasks, prefs]
   );
 }

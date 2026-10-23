@@ -31,6 +31,7 @@ The iOS shots are in [`dark/ios/widgets/`](dark/ios/widgets/) and [`light/ios/wi
 | Today's Check | ● | ● | ● | |
 | Key Goals | | ● | ● | |
 | Daily Quote | ● | ● | ● | ● rectangular |
+| Deadlines | ● | ● | ● | ● rectangular · inline |
 
 Year Tracker is medium-only: a full year needs ~53 columns, which at a large
 widget's width forces cells down to ~5pt — a stripe of confetti with most of the
@@ -41,8 +42,37 @@ the app uses, so the widget and the app always agree. It rolls over at midnight
 on its own — the widget picks from the list rather than being handed today's
 quote, so it doesn't depend on the app being opened.
 
-The Lock Screen accessories are not pictured. They render on the lock screen,
-which is not part of the home-screen layout these shots come from.
+## Lock Screen
+
+| Widget | Slot | Shows |
+| --- | --- | --- |
+| Streak | circular | the current streak in days, under a flame |
+| Streak | rectangular | the current streak, the best this year, and how much of the month is done |
+| Streak | inline | `9d streak · 42%` |
+| Deadlines | rectangular | the next deadline and the time left on it |
+| Deadlines | inline | `5h left · Send the tax return`, countdown first, so a long title loses its end rather than the countdown |
+| Daily Quote | rectangular | today's quote; a long one gives up the heading for a fourth line |
+
+The Lock Screen draws every accessory in one colour, so the states are shapes:
+the flame is filled once today is marked and an outline while the streak is
+waiting on today, and an overdue deadline swaps the hourglass for an
+exclamation mark. Accessories don't follow the app's theme either, which is
+why they are only in the dark folder.
+
+[`lock-screen-vibrant.png`](dark/ios/widgets/lock-screen-vibrant.png),
+[`lock-screen-tinted.png`](dark/ios/widgets/lock-screen-tinted.png) and
+[`lock-screen-always-on.png`](dark/ios/widgets/lock-screen-always-on.png) show
+every accessory at the iPhone SE's slot sizes, the tightest on iOS 27, with
+four sets of data: typical, long text and big numbers, a streak still waiting
+on today, and nothing at all.
+
+These are renders, not captures. The simulator can't place Lock Screen widgets
+from a script and has no always-on display, so the views are drawn headlessly
+and given the system's treatment by hand: brightness becomes the opacity of
+white (vibrant) or of a tint colour (tinted), and always-on dims the wallpaper
+and the widget. Layout, size and truncation are faithful; the system's own
+material and dimming differ in detail. The longest quote still loses its last
+few words in the SE's slot.
 
 ## Android
 

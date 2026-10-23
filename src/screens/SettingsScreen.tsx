@@ -5,6 +5,9 @@ import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
+import TimePicker from '../components/TimePicker';
+import { CheckGlyph, CloseGlyph } from '../components/Glyphs';
+import { DeadlineLead, MAX_SLOTS, NotificationPrefs, placeSlot } from '../settings';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
@@ -26,6 +29,20 @@ const THEME_OPTIONS = [
   { value: 'light' as ThemePreference, label: 'LIGHT' },
   { value: 'system' as ThemePreference, label: 'SYSTEM' },
 ] as const;
+
+const LEAD_OPTIONS: { id: DeadlineLead; label: string; spoken: string }[] = [
+  { id: '3d', label: '3 DAYS', spoken: 'Three days before' },
+  { id: '1d', label: '1 DAY', spoken: 'One day before' },
+  { id: '3h', label: '3 HRS', spoken: 'Three hours before' },
+  { id: '1h', label: '1 HR', spoken: 'One hour before' },
+  { id: 'due', label: 'DUE', spoken: 'When it is due' },
+];
+
+/** where a new reminder's picker starts */
+const NEW_SLOT = { hour: 9, minute: 0 };
+
+const hhmm = (hour: number, minute: number) =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
 const REPO_URL = 'https://github.com/owaisazmal/monthly-planning';
 const PRIVACY_URL = 'https://owaisazmal.github.io/Rin/privacy.html';
@@ -78,6 +95,9 @@ interface Props {
    */
   onDeleteBackup: () => Promise<{ ok: boolean; deleted: number }>;
   onForgetBackup: () => void;
+  /** when reminders go out; held in App with the rest of the settings */
+  notifications: NotificationPrefs;
+  onChangeNotifications: (change: (prev: NotificationPrefs) => NotificationPrefs) => void;
   onClose: () => void;
 }
 
@@ -100,10 +120,16 @@ export default function SettingsScreen({
   backupHolds,
   onRestoreMonth,
   onForgetBackup,
+  notifications,
+  onChangeNotifications: change,
   onClose,
 }: Props) {
   const { mode, preference, palette, setPreference } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+
+  // which slot's time is being set: an index, 'new' for an added one, or null
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const editSlot = typeof editing === 'number' ? notifications.slots[editing] : NEW_SLOT;
   /**
    * The card is told what the backup holds only when there is something this
    * screen could do about the answer. Without a handler there is no button to
@@ -369,6 +395,150 @@ export default function SettingsScreen({
           )}
         </View>
 
+        <SectionHeader title="NOTIFICATIONS" />
+        <View style={styles.card}>
+          <ToggleRow
+            styles={styles}
+            palette={palette}
+            title="Habit reminders"
+            sub="Only while something is still unticked"
+            on={notifications.habits}
+            onPress={() => change((p) => ({ ...p, habits: !p.habits }))}
+          />
+          {notifications.habits ? (
+            <>
+              {notifications.slots.map((slot, i) => {
+                const time = hhmm(slot.hour, slot.minute);
+                return (
+                  <View key={i} style={styles.slotRow}>
+                    <Pressable
+                      hitSlop={10}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: slot.on }}
+                      accessibilityLabel={`Reminder at ${time}`}
+                      onPress={() =>
+                        change((p) => ({
+                          ...p,
+                          slots: p.slots.map((s, j) => (j === i ? { ...s, on: !s.on } : s)),
+                        }))
+                      }
+                      style={({ pressed }) => [
+                        styles.toggle,
+                        slot.on && styles.toggleOn,
+                        pressed && { opacity: 0.6 },
+                      ]}
+                    >
+                      {slot.on && <CheckGlyph color={palette.onAccent} size={13} />}
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Change the ${time} reminder`}
+                      onPress={() => setEditing(i)}
+                      style={({ pressed }) => [styles.slotTime, pressed && { opacity: 0.6 }]}
+                    >
+                      <Text
+                        style={[styles.slotTimeText, !slot.on && styles.off]}
+                        maxFontSizeMultiplier={SCALE.row}
+                      >
+                        {time}
+                      </Text>
+                    </Pressable>
+                    {notifications.slots.length > 1 ? (
+                      <Pressable
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove the ${time} reminder`}
+                        onPress={() =>
+                          change((p) =>
+                            p.slots.length > 1
+                              ? { ...p, slots: p.slots.filter((_, j) => j !== i) }
+                              : p
+                          )
+                        }
+                        style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                      >
+                        <CloseGlyph color={palette.inkSoft} size={13} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+              {notifications.slots.length < MAX_SLOTS ? (
+                <Pressable
+                  onPress={() => setEditing('new')}
+                  style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.ghostText} maxFontSizeMultiplier={SCALE.heading}>
+                    ADD A TIME
+                  </Text>
+                </Pressable>
+              ) : null}
+              <ToggleRow
+                styles={styles}
+                palette={palette}
+                title="All-done message"
+                sub="A well-done in place of the next nudge"
+                on={notifications.allDone}
+                onPress={() => change((p) => ({ ...p, allDone: !p.allDone }))}
+              />
+            </>
+          ) : null}
+
+          <View style={styles.divider} />
+
+          <ToggleRow
+            styles={styles}
+            palette={palette}
+            title="Deadline reminders"
+            sub="Before each deadline, and the morning after a missed one"
+            on={notifications.deadlines}
+            onPress={() => change((p) => ({ ...p, deadlines: !p.deadlines }))}
+          />
+          {notifications.deadlines ? (
+            <View style={styles.chips}>
+              {LEAD_OPTIONS.map(({ id, label, spoken }) => {
+                const on = notifications.leads[id];
+                return (
+                  <Pressable
+                    key={id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={spoken}
+                    onPress={() =>
+                      change((p) => ({ ...p, leads: { ...p.leads, [id]: !p.leads[id] } }))
+                    }
+                    style={({ pressed }) => [
+                      styles.chip,
+                      on && styles.chipOn,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.chipText, on && styles.chipTextOn]}
+                      maxFontSizeMultiplier={SCALE.heading}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        <TimePicker
+          visible={editing !== null}
+          title={editing === 'new' ? 'NEW REMINDER' : 'REMINDER'}
+          hour={editSlot?.hour ?? NEW_SLOT.hour}
+          minute={editSlot?.minute ?? NEW_SLOT.minute}
+          onCancel={() => setEditing(null)}
+          onConfirm={(hour, minute) => {
+            const index = editing === 'new' ? null : editing;
+            change((p) => ({ ...p, slots: placeSlot(p.slots, index, hour, minute) }));
+            setEditing(null);
+          }}
+        />
+
         <SectionHeader title="APPEARANCE" />
         <View style={styles.card}>
           <View style={styles.row}>
@@ -435,6 +605,45 @@ export default function SettingsScreen({
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** A setting that is either on or off; the whole row is the switch */
+function ToggleRow({
+  styles,
+  palette,
+  title,
+  sub,
+  on,
+  onPress,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  palette: Palette;
+  title: string;
+  sub: string;
+  on: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={title}
+      onPress={onPress}
+      style={({ pressed }) => [styles.toggleRow, pressed && { opacity: 0.7 }]}
+    >
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+          {title}
+        </Text>
+        <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+          {sub}
+        </Text>
+      </View>
+      <View style={[styles.toggle, on && styles.toggleOn]}>
+        {on && <CheckGlyph color={palette.onAccent} size={13} />}
+      </View>
+    </Pressable>
   );
 }
 
@@ -584,6 +793,97 @@ const makeStyles = (p: Palette) =>
     },
     rowText: {
       flex: 1,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 44,
+      gap: 12,
+    },
+    toggle: {
+      width: 22,
+      height: 22,
+      borderRadius: RADIUS.pill,
+      borderWidth: 1.5,
+      borderColor: p.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    toggleOn: {
+      backgroundColor: p.accent,
+      borderColor: p.accent,
+    },
+    slotRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 8,
+      minHeight: 44,
+      paddingLeft: 12,
+      paddingRight: 6,
+      borderRadius: RADIUS.control,
+      backgroundColor: p.chip,
+    },
+    slotTime: {
+      flex: 1,
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+    },
+    slotTimeText: {
+      fontSize: 16,
+      fontFamily: FONT.bold,
+      letterSpacing: 1,
+      color: p.ink,
+    },
+    off: {
+      opacity: 0.45,
+    },
+    removeBtn: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addBtn: {
+      marginTop: 8,
+      marginBottom: 6,
+      height: 42,
+      borderRadius: RADIUS.control,
+      borderWidth: 1,
+      borderColor: p.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: p.line,
+      marginVertical: 12,
+    },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 6,
+    },
+    chip: {
+      flexGrow: 1,
+      alignItems: 'center',
+      paddingHorizontal: 8,
+      paddingVertical: 8,
+      borderRadius: RADIUS.pill,
+      backgroundColor: p.chip,
+    },
+    chipOn: {
+      backgroundColor: p.accent,
+    },
+    chipText: {
+      fontSize: 11,
+      fontFamily: FONT.bold,
+      letterSpacing: 1,
+      color: p.inkSoft,
+    },
+    chipTextOn: {
+      color: p.onAccent,
     },
     rowTitle: {
       fontSize: 15,

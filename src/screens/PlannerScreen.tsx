@@ -52,7 +52,7 @@ import {
 } from '../layout';
 import { damagedNotice } from './backupWording';
 import type { SummarySource } from './SummaryScreen';
-import { ChartType } from '../settings';
+import { ChartType, NotificationPrefs } from '../settings';
 import { RAIL_TOP, SPLIT_MAX, plannerFit, usesSideRail } from '../fit';
 import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 import { CardKind, CardRef, cardItemsIn } from '../types';
@@ -82,6 +82,7 @@ export default function PlannerScreen({
   onSetChart,
   layout,
   onChangeLayout,
+  notifications,
   onOpenSettings,
   onOpenHistory,
   onOpenSummary,
@@ -94,6 +95,8 @@ export default function PlannerScreen({
   layout: PlannerLayout;
   /** takes a change rather than a layout, so two in one tick both land */
   onChangeLayout: (change: (prev: PlannerLayout) => PlannerLayout) => void;
+  /** when reminders go out; a change reschedules them */
+  notifications: NotificationPrefs;
   onOpenSettings: () => void;
   onOpenHistory: (filter?: HistoryFilter) => void;
   /** opens the summary of the month on screen */
@@ -207,7 +210,7 @@ export default function PlannerScreen({
   // put a snapshot on the home screen saying nothing is due, and only correct
   // it on the next edit.
   useWidgetSync(loaded && tasksLoaded, year, month, data, yearMonths, mode, tasks);
-  useReminderSync(loaded && tasksLoaded, data, today, tasks);
+  useReminderSync(loaded && tasksLoaded, data, today, tasks, notifications);
 
   const { chartAnim, monthAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
 
