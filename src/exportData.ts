@@ -142,7 +142,36 @@ export function exportCsv(file: ExportFile): string {
       }
     }
   }
-  return `﻿${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+
+const counted = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+/** What the preview card lists: what the file holds, and what could not be read */
+export function exportSummary(
+  file: ExportFile,
+  format: ExportFormat
+): { lines: string[]; damage: string | null } {
+  const months = counted(file.months.length, 'month');
+  let rows = 0;
+  for (const { month, data } of file.months) {
+    const [year, m] = month.split('-').map(Number);
+    rows += monthLength(year, m - 1) * data.habits.length;
+  }
+  const lines =
+    format === 'json'
+      ? [
+          `${months} · ${counted(file.deadlines.length, 'deadline')}`,
+          ...(file.settings ? ['settings and quotes'] : []),
+        ]
+      : [`${counted(rows, 'row')} · ${months}`, 'one per habit per day'];
+  const hurt = file.months.filter((m) => m.damaged).length + file.skipped.length;
+  const deadlines = format === 'json' && !!file.deadlinesDamaged;
+  const what = [hurt ? counted(hurt, 'month') : null, deadlines ? 'the deadlines' : null]
+    .filter((x): x is string => x !== null)
+    .join(' and ');
+  const damage = what ? `${what[0].toUpperCase()}${what.slice(1)} not fully readable` : null;
+  return { lines, damage };
 }
 
 export function exportFileName(scope: ExportScope, format: ExportFormat, now: number): string {

@@ -17,7 +17,15 @@ import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
 import TimePicker from '../components/TimePicker';
 import QuoteEditor from '../components/QuoteEditor';
-import { CheckGlyph, CloseGlyph } from '../components/Glyphs';
+import {
+  BracesGlyph,
+  CheckGlyph,
+  CloseGlyph,
+  ExternalGlyph,
+  GridGlyph,
+  ShareGlyph,
+  UnlockGlyph,
+} from '../components/Glyphs';
 import { DeadlineLead, MAX_SLOTS, NotificationPrefs, placeSlot } from '../settings';
 import { DISCIPLINE_QUOTES, MAX_CUSTOM_QUOTES, QuotePrefs, QuoteSource, placeQuote } from '../quotes';
 import { notificationsBlocked } from '../notifications';
@@ -30,7 +38,9 @@ import {
   exportFileName,
   exportJson,
   exportNotice,
+  exportSummary,
   gatherExport,
+  scopeKey,
   scopeTitle,
 } from '../exportData';
 import { shareExport } from '../exportFile';
@@ -263,6 +273,25 @@ export default function SettingsScreen({
       Math.min(stepCount - 1, Math.max(0, at + delta))
     );
 
+  // what the file will hold, read again whenever the range changes
+  const [preview, setPreview] = useState<ExportFile | null>(null);
+  const scopeId = scope ? scopeKey(scope) : null;
+  useEffect(() => {
+    if (!scope) {
+      setPreview(null);
+      return;
+    }
+    let live = true;
+    gatherExport(scope).then(
+      (file) => live && setPreview(file),
+      () => live && setPreview(null)
+    );
+    return () => {
+      live = false;
+    };
+  }, [scopeId]);
+  const summary = preview ? exportSummary(preview, format) : null;
+
   const [exporting, setExporting] = useState(false);
   const send = async (file: ExportFile, chosen: ExportScope, as: ExportFormat) => {
     try {
@@ -431,7 +460,7 @@ export default function SettingsScreen({
       { cancelable: true }
     );
 
-  // 'bottom' matters now that the colophon is pinned down there: without it the
+  // 'bottom' matters now that the about card is pinned down there: without it the
   // last line sits under Android's gesture pill.
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
@@ -559,91 +588,6 @@ export default function SettingsScreen({
               </Pressable>
             </>
           )}
-        </View>
-
-        <SectionHeader title="EXPORT" />
-        <View style={styles.card}>
-          <View style={styles.quoteHead}>
-            <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
-              Export to a file
-            </Text>
-            <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
-              {format === 'json'
-                ? 'Months, deadlines, settings and quotes, in full'
-                : 'One row per habit per day, for spreadsheets'}
-            </Text>
-          </View>
-          <SegmentedControl
-            options={FORMAT_OPTIONS}
-            value={format}
-            onChange={setFormat}
-            verticalPadding={9}
-          />
-          <SegmentedControl
-            options={SCOPE_OPTIONS}
-            value={scopeKind}
-            onChange={setScopeKind}
-            verticalPadding={9}
-            style={styles.scopeControl}
-          />
-          {scopeKind !== 'all' ? (
-            <View style={[styles.slotRow, styles.stepper]}>
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={scopeKind === 'month' ? 'Earlier month' : 'Earlier year'}
-                disabled={stepAt <= 0}
-                onPress={() => step(-1)}
-                style={({ pressed }) => [
-                  styles.removeBtn,
-                  stepAt <= 0 && styles.off,
-                  pressed && { opacity: 0.6 },
-                ]}
-              >
-                <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
-                  ‹
-                </Text>
-              </Pressable>
-              <Text style={styles.stepLabel} maxFontSizeMultiplier={SCALE.row}>
-                {scope ? scopeTitle(scope) : 'No months yet'}
-              </Text>
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={scopeKind === 'month' ? 'Later month' : 'Later year'}
-                disabled={stepAt >= stepCount - 1}
-                onPress={() => step(1)}
-                style={({ pressed }) => [
-                  styles.removeBtn,
-                  stepAt >= stepCount - 1 && styles.off,
-                  pressed && { opacity: 0.6 },
-                ]}
-              >
-                <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
-                  ›
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-          <Pressable
-            disabled={exporting || !scope}
-            onPress={startExport}
-            style={({ pressed }) => [
-              styles.ghostBtn,
-              !scope && styles.off,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Text
-              style={[styles.ghostText, styles.retryText]}
-              maxFontSizeMultiplier={SCALE.heading}
-            >
-              {exporting ? 'READING…' : 'EXPORT'}
-            </Text>
-          </Pressable>
-          <Text style={[styles.rowSub, styles.exportNote]} maxFontSizeMultiplier={SCALE.row}>
-            The file is not encrypted. Rin uploads nothing; it goes only where you send it.
-          </Text>
         </View>
 
         <SectionHeader title="NOTIFICATIONS" />
@@ -932,37 +876,162 @@ export default function SettingsScreen({
           <ThemeBackdrop />
         </View>
 
-        <View style={styles.colophon}>
-          <Text style={styles.appName}>Rin</Text>
-          <Text style={styles.appDefinition}>
-            凛: dignity in showing up, day after day.
+        <SectionHeader title="EXPORT" />
+        <View style={styles.card}>
+          <View style={styles.exportRow}>
+            <View style={styles.exportLabelBox}>
+              <Text style={styles.exportLabel} maxFontSizeMultiplier={SCALE.heading}>
+                FORMAT
+              </Text>
+            </View>
+            <SegmentedControl
+              options={FORMAT_OPTIONS}
+              value={format}
+              onChange={setFormat}
+              verticalPadding={9}
+              style={styles.exportControl}
+            />
+          </View>
+          <View style={[styles.exportRow, styles.exportGap]}>
+            <View style={styles.exportLabelBox}>
+              <Text style={styles.exportLabel} maxFontSizeMultiplier={SCALE.heading}>
+                RANGE
+              </Text>
+            </View>
+            <View style={styles.exportControl}>
+              <SegmentedControl
+                options={SCOPE_OPTIONS}
+                value={scopeKind}
+                onChange={setScopeKind}
+                verticalPadding={9}
+              />
+              {scopeKind !== 'all' ? (
+                <View style={[styles.slotRow, styles.stepper]}>
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={scopeKind === 'month' ? 'Earlier month' : 'Earlier year'}
+                    disabled={stepAt <= 0}
+                    onPress={() => step(-1)}
+                    style={({ pressed }) => [
+                      styles.removeBtn,
+                      stepAt <= 0 && styles.off,
+                      pressed && { opacity: 0.6 },
+                    ]}
+                  >
+                    <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                      ‹
+                    </Text>
+                  </Pressable>
+                  <Text style={styles.stepLabel} maxFontSizeMultiplier={SCALE.row}>
+                    {scope ? scopeTitle(scope) : 'No months yet'}
+                  </Text>
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={scopeKind === 'month' ? 'Later month' : 'Later year'}
+                    disabled={stepAt >= stepCount - 1}
+                    onPress={() => step(1)}
+                    style={({ pressed }) => [
+                      styles.removeBtn,
+                      stepAt >= stepCount - 1 && styles.off,
+                      pressed && { opacity: 0.6 },
+                    ]}
+                  >
+                    <Text style={styles.stepArrow} maxFontSizeMultiplier={SCALE.glyph}>
+                      ›
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.ticket}>
+            <View style={styles.rowIcon}>
+              {format === 'json' ? (
+                <BracesGlyph color={palette.accent} size={18} />
+              ) : (
+                <GridGlyph color={palette.accent} size={18} />
+              )}
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.ticketName} maxFontSizeMultiplier={SCALE.row} numberOfLines={1}>
+                {scope ? exportFileName(scope, format, Date.now()) : 'No months yet'}
+              </Text>
+              {(summary?.lines ?? (scope ? ['Reading…'] : [])).map((line) => (
+                <Text key={line} style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+                  {line}
+                </Text>
+              ))}
+              {summary?.damage ? (
+                <Text
+                  style={[styles.rowSub, styles.ticketDamage]}
+                  maxFontSizeMultiplier={SCALE.row}
+                >
+                  {summary.damage}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.warnStrip}>
+            <UnlockGlyph color={palette.accent} size={16} />
+            <Text style={styles.warnText} maxFontSizeMultiplier={SCALE.row}>
+              Not encrypted. Rin uploads nothing; the file goes only where you send it.
+            </Text>
+          </View>
+
+          <Pressable
+            disabled={exporting || !scope}
+            onPress={startExport}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.primary,
+              styles.shareBtn,
+              !scope && styles.off,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <ShareGlyph color={palette.onAccent} size={15} />
+            <Text style={styles.primaryText} maxFontSizeMultiplier={SCALE.heading}>
+              {exporting ? 'READING…' : 'SHARE FILE'}
+            </Text>
+          </Pressable>
+        </View>
+
+        <SectionHeader title="ABOUT" />
+        <View style={styles.card}>
+          <Text style={styles.appName} maxFontSizeMultiplier={SCALE.heading}>
+            Rin
           </Text>
+          <Text style={styles.appDefinition}>凛: dignity in showing up, day after day.</Text>
           <Text style={styles.madeBy}>
             Free and open-source. Made by Owais Khan. No team, no investors, and
             no analytics to tell me whether anyone ever reads this line.
           </Text>
-          <Pressable
-            hitSlop={10}
-            accessibilityRole="link"
-            onPress={() => Linking.openURL(REPO_URL)}
-            style={({ pressed }) => [styles.repo, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={styles.repoText}>{REPO_URL.replace('https://', '')}</Text>
-          </Pressable>
+          <View style={styles.divider} />
+          <LinkRow
+            styles={styles}
+            palette={palette}
+            title="Source code"
+            sub={REPO_URL.replace('https://', '')}
+            url={REPO_URL}
+          />
+          <LinkRow
+            styles={styles}
+            palette={palette}
+            title="Privacy policy"
+            sub={PRIVACY_URL.replace('https://', '').replace('/privacy.html', '')}
+            url={PRIVACY_URL}
+          />
+          <View style={styles.divider} />
           <Text style={styles.madeBy}>
             App is public, and staying that way. No trackers, no analytics, no
             data collection. Nothing leaves this {device()} unless you ask for a
             backup, and what leaves then is encrypted with a code I never see. An
             export goes only where you send it.
           </Text>
-          <Pressable
-            hitSlop={10}
-            accessibilityRole="link"
-            onPress={() => Linking.openURL(PRIVACY_URL)}
-            style={({ pressed }) => [styles.repo, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={styles.repoText}>Privacy policy</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1004,6 +1073,40 @@ function ToggleRow({
       <View style={[styles.toggle, on && styles.toggleOn]}>
         {on && <CheckGlyph color={palette.onAccent} size={13} />}
       </View>
+    </Pressable>
+  );
+}
+
+/** A link out of the app, with where it goes underneath */
+function LinkRow({
+  styles,
+  palette,
+  title,
+  sub,
+  url,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  palette: Palette;
+  title: string;
+  sub: string;
+  url: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={title}
+      onPress={() => Linking.openURL(url)}
+      style={({ pressed }) => [styles.toggleRow, pressed && { opacity: 0.6 }]}
+    >
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+          {title}
+        </Text>
+        <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row} numberOfLines={1}>
+          {sub}
+        </Text>
+      </View>
+      <ExternalGlyph color={palette.inkSoft} size={14} />
     </Pressable>
   );
 }
@@ -1056,7 +1159,7 @@ const makeStyles = (p: Palette) =>
     },
     /**
      * Home for the theme clip, and the screen's slack. Taking the leftover
-     * space rather than a fixed ratio puts the colophon on the bottom edge on
+     * space rather than a fixed ratio puts the last cards on the bottom edge on
      * any screen without the page having to scroll to reach it — and the clip
      * is drawn with `contain`, so a wide short panel shrinks the drawing
      * instead of cropping it.
@@ -1069,7 +1172,7 @@ const makeStyles = (p: Palette) =>
       // blend under a drag.
       minHeight: 80,
       // Clearance for the clip's edge fades, which reach outside the panel —
-      // without it they wash over the caption and the colophon. Only iOS draws
+      // without it they wash over the caption and the export card. Only iOS draws
       // them, and on a short screen this margin is the difference between a
       // drawing that fills the panel and one that looks like a stamp, so
       // Android keeps its space instead of paying for a fade it never renders.
@@ -1248,11 +1351,32 @@ const makeStyles = (p: Palette) =>
     quoteCap: {
       marginTop: 12,
     },
-    scopeControl: {
-      marginTop: 8,
+    exportRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+    exportGap: {
+      marginTop: 10,
+    },
+    // as tall as the control beside it, so the label sits on its middle
+    exportLabelBox: {
+      minWidth: 64,
+      minHeight: 37,
+      justifyContent: 'center',
+    },
+    exportLabel: {
+      fontSize: 10,
+      fontFamily: FONT.bold,
+      letterSpacing: 2,
+      color: p.inkSoft,
+    },
+    exportControl: {
+      flex: 1,
     },
     stepper: {
       paddingLeft: 6,
+      minHeight: 40,
     },
     stepArrow: {
       fontSize: 22,
@@ -1268,9 +1392,46 @@ const makeStyles = (p: Palette) =>
       letterSpacing: 0.5,
       color: p.ink,
     },
-    exportNote: {
-      marginTop: 10,
-      textAlign: 'center',
+    ticket: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 16,
+      padding: 12,
+      borderRadius: RADIUS.control,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: p.line,
+    },
+    ticketName: {
+      fontSize: 15,
+      fontFamily: FONT.semibold,
+      color: p.ink,
+      marginBottom: 2,
+    },
+    ticketDamage: {
+      color: p.accent,
+    },
+    warnStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: RADIUS.control,
+      backgroundColor: p.accentSoft,
+    },
+    warnText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: wrapSafe(17),
+      fontFamily: FONT.regular,
+      color: p.ink,
+    },
+    shareBtn: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
     },
     chips: {
       flexDirection: 'row',
@@ -1309,43 +1470,24 @@ const makeStyles = (p: Palette) =>
       fontFamily: FONT.regular,
       color: p.inkSoft,
     },
-    colophon: {
-      alignItems: 'center',
-      paddingHorizontal: 12,
-    },
     appName: {
-      marginBottom: 4,
+      marginBottom: 2,
       fontSize: 22,
       fontFamily: FONT.bold,
       letterSpacing: 1,
       color: p.ink,
-      textAlign: 'center',
     },
     appDefinition: {
-      marginBottom: 14,
-      fontSize: 12,
+      marginBottom: 10,
+      fontSize: 13,
       fontFamily: FONT.italic,
       color: p.inkSoft,
-      textAlign: 'center',
     },
     madeBy: {
-      textAlign: 'center',
-      fontSize: 11,
-      lineHeight: wrapSafe(17),
+      fontSize: 12,
+      lineHeight: wrapSafe(18),
       fontFamily: FONT.regular,
       color: p.inkSoft,
-      opacity: 0.75,
-    },
-    repo: {
-      marginVertical: 8,
-    },
-    repoText: {
-      fontSize: 12,
-      fontFamily: FONT.semibold,
-      color: p.accent,
-      textDecorationLine: 'underline',
-      // the link wraps at its slashes at large text sizes
-      textAlign: 'center',
     },
     footer: {
       textAlign: 'center',

@@ -8,6 +8,7 @@ import {
   exportFileName,
   exportJson,
   exportNotice,
+  exportSummary,
   gatherExport,
   scopeTitle,
 } from '../exportData';
@@ -261,10 +262,10 @@ describe('the settings block', () => {
 describe('exportCsv', () => {
   const file = buildExport(source(), { kind: 'all' }, NOW);
   const csv = exportCsv(file);
-  const rows = csv.replace(/^﻿/, '').split('\r\n');
+  const rows = csv.replace(/^\uFEFF/, '').split('\r\n');
 
   it('starts with a BOM and a header, and ends every row with CRLF', () => {
-    expect(csv.startsWith('﻿date,habit,status\r\n')).toBe(true);
+    expect(csv.startsWith('\uFEFFdate,habit,status\r\n')).toBe(true);
     expect(csv.endsWith('\r\n')).toBe(true);
     expect(csv.replace(/\r\n/g, '')).not.toMatch(/\n/);
   });
@@ -301,6 +302,50 @@ describe('exportCsv', () => {
     expect(out).toContain('\r\n2026-02-01,Untitled habit,\r\n2026-02-01,"Two\nlines",\r\n');
     expect(out).toContain('\r\n2026-02-28,"Two\nlines",\r\n');
     expect(out).not.toContain('2026-02-29');
+  });
+});
+
+describe('exportSummary', () => {
+  it('counts what the file holds, per format', () => {
+    const file = buildExport(source(), { kind: 'all' }, NOW);
+    expect(exportSummary(file, 'json')).toEqual({
+      lines: ['2 months · 3 deadlines'],
+      damage: null,
+    });
+    expect(exportSummary({ ...file, settings: undefined }, 'csv')).toEqual({
+      lines: ['92 rows · 2 months', 'one per habit per day'],
+      damage: null,
+    });
+    const one = buildExport(source(), { kind: 'month', year: 2026, month: 8 }, NOW);
+    expect(exportSummary(one, 'csv').lines[0]).toBe('30 rows · 1 month');
+  });
+
+  it('mentions settings when the file has them', () => {
+    const file = buildExport(source(), { kind: 'all' }, NOW);
+    const withSettings = { ...file, settings: {} as ExportFile['settings'] };
+    expect(exportSummary(withSettings, 'json').lines).toEqual([
+      '2 months · 3 deadlines',
+      'settings and quotes',
+    ]);
+  });
+
+  it('says what could not be read, deadlines only in JSON', () => {
+    const file = buildExport(
+      source({
+        months: [
+          { year: 2026, month: 2, read: { status: 'partial', data: september, lost: '1 grid entry' } },
+          { year: 2026, month: 4, read: { status: 'unreadable' } },
+        ],
+        tasks: { status: 'unreadable' },
+      }),
+      { kind: 'all' },
+      NOW
+    );
+    expect(exportSummary(file, 'json').damage).toBe('2 months and the deadlines not fully readable');
+    expect(exportSummary(file, 'csv').damage).toBe('2 months not fully readable');
+    expect(exportSummary({ ...file, months: [], skipped: [] }, 'json').damage).toBe(
+      'The deadlines not fully readable'
+    );
   });
 });
 
