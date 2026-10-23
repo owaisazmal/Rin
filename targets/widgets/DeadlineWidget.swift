@@ -243,8 +243,7 @@ struct AccessoryDeadline: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
-      Text("NEXT DUE")
-        .font(.system(size: 12, weight: .bold))
+      AccessoryHeading(text: "NEXT DUE")
       if let item {
         Text(item.text.isEmpty ? "Untitled task" : item.text)
           .font(.system(size: 14, weight: .semibold))

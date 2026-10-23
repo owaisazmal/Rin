@@ -72,6 +72,23 @@ struct Theme {
     ]
   )
 
+  /// Lock Screen: the system keeps only brightness, so every state is a shade of white.
+  static let accessory = Theme(
+    bg: .clear,
+    card: .clear,
+    ink: .white,
+    inkSoft: .white.opacity(0.7),
+    line: .white.opacity(0.3),
+    accent: .white,
+    cellEmpty: .white.opacity(0.2),
+    done: .white,
+    missed: .white.opacity(0.5),
+    onState: .black,
+    ghLevels: [
+      .white.opacity(0.18), .white.opacity(0.4), .white.opacity(0.6), .white.opacity(0.8), .white,
+    ]
+  )
+
   /// Widgets follow the app's own appearance setting, not the phone's — the
   /// planner is the thing they are an extension of, so a light app next to a
   /// dark widget would read as a bug.

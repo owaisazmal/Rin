@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import SegmentedControl from './SegmentedControl';
 import { MONTH_NAMES, monthLength, startOfDay } from '../dates';
+import { clampNote } from '../recurring';
+import type { RepeatEvery } from '../tasks';
 import { FONT, MODAL_ORIENTATIONS, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
 /**
@@ -18,12 +21,23 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 /** Minutes move in fives — a deadline is never meaningfully 18:37 */
 const MINUTE_STEP = 5;
 
+type RepeatChoice = RepeatEvery | 'never';
+
+const REPEAT_OPTIONS: { value: RepeatChoice; label: string }[] = [
+  { value: 'never', label: 'NEVER' },
+  { value: 'week', label: 'WEEKLY' },
+  { value: 'month', label: 'MONTHLY' },
+  { value: 'year', label: 'YEARLY' },
+];
+
 interface Props {
   visible: boolean;
   /** the deadline being edited, epoch ms */
   value: number;
+  /** how often it comes back, or null for a one-off */
+  repeat: RepeatEvery | null;
   onCancel: () => void;
-  onConfirm: (due: number) => void;
+  onConfirm: (due: number, repeat: RepeatEvery | null) => void;
 }
 
 /** Monday-first weeks, padded with nulls so every row has seven cells */
@@ -36,7 +50,7 @@ function monthCells(year: number, month: number): (number | null)[] {
   return cells;
 }
 
-export default function DueDatePicker({ visible, value, onCancel, onConfirm }: Props) {
+export default function DueDatePicker({ visible, value, repeat, onCancel, onConfirm }: Props) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -45,6 +59,7 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
     year: new Date(value).getFullYear(),
     month: new Date(value).getMonth(),
   }));
+  const [every, setEvery] = useState<RepeatChoice>(repeat ?? 'never');
 
   // Opening is the only moment the sheet should adopt the task's own deadline;
   // re-syncing while it is open would fight whatever is being picked.
@@ -53,7 +68,8 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
     const d = new Date(value);
     setPicked(d);
     setCursor({ year: d.getFullYear(), month: d.getMonth() });
-  }, [visible, value]);
+    setEvery(repeat ?? 'never');
+  }, [visible, value, repeat]);
 
   const cells = useMemo(() => monthCells(cursor.year, cursor.month), [cursor]);
   const todayStart = startOfDay(Date.now());
@@ -179,6 +195,12 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
             />
           </View>
 
+          <Text style={styles.repeatLabel}>REPEAT</Text>
+          <SegmentedControl options={REPEAT_OPTIONS} value={every} onChange={setEvery} />
+          <Text style={styles.repeatNote}>
+            {(every !== 'never' && clampNote(every, picked.getTime())) || ' '}
+          </Text>
+
           <View style={styles.actions}>
             <Pressable
               onPress={onCancel}
@@ -187,7 +209,7 @@ export default function DueDatePicker({ visible, value, onCancel, onConfirm }: P
               <Text style={styles.ghostText}>CANCEL</Text>
             </Pressable>
             <Pressable
-              onPress={() => onConfirm(picked.getTime())}
+              onPress={() => onConfirm(picked.getTime(), every === 'never' ? null : every)}
               style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
             >
               <Text style={styles.primaryText}>SET</Text>
@@ -345,7 +367,23 @@ const makeStyles = (p: Palette) =>
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: 14,
-      marginBottom: 18,
+      marginBottom: 14,
+    },
+    repeatLabel: {
+      fontSize: 10,
+      fontFamily: FONT.bold,
+      letterSpacing: 1.5,
+      color: p.inkSoft,
+      marginBottom: 8,
+    },
+    /** always one line tall, so the sheet doesn't jump when a hint appears */
+    repeatNote: {
+      fontSize: 11,
+      lineHeight: 15,
+      fontFamily: FONT.regular,
+      color: p.inkSoft,
+      marginTop: 6,
+      marginBottom: 12,
     },
     timeLabel: {
       flex: 1,

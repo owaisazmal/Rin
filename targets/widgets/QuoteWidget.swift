@@ -25,15 +25,14 @@ struct QuoteWidgetView: View {
 
     switch family {
     case .accessoryRectangular:
-      let text = Text(quote ?? "Keep going.").font(.system(size: 13, weight: .medium))
-      // a long quote gives up the heading for a fourth line before it shrinks
+      let full = quote ?? "Keep going."
+      let lead = Self.firstSentence(full)
+      // a long quote gives up the heading, then everything after its first sentence
       ViewThatFits(in: .vertical) {
-        VStack(alignment: .leading, spacing: 1) {
-          Text("DISCIPLINE").font(.system(size: 11, weight: .bold)).kerning(1)
-          text
-        }
-        text
-        text.lineLimit(4).minimumScaleFactor(0.9)
+        lockLines(full, heading: true)
+        lockLines(full, heading: false)
+        lockLines(lead, heading: true)
+        lockLines(lead, heading: false).lineLimit(4).minimumScaleFactor(0.9)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .widgetAccentable()
@@ -69,6 +68,21 @@ struct QuoteWidgetView: View {
       .padding(family == .systemSmall ? 12 : 16)
       .widgetBackground(theme.bg)
     }
+  }
+
+  private func lockLines(_ quote: String, heading: Bool) -> some View {
+    VStack(alignment: .leading, spacing: 1) {
+      if heading {
+        Text("DISCIPLINE").font(.system(size: 11, weight: .bold)).kerning(1)
+      }
+      Text(quote).font(.system(size: 13, weight: .medium))
+    }
+  }
+
+  /// "One. Two." → "One." A quote's opening sentence reads whole on its own.
+  static func firstSentence(_ quote: String) -> String {
+    guard let end = quote.range(of: ". ") else { return quote }
+    return String(quote[..<end.lowerBound]) + "."
   }
 }
 

@@ -13,6 +13,7 @@ import type { BackupStatus } from '../hooks/useAutoBackup';
 import { HistoryFilter } from '../history';
 import type { PlannerLayout } from '../layout';
 import { ChartType, NotificationPrefs } from '../settings';
+import type { QuotePrefs } from '../quotes';
 
 type Screen = 'planner' | 'settings' | 'history' | 'summary' | 'backup' | 'intro';
 type BackupVariant = 'onboarding' | 'standalone';
@@ -28,6 +29,8 @@ export default function Navigator({
   onChangeLayout,
   notifications,
   onChangeNotifications,
+  quotes,
+  onChangeQuotes,
   onBackedUp,
   onRetryBackup,
   backupHolds,
@@ -50,6 +53,8 @@ export default function Navigator({
   onChangeLayout: (change: (prev: PlannerLayout) => PlannerLayout) => void;
   notifications: NotificationPrefs;
   onChangeNotifications: (change: (prev: NotificationPrefs) => NotificationPrefs) => void;
+  quotes: QuotePrefs;
+  onChangeQuotes: (change: (prev: QuotePrefs) => QuotePrefs) => void;
   onBackedUp: (code: string, outcome: BackupOutcome) => void;
   /** takes the park off everything stuck and offers the lot again, now */
   onRetryBackup: () => Promise<void>;
@@ -183,6 +188,7 @@ export default function Navigator({
           layout={layout}
           onChangeLayout={onChangeLayout}
           notifications={notifications}
+          quotes={quotes}
           onOpenSettings={() => setScreen('settings')}
           onOpenHistory={openHistory}
           onOpenSummary={openSummary}
@@ -245,6 +251,8 @@ export default function Navigator({
           onForgetBackup={onForgetBackup}
           notifications={notifications}
           onChangeNotifications={onChangeNotifications}
+          quotes={quotes}
+          onChangeQuotes={onChangeQuotes}
           onClose={() => setScreen('planner')}
         />
       </ScreenLayer>

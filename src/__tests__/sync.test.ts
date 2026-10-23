@@ -300,6 +300,15 @@ describe('round trips', () => {
     await expect(pullTasks(CODE)).resolves.toEqual({ ok: true, value: tasks });
   });
 
+  it('brings a repeat rule back exactly', async () => {
+    const recurring: Task[] = [
+      { ...tasks[0], repeat: { every: 'month', day: 31 } },
+      { ...alsoOpen, repeat: { every: 'week' } },
+    ];
+    await pushTasks(CODE, recurring);
+    await expect(pullTasks(CODE)).resolves.toEqual({ ok: true, value: recurring });
+  });
+
   it('lists the months a backup holds, newest first, without decrypting them', async () => {
     await pushMonth(CODE, 2026, 0, month);
     await pushMonth(CODE, 2026, 8, month);
@@ -666,6 +675,22 @@ describe('restoring onto another phone', () => {
     await expect(loadMonth(2026, 8)).resolves.toEqual(month);
     await expect(loadMonth(2026, 0)).resolves.toEqual(month);
     await expect(loadTasks()).resolves.toEqual(tasks);
+  });
+
+  it('restores a recurring series with its rule and its finished occurrences', async () => {
+    const series: Task[] = [
+      { ...tasks[0], repeat: { every: 'year', day: 29 } },
+      { ...finishedIn2024, text: tasks[0].text },
+      { ...finishedIn2025, text: tasks[0].text },
+    ];
+    await saveMonth(2026, 8, month);
+    await saveTasks(series);
+    await backupEverything(CODE);
+
+    mockLocal.clear();
+    await expect(restoreEverything(CODE)).resolves.toMatchObject({ ok: true, deadlines: 'restored' });
+    await expect(loadTasks()).resolves.toEqual(series);
+    expect(JSON.parse(mockLocal.get(TASKS_BLOB)!)[0].repeat).toEqual({ every: 'year', day: 29 });
   });
 
   it('reports a code with no backup behind it', async () => {

@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Planned, planReminders, syncReminders } from '../notifications';
+import { Planned, notificationsBlocked, planReminders, syncReminders } from '../notifications';
 import { NotificationPrefs, ReminderSlot, defaultNotifications } from '../settings';
 import { CellState, Habit, cellKey } from '../types';
 import type { Task } from '../tasks';
@@ -136,6 +136,13 @@ describe('planReminders', () => {
     expect(planned.map((n) => n.date.getTime())).toEqual([at(1, 9, 0)]);
   });
 
+  it('drops the missed-deadline nudge on its own when that is switched off', () => {
+    const missed = task({ due: NOW.getTime() - HOUR });
+    const planned = deadlinesOf(plan({ overdue: false }, { tasks: [missed, task({ id: '1' })] }));
+    expect(planned).toHaveLength(5);
+    expect(planned.every((n) => !/Past due/.test(n.body))).toBe(true);
+  });
+
   it('drops every deadline reminder, missed ones included, when switched off', () => {
     const tasks = [task(), task({ id: '1', due: NOW.getTime() - HOUR })];
     expect(deadlinesOf(plan({ deadlines: false }, { tasks }))).toHaveLength(0);
@@ -167,6 +174,22 @@ describe('planReminders', () => {
   });
 });
 
+describe('notificationsBlocked', () => {
+  it('is true only once the OS has refused and will not ask again', async () => {
+    native.getPermissionsAsync.mockResolvedValueOnce({ granted: false, canAskAgain: false } as never);
+    await expect(notificationsBlocked()).resolves.toBe(true);
+    native.getPermissionsAsync.mockResolvedValueOnce({ granted: false, canAskAgain: true } as never);
+    await expect(notificationsBlocked()).resolves.toBe(false);
+    native.getPermissionsAsync.mockResolvedValueOnce({ granted: true, canAskAgain: true } as never);
+    await expect(notificationsBlocked()).resolves.toBe(false);
+  });
+
+  it('says nothing when the OS cannot be asked', async () => {
+    native.getPermissionsAsync.mockRejectedValueOnce(new Error('no module'));
+    await expect(notificationsBlocked()).resolves.toBe(false);
+  });
+});
+
 describe('syncReminders', () => {
   const sync = (prefs: Partial<NotificationPrefs>, tasks: Task[] = [task()]) =>
     syncReminders({
@@ -189,6 +212,7 @@ describe('syncReminders', () => {
   it('never asks when what is switched on has nothing to send', async () => {
     await sync({ slots: [slot(12, 30, false)], deadlines: false });
     await sync({ slots: [slot(12, 30, false)] }, []);
+    await sync({ habits: false, overdue: false }, [task({ due: NOW.getTime() - HOUR })]);
     expect(native.getPermissionsAsync).not.toHaveBeenCalled();
     expect(native.requestPermissionsAsync).not.toHaveBeenCalled();
   });

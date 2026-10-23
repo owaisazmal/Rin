@@ -68,13 +68,15 @@ export function useWidgetSync(
   data: MonthData,
   yearMonths: YearMonthSummary[] | null,
   mode: ThemeMode,
-  tasks: Task[]
+  tasks: Task[],
+  quotes: string[]
 ) {
   useDebouncedPush(
     enabled && yearMonths
-      ? () => syncWidgets(buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks))
+      ? () =>
+          syncWidgets(buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks, quotes))
       : null,
-    [enabled, data, year, month, yearMonths, mode, tasks]
+    [enabled, data, year, month, yearMonths, mode, tasks, quotes]
   );
 }
 

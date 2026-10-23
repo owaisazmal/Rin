@@ -53,6 +53,7 @@ import {
 import { damagedNotice } from './backupWording';
 import type { SummarySource } from './SummaryScreen';
 import { ChartType, NotificationPrefs } from '../settings';
+import { QuotePrefs, activeQuotes } from '../quotes';
 import { RAIL_TOP, SPLIT_MAX, plannerFit, usesSideRail } from '../fit';
 import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 import { CardKind, CardRef, cardItemsIn } from '../types';
@@ -83,6 +84,7 @@ export default function PlannerScreen({
   layout,
   onChangeLayout,
   notifications,
+  quotes,
   onOpenSettings,
   onOpenHistory,
   onOpenSummary,
@@ -97,6 +99,8 @@ export default function PlannerScreen({
   onChangeLayout: (change: (prev: PlannerLayout) => PlannerLayout) => void;
   /** when reminders go out; a change reschedules them */
   notifications: NotificationPrefs;
+  /** which quotes the card and the widgets rotate through */
+  quotes: QuotePrefs;
   onOpenSettings: () => void;
   onOpenHistory: (filter?: HistoryFilter) => void;
   /** opens the summary of the month on screen */
@@ -209,7 +213,8 @@ export default function PlannerScreen({
   // Both, not just the month: pushing before the deadlines have loaded would
   // put a snapshot on the home screen saying nothing is due, and only correct
   // it on the next edit.
-  useWidgetSync(loaded && tasksLoaded, year, month, data, yearMonths, mode, tasks);
+  const quoteList = useMemo(() => activeQuotes(quotes), [quotes]);
+  useWidgetSync(loaded && tasksLoaded, year, month, data, yearMonths, mode, tasks, quoteList);
   useReminderSync(loaded && tasksLoaded, data, today, tasks, notifications);
 
   const { chartAnim, monthAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
@@ -345,7 +350,7 @@ export default function PlannerScreen({
           />
         );
       case 'quote':
-        return <QuoteCard key={slot.id} date={now} />;
+        return <QuoteCard key={slot.id} date={now} quotes={quoteList} />;
     }
     if (!slot.custom) return null;
     const card: CardRef = { id: slot.id, ...slot.custom };
@@ -547,9 +552,10 @@ export default function PlannerScreen({
         <DueDatePicker
           visible={editingDue !== null}
           value={findTask(editingDue ?? '')?.due ?? nowMs}
+          repeat={findTask(editingDue ?? '')?.repeat?.every ?? null}
           onCancel={() => setEditingDue(null)}
-          onConfirm={(due) => {
-            if (editingDue) setTaskDue(editingDue, due);
+          onConfirm={(due, repeat) => {
+            if (editingDue) setTaskDue(editingDue, due, repeat);
             setEditingDue(null);
           }}
         />

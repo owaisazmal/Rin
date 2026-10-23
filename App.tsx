@@ -14,6 +14,7 @@ import {
 import { forgetLaunch } from './src/hooks/backupRuns';
 import { useAutoBackup } from './src/hooks/useAutoBackup';
 import type { PlannerLayout } from './src/layout';
+import type { QuotePrefs } from './src/quotes';
 import { loadIntroSeen, saveIntroSeen } from './src/onboarding';
 import {
   NotificationPrefs,
@@ -242,6 +243,12 @@ export default function App() {
     []
   );
 
+  const changeQuotes = useCallback(
+    (change: (prev: QuotePrefs) => QuotePrefs) =>
+      setSettings((prev) => (prev ? { ...prev, quotes: change(prev.quotes) } : prev)),
+    []
+  );
+
   // re-renders when the OS appearance changes, which is what `system` follows
   const osScheme = useColorScheme();
   const preference = settings?.theme ?? 'dark';
@@ -279,6 +286,8 @@ export default function App() {
             onChangeLayout={changeLayout}
             notifications={settings.notifications}
             onChangeNotifications={changeNotifications}
+            quotes={settings.quotes}
+            onChangeQuotes={changeQuotes}
             onBackedUp={(_code, outcome) => {
               setHasCode(true);
               /**

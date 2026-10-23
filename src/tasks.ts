@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { nextDue, parseRepeat } from './recurring';
 import type { VouchedRead, VouchedValue } from './storage';
 
 /**
@@ -24,6 +25,16 @@ export interface Task {
    * treats a missing value as "finished, time unknown" rather than guessing.
    */
   completedAt?: number;
+  /** only the open occurrence carries it; absent on a one-off deadline */
+  repeat?: Repeat;
+}
+
+export type RepeatEvery = 'week' | 'month' | 'year';
+
+export interface Repeat {
+  every: RepeatEvery;
+  /** day of the month for monthly and yearly, so a clamped 31st goes back to the 31st */
+  day?: number;
 }
 
 /** A deadline's own field limit; the group in `types.ts` explains the sizing. */
@@ -52,12 +63,33 @@ export function parseTasks(raw: unknown): Task[] {
         Number.isFinite(t.due) &&
         typeof t.done === 'boolean'
     )
-    .map((t) => ({
-      ...t,
-      // an unfinished task has no completion time, whatever an older or
-      // hand-edited record might claim
-      completedAt: t.done && typeof t.completedAt === 'number' ? t.completedAt : undefined,
-    }));
+    .map(({ repeat, ...t }) => {
+      const rule = parseRepeat(repeat, t.due);
+      return {
+        ...t,
+        // an unfinished task has no completion time, whatever an older or
+        // hand-edited record might claim
+        completedAt: t.done && typeof t.completedAt === 'number' ? t.completedAt : undefined,
+        ...(rule && { repeat: rule }),
+      };
+    });
+}
+
+/** Ticks or un-ticks a deadline; ticking a recurring one adds its next occurrence */
+export function toggleDone(tasks: Task[], id: string, now: number): Task[] {
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return tasks;
+  if (task.done || !task.repeat) {
+    return tasks.map((t) =>
+      t === task ? { ...t, done: !t.done, completedAt: t.done ? undefined : now } : t
+    );
+  }
+  // the open row keeps its id and rule and moves on; the finished one is filed under a new id
+  const { repeat, ...finished } = task;
+  return [
+    ...tasks.map((t) => (t === task ? { ...t, due: nextDue(t.due, repeat, now) } : t)),
+    { ...finished, id: nextTaskId(tasks), done: true, completedAt: now },
+  ];
 }
 
 export async function loadTasks(): Promise<Task[]> {

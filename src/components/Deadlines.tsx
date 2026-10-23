@@ -5,6 +5,7 @@ import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
 import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } from '../deadlines';
+import { repeatLabel } from '../recurring';
 import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /**
@@ -142,6 +143,7 @@ export default function Deadlines({
           {ordered.map((t) => {
             const tone = colourFor(urgencyOf(t, now), palette);
             const fill = pressureOf(t.due, now);
+            const repeats = t.repeat ? repeatLabel(t.repeat.every) : null;
             return (
               <View key={t.id} style={styles.row}>
                 <View style={styles.rowTop}>
@@ -188,7 +190,7 @@ export default function Deadlines({
                   <Pressable
                     hitSlop={6}
                     accessibilityRole="button"
-                    accessibilityLabel={`Due ${dueLabel(t.due, now)}. Change deadline`}
+                    accessibilityLabel={`Due ${dueLabel(t.due, now)}${repeats ? `, repeats ${repeats}` : ''}. Change deadline`}
                     onPress={() => onEditDue(t.id)}
                     style={({ pressed }) => [
                       styles.dueChip,
@@ -209,6 +211,11 @@ export default function Deadlines({
                   >
                     {timeLeftLabel(t.due, now)}
                   </Text>
+                  {repeats && (
+                    <Text style={styles.repeats} maxFontSizeMultiplier={SCALE.figure}>
+                      {`↻ ${repeats}`}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.track}>
@@ -353,6 +360,11 @@ const makeStyles = (p: Palette) =>
       fontSize: 11,
       fontFamily: FONT.bold,
       letterSpacing: 0.3,
+    },
+    repeats: {
+      fontSize: 11,
+      fontFamily: FONT.semibold,
+      color: p.inkSoft,
     },
     /** where the finished ones went, since they are no longer listed above */
     historyLink: {

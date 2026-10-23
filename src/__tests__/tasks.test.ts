@@ -5,6 +5,7 @@ import {
   readTasksForEditing,
   readTasksVouched,
   saveTasks,
+  toggleDone,
   vouchTasksValue,
 } from '../tasks';
 import type { Task } from '../tasks';
@@ -102,6 +103,25 @@ describe('loadTasks', () => {
     const [task] = await loadTasks();
     expect(task.completedAt).toBeUndefined();
   });
+
+  it('reads a record from before repeats existed as a one-off', async () => {
+    stored([valid]);
+    const [task] = await loadTasks();
+    expect(task).not.toHaveProperty('repeat');
+  });
+
+  it('keeps a repeat rule', async () => {
+    stored([{ ...valid, repeat: { every: 'month', day: 31 } }]);
+    const [task] = await loadTasks();
+    expect(task.repeat).toEqual({ every: 'month', day: 31 });
+  });
+
+  it('keeps the deadline but drops a repeat rule it cannot read', async () => {
+    stored([{ ...valid, repeat: { every: 'fortnight' } }]);
+    const [task] = await loadTasks();
+    expect(task.id).toBe('0');
+    expect(task).not.toHaveProperty('repeat');
+  });
 });
 
 describe('saveTasks', () => {
@@ -114,6 +134,62 @@ describe('saveTasks', () => {
   it('swallows a failed write rather than surfacing it', async () => {
     store.setItem.mockRejectedValue(new Error('disk full'));
     await expect(saveTasks([])).resolves.toBeUndefined();
+  });
+});
+
+describe('toggleDone', () => {
+  const NOW = new Date(2026, 9, 22, 12).getTime();
+  const due = new Date(2026, 9, 31, 18).getTime();
+
+  it('ticks a one-off deadline exactly as before', () => {
+    const list: Task[] = [{ ...valid, due }];
+    expect(toggleDone(list, '0', NOW)).toEqual([{ ...valid, due, done: true, completedAt: NOW }]);
+  });
+
+  it('un-ticks a finished deadline and forgets when it was finished', () => {
+    const list: Task[] = [{ ...valid, due, done: true, completedAt: NOW }];
+    const [task] = toggleDone(list, '0', NOW + 1);
+    expect(task.done).toBe(false);
+    expect(task.completedAt).toBeUndefined();
+  });
+
+  it('leaves the list alone for an id it does not hold', () => {
+    const list: Task[] = [{ ...valid, due }];
+    expect(toggleDone(list, '9', NOW)).toBe(list);
+  });
+
+  it('moves a recurring deadline on and files the finished occurrence', () => {
+    const list: Task[] = [
+      { ...valid, id: '4', due, repeat: { every: 'month', day: 31 } },
+      { ...valid, id: '7', text: 'Other', due },
+    ];
+    const next = toggleDone(list, '4', NOW);
+    expect(next).toEqual([
+      // same row, same rule, next date: 31 Oct clamps to 30 Nov
+      { ...valid, id: '4', due: new Date(2026, 10, 30, 18).getTime(), repeat: { every: 'month', day: 31 } },
+      list[1],
+      { ...valid, id: '8', due, done: true, completedAt: NOW },
+    ]);
+    // the finished copy carries no rule, so nothing else can spawn from it
+    expect(next[2]).not.toHaveProperty('repeat');
+  });
+
+  it('keeps every finished occurrence as its own record', () => {
+    let list: Task[] = [{ ...valid, due, repeat: { every: 'week' } }];
+    for (let i = 0; i < 3; i++) list = toggleDone(list, '0', NOW + i * 7 * 24 * 3_600_000);
+    expect(list.map((t) => [t.id, t.done])).toEqual([
+      ['0', false],
+      ['1', true],
+      ['2', true],
+      ['3', true],
+    ]);
+    expect(list.filter((t) => t.done).map((t) => new Date(t.due).getDate())).toEqual([31, 7, 14]);
+  });
+
+  it('does not spawn anything when a finished occurrence is un-ticked and ticked again', () => {
+    let list: Task[] = toggleDone([{ ...valid, due, repeat: { every: 'week' } }], '0', NOW);
+    list = toggleDone(toggleDone(list, '1', NOW), '1', NOW);
+    expect(list).toHaveLength(2);
   });
 });
 
@@ -215,6 +291,11 @@ describe('readTasksVouched', () => {
     // the row is all there; clearing a stray finish time off an unfinished task
     // is the parser doing its documented job, not storage losing a deadline
     stored([{ ...valid, done: false, completedAt: 1_800_000_000_000 }]);
+    await expect(readTasksVouched()).resolves.toMatchObject({ status: 'complete' });
+  });
+
+  it('does not call a dropped repeat rule a lost deadline', async () => {
+    stored([{ ...valid, repeat: 'monthly' }]);
     await expect(readTasksVouched()).resolves.toMatchObject({ status: 'complete' });
   });
 

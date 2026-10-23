@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Task, nextTaskId, readTasksForEditing, saveTasks } from '../tasks';
+import { RepeatEvery, Task, nextTaskId, readTasksForEditing, saveTasks, toggleDone } from '../tasks';
+import { repeatFor } from '../recurring';
 import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
 
 /**
@@ -61,7 +62,7 @@ export interface TaskStore {
   vouched: boolean;
   addTask: () => void;
   setTaskText: (id: string, text: string) => void;
-  setTaskDue: (id: string, due: number) => void;
+  setTaskDue: (id: string, due: number, every: RepeatEvery | null) => void;
   toggleTaskDone: (id: string) => void;
   removeTask: (id: string) => void;
   findTask: (id: string) => Task | undefined;
@@ -219,8 +220,15 @@ export function useTasks(): TaskStore {
   );
 
   const setTaskDue = useCallback(
-    (id: string, due: number) => {
-      edit((prev) => prev.map((t) => (t.id === id ? { ...t, due } : t)));
+    (id: string, due: number, every: RepeatEvery | null) => {
+      edit((prev) =>
+        prev.map((t) => {
+          if (t.id !== id) return t;
+          const { repeat: _old, ...rest } = t;
+          const repeat = repeatFor(every, due, t);
+          return repeat ? { ...rest, due, repeat } : { ...rest, due };
+        })
+      );
     },
     [edit]
   );
@@ -237,13 +245,7 @@ export function useTasks(): TaskStore {
    */
   const toggleTaskDone = useCallback(
     (id: string) => {
-      edit((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? { ...t, done: !t.done, completedAt: t.done ? undefined : Date.now() }
-            : t
-        )
-      );
+      edit((prev) => toggleDone(prev, id, Date.now()));
     },
     [edit]
   );

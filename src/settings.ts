@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlannerLayout, defaultLayout, parseLayout } from './layout';
+import { QuotePrefs, defaultQuotePrefs, parseQuotePrefs } from './quotes';
 import type { ColorSchemeName } from 'react-native';
 import type { ThemeMode, ThemePreference } from './theme';
 
 /**
  * What the app remembers about how it is shown: which palette, which chart the
- * tracker opens on, which cards the planner carries below the daily check, and
- * when it sends reminders. Kept apart from the month store because they change for
+ * tracker opens on, which cards the planner carries below the daily check,
+ * when it sends reminders, and which quotes it shows. Kept apart from the month store because they change for
  * different reasons and are read at different times — once at launch here, once
  * per month there.
  */
@@ -29,6 +30,8 @@ export interface NotificationPrefs {
   allDone: boolean;
   deadlines: boolean;
   leads: Record<DeadlineLead, boolean>;
+  /** the one nudge the morning after a deadline is missed */
+  overdue: boolean;
 }
 
 /** 5 a day for 7 days is 35, which fits beside the 28 deadline reminders under iOS's 64 */
@@ -45,6 +48,7 @@ export function defaultNotifications(): NotificationPrefs {
     allDone: true,
     deadlines: true,
     leads: { '3d': true, '1d': true, '3h': true, '1h': true, due: true },
+    overdue: true,
   };
 }
 
@@ -53,6 +57,7 @@ export interface Settings {
   chart: ChartType;
   layout: PlannerLayout;
   notifications: NotificationPrefs;
+  quotes: QuotePrefs;
 }
 
 const SETTINGS_KEY = '@monthly-planning/settings';
@@ -61,6 +66,7 @@ const DEFAULTS: Settings = {
   chart: 'radial',
   layout: defaultLayout(),
   notifications: defaultNotifications(),
+  quotes: defaultQuotePrefs(),
 };
 
 const minutesOf = (s: ReminderSlot) => s.hour * 60 + s.minute;
@@ -95,6 +101,7 @@ export function parseNotifications(raw: unknown): NotificationPrefs {
     leads: Object.fromEntries(
       DEADLINE_LEADS.map((id) => [id, flag(leads[id], d.leads[id])])
     ) as Record<DeadlineLead, boolean>,
+    overdue: flag(p.overdue, d.overdue),
   };
 }
 
@@ -124,6 +131,7 @@ export async function loadSettings(): Promise<Settings> {
       chart: parsed.chart === 'github' ? 'github' : 'radial',
       layout: parseLayout(parsed.layout),
       notifications: parseNotifications(parsed.notifications),
+      quotes: parseQuotePrefs(parsed.quotes),
     };
   } catch {
     return DEFAULTS;

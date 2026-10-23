@@ -51,6 +51,17 @@ struct RadialWidgetView: View {
   @Environment(\.colorScheme) private var scheme
 
   var body: some View {
+    if family == .accessoryCircular {
+      // done bright, missed dimmer, pending faint: shades are all the Lock Screen keeps
+      RadialChart(snapshot: entry.snapshot, theme: .accessory, holeRatio: 0.2)
+        .widgetAccentable()
+        .widgetBackground(.clear)
+    } else {
+      home
+    }
+  }
+
+  @ViewBuilder private var home: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
 
@@ -134,13 +145,20 @@ struct LegendDot: View {
 }
 
 struct RadialTrackerWidget: Widget {
+  private var families: [WidgetFamily] {
+    if #available(iOS 16.0, *) {
+      return [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular]
+    }
+    return [.systemSmall, .systemMedium, .systemLarge]
+  }
+
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "RadialTracker", provider: SnapshotProvider()) { entry in
       RadialWidgetView(entry: entry)
     }
     .configurationDisplayName("Radial Tracker")
     .description("This month as rings: one ring per habit, one wedge per day.")
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .supportedFamilies(families)
     // the view pads itself; the system's own margins on top left the rings
     // at barely half the square
     .contentMarginsDisabled()
@@ -149,14 +167,26 @@ struct RadialTrackerWidget: Widget {
 
 // MARK: - Year tracker
 
-/// Medium only. A full year needs ~53 columns, which at a large widget's width
-/// forces cells down to ~5pt — a stripe of confetti with most of the card empty.
-/// The recent stretch at a legible size says more.
+/// Medium only on the Home Screen. A full year needs ~53 columns, which at a
+/// large widget's width forces cells down to ~5pt — a stripe of confetti with
+/// most of the card empty. The recent stretch at a legible size says more.
 struct YearWidgetView: View {
   var entry: SnapshotEntry
+  @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
 
   var body: some View {
+    if family == .accessoryRectangular {
+      // the last 16 weeks fill the slot; there is no room for a label as well
+      YearGrid(snapshot: entry.snapshot, theme: .accessory, cell: 8, gap: 1.5, weekLimit: 16)
+        .widgetAccentable()
+        .widgetBackground(.clear)
+    } else {
+      home
+    }
+  }
+
+  @ViewBuilder private var home: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
 
@@ -184,13 +214,20 @@ struct YearWidgetView: View {
 }
 
 struct YearTrackerWidget: Widget {
+  private var families: [WidgetFamily] {
+    if #available(iOS 16.0, *) {
+      return [.systemMedium, .accessoryRectangular]
+    }
+    return [.systemMedium]
+  }
+
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "YearTracker", provider: SnapshotProvider()) { entry in
       YearWidgetView(entry: entry)
     }
     .configurationDisplayName("Year Tracker")
     .description("The last 17 weeks, shaded by how much you checked off.")
-    .supportedFamilies([.systemMedium])
+    .supportedFamilies(families)
   }
 }
 
@@ -201,10 +238,23 @@ struct ProgressWidgetView: View {
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
 
+  private var progress: Double {
+    let snap = entry.snapshot
+    return snap.monthTotal > 0 ? Double(snap.monthDone) / Double(snap.monthTotal) : 0
+  }
+
   var body: some View {
+    switch family {
+    case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+      AccessoryProgress(snapshot: entry.snapshot, progress: progress)
+    default:
+      home
+    }
+  }
+
+  @ViewBuilder private var home: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
-    let progress = snap.monthTotal > 0 ? Double(snap.monthDone) / Double(snap.monthTotal) : 0
 
     Group {
       if family == .systemSmall {
@@ -251,13 +301,71 @@ struct ProgressWidgetView: View {
   }
 }
 
+/// Month progress on the Lock Screen: a ring, a bar, or a line above the clock.
+struct AccessoryProgress: View {
+  let snapshot: PlannerSnapshot
+  let progress: Double
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    let snap = snapshot
+
+    Group {
+      switch family {
+      case .accessoryCircular:
+        ZStack {
+          ProgressRing(progress: progress, theme: .accessory, lineWidth: 6)
+          VStack(spacing: -2) {
+            Text("\(snap.monthPct)%")
+              .font(.system(size: 17, weight: .bold, design: .rounded))
+              .lineLimit(1)
+              .minimumScaleFactor(0.6)
+            Text(String(snap.monthName.prefix(3)))
+              .font(.system(size: 10, weight: .bold))
+          }
+          .padding(.horizontal, 9)
+        }
+        .padding(3)
+
+      case .accessoryRectangular:
+        VStack(alignment: .leading, spacing: 2) {
+          AccessoryHeading(text: snap.monthName)
+          Text("\(snap.monthPct)% done")
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+          PressureBar(fraction: progress, tone: .white, theme: .accessory)
+          Text(snap.monthTotal > 0 ? "\(snap.monthDone) of \(snap.monthTotal) checked off" : "No habits yet")
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .minimumScaleFactor(0.9)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      default:
+        Label("\(snap.monthPct)% of \(snap.monthName.capitalized) done", systemImage: "chart.pie.fill")
+      }
+    }
+    .widgetAccentable()
+    .widgetBackground(.clear)
+  }
+}
+
 struct MonthProgressWidget: Widget {
+  private var families: [WidgetFamily] {
+    if #available(iOS 16.0, *) {
+      return [
+        .systemSmall, .systemMedium,
+        .accessoryCircular, .accessoryRectangular, .accessoryInline,
+      ]
+    }
+    return [.systemSmall, .systemMedium]
+  }
+
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "MonthProgress", provider: SnapshotProvider()) { entry in
       ProgressWidgetView(entry: entry)
     }
     .configurationDisplayName("Month Progress")
     .description("How much of this month you've actually checked off.")
-    .supportedFamilies([.systemSmall, .systemMedium])
+    .supportedFamilies(families)
   }
 }

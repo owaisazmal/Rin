@@ -47,11 +47,7 @@ struct StreakWidgetView: View {
 
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 0) {
-        HStack(spacing: 3) {
-          Image(systemName: flame)
-          Text("STREAK").kerning(1)
-        }
-        .font(.system(size: 12, weight: .bold))
+        AccessoryHeading(text: "STREAK", symbol: flame)
         Text(snap.currentStreak == 1 ? "1 day" : "\(snap.currentStreak) days")
           .font(.system(size: 20, weight: .bold, design: .rounded))
         ViewThatFits(in: .horizontal) {
@@ -161,6 +157,15 @@ struct TodayWidgetView: View {
   }
 
   var body: some View {
+    switch family {
+    case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+      AccessoryToday(rows: rows, synced: entry.snapshot.today != nil)
+    default:
+      home
+    }
+  }
+
+  @ViewBuilder private var home: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let rows = self.rows
 
@@ -237,14 +242,102 @@ struct StateGlyph: View {
   }
 }
 
+/// Today's tally on the Lock Screen, and what is still open.
+struct AccessoryToday: View {
+  let rows: [(name: String, state: Int)]
+  /// false when the snapshot isn't this month's, so there is no today to show
+  let synced: Bool
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    let done = rows.filter { $0.state == 1 }.count
+    let open = rows.filter { $0.state == 0 }.map(\.name)
+    let blank = synced ? "No habits yet" : "Open Rin to sync"
+
+    Group {
+      switch family {
+      case .accessoryCircular:
+        ZStack {
+          ProgressRing(
+            progress: rows.isEmpty ? 0 : Double(done) / Double(rows.count),
+            theme: .accessory,
+            lineWidth: 6
+          )
+          VStack(spacing: -2) {
+            Text(rows.isEmpty ? "–" : "\(done)/\(rows.count)")
+              .font(.system(size: 17, weight: .bold, design: .rounded))
+              .lineLimit(1)
+              .minimumScaleFactor(0.6)
+            Text("today").font(.system(size: 10, weight: .bold))
+          }
+          .padding(.horizontal, 9)
+        }
+        .padding(3)
+
+      case .accessoryRectangular:
+        VStack(alignment: .leading, spacing: 1) {
+          AccessoryHeading(text: "TODAY", trailing: rows.isEmpty ? nil : "\(done)/\(rows.count)")
+          if rows.isEmpty {
+            Text(blank).font(.system(size: 13, weight: .medium))
+          } else if open.isEmpty {
+            Label("All done", systemImage: "checkmark.circle.fill")
+              .font(.system(size: 13, weight: .semibold))
+          } else {
+            // three lines fit under the heading; past that the third counts the rest
+            let shown = open.count > 3 ? 2 : open.count
+            ForEach(0..<shown, id: \.self) { i in
+              AccessoryRow(text: open[i], done: false)
+            }
+            if open.count > shown {
+              Text("+\(open.count - shown) more").font(.system(size: 12, weight: .medium))
+            }
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      default:
+        Label(rows.isEmpty ? blank : "\(done) of \(rows.count) done today", systemImage: "checklist")
+      }
+    }
+    .widgetAccentable()
+    .widgetBackground(.clear)
+  }
+}
+
+/// One line of a Lock Screen list: an open or filled circle, then the text.
+struct AccessoryRow: View {
+  let text: String
+  let done: Bool
+
+  var body: some View {
+    HStack(spacing: 4) {
+      Image(systemName: done ? "checkmark.circle.fill" : "circle")
+        .font(.system(size: 11, weight: .semibold))
+      Text(text)
+        .font(.system(size: 13, weight: .medium))
+        .lineLimit(1)
+    }
+  }
+}
+
 struct TodayWidget: Widget {
+  private var families: [WidgetFamily] {
+    if #available(iOS 16.0, *) {
+      return [
+        .systemSmall, .systemMedium, .systemLarge,
+        .accessoryCircular, .accessoryRectangular, .accessoryInline,
+      ]
+    }
+    return [.systemSmall, .systemMedium, .systemLarge]
+  }
+
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "TodayCheck", provider: SnapshotProvider()) { entry in
       TodayWidgetView(entry: entry)
     }
     .configurationDisplayName("Today's Check")
     .description("What you've ticked off today, and what's still open.")
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .supportedFamilies(families)
   }
 }
 
@@ -256,6 +349,15 @@ struct GoalsWidgetView: View {
   @Environment(\.colorScheme) private var scheme
 
   var body: some View {
+    switch family {
+    case .accessoryRectangular, .accessoryInline:
+      AccessoryGoals(goals: entry.snapshot.goals)
+    default:
+      home
+    }
+  }
+
+  @ViewBuilder private var home: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
     let goals = snap.goals
@@ -304,13 +406,53 @@ struct GoalsWidgetView: View {
   }
 }
 
+/// The month's goals on the Lock Screen, counted the way the Home Screen widget counts them.
+struct AccessoryGoals: View {
+  let goals: [PlannerSnapshot.Goal]
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    let written = goals.filter { !$0.text.isEmpty }
+    let done = written.filter(\.done).count
+
+    Group {
+      if family == .accessoryInline {
+        Label(
+          written.isEmpty ? "No goals set" : "\(done) of \(goals.count) goals done",
+          systemImage: "target"
+        )
+      } else {
+        VStack(alignment: .leading, spacing: 1) {
+          AccessoryHeading(text: "KEY GOALS", trailing: written.isEmpty ? nil : "\(done)/\(goals.count)")
+          if written.isEmpty {
+            Text("No goals set yet").font(.system(size: 13, weight: .medium))
+          }
+          ForEach(Array(written.prefix(3).enumerated()), id: \.offset) { _, goal in
+            AccessoryRow(text: goal.text, done: goal.done)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .widgetAccentable()
+    .widgetBackground(.clear)
+  }
+}
+
 struct GoalsWidget: Widget {
+  private var families: [WidgetFamily] {
+    if #available(iOS 16.0, *) {
+      return [.systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
+    }
+    return [.systemMedium, .systemLarge]
+  }
+
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "KeyGoals", provider: SnapshotProvider()) { entry in
       GoalsWidgetView(entry: entry)
     }
     .configurationDisplayName("Key Goals")
     .description("This month's three goals and whether they're done.")
-    .supportedFamilies([.systemMedium, .systemLarge])
+    .supportedFamilies(families)
   }
 }

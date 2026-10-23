@@ -202,6 +202,24 @@ struct ProgressRing: View {
   }
 }
 
+/// The label at the top of a Lock Screen widget.
+struct AccessoryHeading: View {
+  let text: String
+  var symbol: String? = nil
+  var trailing: String? = nil
+
+  var body: some View {
+    HStack(spacing: 3) {
+      if let symbol { Image(systemName: symbol) }
+      Text(text).kerning(1)
+      Spacer(minLength: 2)
+      if let trailing { Text(trailing) }
+    }
+    .font(.system(size: 12, weight: .bold))
+    .lineLimit(1)
+  }
+}
+
 /// The section label used across the widgets — small caps with a leading bar.
 struct WidgetHeading: View {
   let text: String

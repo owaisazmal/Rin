@@ -1,7 +1,6 @@
 import { CellState, KeyGoal, MonthData, cellKey } from '../types';
 import { YearMonthSummary } from '../storage';
 import { ThemeMode } from '../theme';
-import { DISCIPLINE_QUOTES } from '../quotes';
 import { computeStreaks } from '../streaks';
 import { Task } from '../tasks';
 import { pendingTasks } from '../deadlines';
@@ -62,9 +61,9 @@ export interface WidgetSnapshot {
   yearHabitCounts: number[];
   yearTotal: number;
   /**
-   * The whole list, not just today's. The quote widget picks its own by
-   * day-of-year, so it rolls over at midnight even if the app is never opened —
-   * and `quotes.ts` stays the single source of truth.
+   * The whole active list (`activeQuotes`), not just today's. The quote widget
+   * picks its own by day-of-year, so it rolls over at midnight even if the app is
+   * never opened — and `quotes.ts` stays the single source of truth.
    */
   quotes: string[];
   /**
@@ -107,7 +106,8 @@ export function buildSnapshot(
   yearMonths: YearMonthSummary[],
   now: Date,
   theme: ThemeMode,
-  tasks: Task[]
+  tasks: Task[],
+  quotes: string[]
 ): WidgetSnapshot {
   const daysInMonth = monthLength(year, month);
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
@@ -167,7 +167,7 @@ export function buildSnapshot(
     yearMissed,
     yearHabitCounts,
     yearTotal,
-    quotes: DISCIPLINE_QUOTES,
+    quotes,
     tasks: pendingTasks(tasks)
       .slice(0, MAX_WIDGET_TASKS)
       .map((t) => ({ text: t.text.trim(), due: t.due })),

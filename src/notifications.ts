@@ -111,7 +111,12 @@ export interface Planned {
  * until the allowance runs out. A task that doesn't fit simply gets its
  * reminders on the next sync, once the ones ahead of it have fired.
  */
-function planDeadlines(tasks: Task[], now: Date, leads: Record<DeadlineLead, boolean>): Planned[] {
+function planDeadlines(
+  tasks: Task[],
+  now: Date,
+  leads: Record<DeadlineLead, boolean>,
+  overdue: boolean
+): Planned[] {
   const nowMs = now.getTime();
   const planned: Planned[] = [];
   const run = LEADS.filter((lead) => leads[lead.id]);
@@ -121,6 +126,7 @@ function planDeadlines(tasks: Task[], now: Date, leads: Record<DeadlineLead, boo
 
     // Already missed: one nag the next morning, not a replay of the run-up.
     if (task.due <= nowMs) {
+      if (!overdue) continue;
       const at = new Date(now);
       at.setHours(OVERDUE_HOUR, 0, 0, 0);
       if (at.getTime() <= nowMs) at.setDate(at.getDate() + 1);
@@ -175,6 +181,16 @@ async function ensurePermission(): Promise<boolean> {
   }
 }
 
+/** True once the OS has refused and won't let the app ask again */
+export async function notificationsBlocked(): Promise<boolean> {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    return !current.granted && !current.canAskAgain;
+  } catch {
+    return false;
+  }
+}
+
 function pendingCount(habits: Habit[], grid: Record<string, CellState>, day: number): number {
   return habits.filter((h) => (grid[cellKey(day, h.id)] ?? 0) === 0).length;
 }
@@ -215,7 +231,7 @@ interface ReminderInput {
 /** Everything the schedule should hold right now, deadlines first */
 export function planReminders(opts: ReminderInput): Planned[] {
   const { habits, grid, today, tasks, now, prefs } = opts;
-  const planned = prefs.deadlines ? planDeadlines(tasks, now, prefs.leads) : [];
+  const planned = prefs.deadlines ? planDeadlines(tasks, now, prefs.leads, prefs.overdue) : [];
   const times = prefs.habits ? ringTimes(prefs.slots) : [];
   if (habits.length === 0 || times.length === 0) return planned;
 

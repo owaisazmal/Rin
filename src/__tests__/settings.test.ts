@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultLayout } from '../layout';
+import { defaultQuotePrefs } from '../quotes';
 import {
   MAX_SLOTS,
   defaultNotifications,
@@ -20,6 +21,7 @@ const DEFAULTS = {
   chart: 'radial',
   layout: defaultLayout(),
   notifications: defaultNotifications(),
+  quotes: defaultQuotePrefs(),
 };
 
 describe('loadSettings', () => {
@@ -116,6 +118,7 @@ describe('notification settings', () => {
       allDone: true,
       deadlines: true,
       leads: { '3d': true, '1d': true, '3h': true, '1h': true, due: true },
+      overdue: true,
     });
   });
 
@@ -132,6 +135,7 @@ describe('notification settings', () => {
       allDone: false,
       deadlines: true,
       leads: { '3d': false, '1d': true, '3h': false, '1h': true, due: false },
+      overdue: false,
     };
     store.getItem.mockResolvedValue(JSON.stringify({ theme: 'dark', notifications }));
     await expect(loadSettings()).resolves.toEqual({ ...DEFAULTS, notifications });
@@ -139,7 +143,13 @@ describe('notification settings', () => {
 
   it('fall back one field at a time', () => {
     expect(
-      parseNotifications({ habits: 'no', allDone: false, deadlines: 0, leads: { '1h': false, x: true } })
+      parseNotifications({
+        habits: 'no',
+        allDone: false,
+        deadlines: 0,
+        leads: { '1h': false, x: true },
+        overdue: 'yes',
+      })
     ).toEqual({
       ...defaultNotifications(),
       allDone: false,
@@ -199,5 +209,18 @@ describe('placeSlot', () => {
   it('adds nothing past the cap', () => {
     const full = Array.from({ length: MAX_SLOTS }, (_, i) => ({ on: true, hour: 8 + i, minute: 0 }));
     expect(placeSlot(full, null, 22, 0)).toBe(full);
+  });
+});
+
+describe('quote settings', () => {
+  it('give settings saved before custom quotes the built-in list', async () => {
+    store.getItem.mockResolvedValue(JSON.stringify({ theme: 'dark', chart: 'radial' }));
+    expect((await loadSettings()).quotes).toEqual({ source: 'builtin', custom: [] });
+  });
+
+  it('read stored quotes back through loadSettings', async () => {
+    const quotes = { source: 'mine', custom: ['One step.', 'Then another.'] };
+    store.getItem.mockResolvedValue(JSON.stringify({ theme: 'dark', quotes }));
+    await expect(loadSettings()).resolves.toEqual({ ...DEFAULTS, quotes });
   });
 });

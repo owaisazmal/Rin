@@ -7,6 +7,7 @@ import {
 } from '../history';
 import type { HistoryDay } from '../history';
 import type { MonthRecord } from '../storage';
+import { toggleDone } from '../tasks';
 import type { Task } from '../tasks';
 import { emptyMonthData } from '../types';
 import type { CellState } from '../types';
@@ -125,6 +126,25 @@ describe('buildHistory', () => {
     const t = task({ text: '  ', completedAt: at(2026, 8, 12, 9) });
     const [day] = buildHistory([], [t], NOW);
     expect(day.deadlines[0].text).toBe('Untitled task');
+  });
+
+  it('shows each finished occurrence of a recurring deadline on its own', () => {
+    let tasks = [task({ text: 'Report', done: false, due: at(2026, 8, 4, 17), repeat: { every: 'week' } })];
+    tasks = toggleDone(tasks, '0', at(2026, 8, 4, 9));
+    tasks = toggleDone(tasks, '0', at(2026, 8, 12, 9)); // 11 Sep, a day late
+    const days = buildHistory([], tasks, NOW);
+    expect(days.map((d) => [d.day, d.deadlines])).toEqual([
+      [12, [{ text: 'Report', due: at(2026, 8, 11, 17), completedAt: at(2026, 8, 12, 9), late: true }]],
+      [4, [{ text: 'Report', due: at(2026, 8, 4, 17), completedAt: at(2026, 8, 4, 9), late: false }]],
+    ]);
+  });
+
+  it('keeps two occurrences finished on the same day apart', () => {
+    let tasks = [task({ text: 'Report', done: false, due: at(2026, 8, 4, 17), repeat: { every: 'week' } })];
+    tasks = toggleDone(tasks, '0', at(2026, 8, 10, 9));
+    tasks = toggleDone(tasks, '0', at(2026, 8, 10, 10));
+    const [day] = buildHistory([], tasks, NOW);
+    expect(day.deadlines.map((e) => e.due)).toEqual([at(2026, 8, 4, 17), at(2026, 8, 11, 17)]);
   });
 });
 

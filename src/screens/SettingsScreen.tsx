@@ -1,13 +1,26 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  AppState,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SectionHeader from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import ThemeIcon from '../components/ThemeIcon';
 import ThemeBackdrop from '../components/ThemeBackdrop';
 import TimePicker from '../components/TimePicker';
+import QuoteEditor from '../components/QuoteEditor';
 import { CheckGlyph, CloseGlyph } from '../components/Glyphs';
 import { DeadlineLead, MAX_SLOTS, NotificationPrefs, placeSlot } from '../settings';
+import { DISCIPLINE_QUOTES, MAX_CUSTOM_QUOTES, QuotePrefs, QuoteSource, placeQuote } from '../quotes';
+import { notificationsBlocked } from '../notifications';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
@@ -37,6 +50,22 @@ const LEAD_OPTIONS: { id: DeadlineLead; label: string; spoken: string }[] = [
   { id: '1h', label: '1 HR', spoken: 'One hour before' },
   { id: 'due', label: 'DUE', spoken: 'When it is due' },
 ];
+
+const SOURCE_OPTIONS = [
+  { value: 'builtin' as QuoteSource, label: 'BUILT-IN' },
+  { value: 'mine' as QuoteSource, label: 'MINE' },
+  { value: 'both' as QuoteSource, label: 'BOTH' },
+] as const;
+
+function quoteSummary({ source, custom }: QuotePrefs): string {
+  const builtIn = DISCIPLINE_QUOTES.length;
+  if (source === 'builtin') return `The ${builtIn} that come with Rin, one a day`;
+  if (custom.length === 0) return 'The built-in ones until you add your own';
+  if (source === 'mine') {
+    return custom.length === 1 ? 'Your one quote, every day' : `Your ${custom.length}, one a day`;
+  }
+  return `${builtIn} built-in and ${custom.length} of yours, one a day`;
+}
 
 /** where a new reminder's picker starts */
 const NEW_SLOT = { hour: 9, minute: 0 };
@@ -98,6 +127,9 @@ interface Props {
   /** when reminders go out; held in App with the rest of the settings */
   notifications: NotificationPrefs;
   onChangeNotifications: (change: (prev: NotificationPrefs) => NotificationPrefs) => void;
+  /** which quotes the planner's card shows, and the user's own */
+  quotes: QuotePrefs;
+  onChangeQuotes: (change: (prev: QuotePrefs) => QuotePrefs) => void;
   onClose: () => void;
 }
 
@@ -122,6 +154,8 @@ export default function SettingsScreen({
   onForgetBackup,
   notifications,
   onChangeNotifications: change,
+  quotes,
+  onChangeQuotes,
   onClose,
 }: Props) {
   const { mode, preference, palette, setPreference } = useTheme();
@@ -130,6 +164,42 @@ export default function SettingsScreen({
   // which slot's time is being set: an index, 'new' for an added one, or null
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const editSlot = typeof editing === 'number' ? notifications.slots[editing] : NEW_SLOT;
+
+  // rechecked on return to the app, which is how someone comes back from the system settings
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => {
+    const check = () => notificationsBlocked().then(setBlocked);
+    check();
+    // again once the reminder sync has had its say, since a silent refusal comes back from there
+    const later = setTimeout(check, 2500);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
+    });
+    return () => {
+      clearTimeout(later);
+      sub.remove();
+    };
+  }, [notifications]);
+  const anyOn =
+    (notifications.habits && notifications.slots.some((s) => s.on)) || notifications.deadlines;
+
+  // which of the user's quotes is being written: an index, 'new', or null
+  const [writing, setWriting] = useState<number | 'new' | null>(null);
+  const removeQuote = (text: string) =>
+    Alert.alert(
+      'Remove this quote?',
+      `“${text}”`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () =>
+            onChangeQuotes((q) => ({ ...q, custom: q.custom.filter((c) => c !== text) })),
+        },
+      ],
+      { cancelable: true }
+    );
   /**
    * The card is told what the backup holds only when there is something this
    * screen could do about the answer. Without a handler there is no button to
@@ -397,6 +467,27 @@ export default function SettingsScreen({
 
         <SectionHeader title="NOTIFICATIONS" />
         <View style={styles.card}>
+          {blocked && anyOn ? (
+            <>
+              <Text style={[styles.emptyTitle, styles.alertTitle]}>Notifications are off</Text>
+              <Text style={[styles.emptyBody, styles.alertBody]}>
+                This {device()} isn’t letting Rin send them, so none of the reminders below will
+                arrive.
+              </Text>
+              <Pressable
+                onPress={() => Linking.openSettings()}
+                style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Text
+                  style={[styles.ghostText, styles.retryText]}
+                  maxFontSizeMultiplier={SCALE.heading}
+                >
+                  OPEN SETTINGS
+                </Text>
+              </Pressable>
+              <View style={styles.divider} />
+            </>
+          ) : null}
           <ToggleRow
             styles={styles}
             palette={palette}
@@ -490,7 +581,7 @@ export default function SettingsScreen({
             styles={styles}
             palette={palette}
             title="Deadline reminders"
-            sub="Before each deadline, and the morning after a missed one"
+            sub="Before each deadline"
             on={notifications.deadlines}
             onPress={() => change((p) => ({ ...p, deadlines: !p.deadlines }))}
           />
@@ -524,6 +615,18 @@ export default function SettingsScreen({
               })}
             </View>
           ) : null}
+          {notifications.deadlines ? (
+            <View style={styles.missedRow}>
+              <ToggleRow
+                styles={styles}
+                palette={palette}
+                title="Missed deadlines"
+                sub="One more nudge the morning after"
+                on={notifications.overdue}
+                onPress={() => change((p) => ({ ...p, overdue: !p.overdue }))}
+              />
+            </View>
+          ) : null}
         </View>
 
         <TimePicker
@@ -536,6 +639,82 @@ export default function SettingsScreen({
             const index = editing === 'new' ? null : editing;
             change((p) => ({ ...p, slots: placeSlot(p.slots, index, hour, minute) }));
             setEditing(null);
+          }}
+        />
+
+        <SectionHeader title="QUOTES" />
+        <View style={styles.card}>
+          <View style={styles.quoteHead}>
+            <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+              Daily quote
+            </Text>
+            <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+              {quoteSummary(quotes)}
+            </Text>
+          </View>
+          <SegmentedControl
+            options={SOURCE_OPTIONS}
+            value={quotes.source}
+            onChange={(source) => onChangeQuotes((q) => ({ ...q, source }))}
+            verticalPadding={9}
+          />
+          {quotes.custom.map((text, i) => (
+            <View key={text} style={[styles.slotRow, styles.quoteRow]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Edit quote: ${text}`}
+                onPress={() => setWriting(i)}
+                style={({ pressed }) => [styles.quoteText, pressed && { opacity: 0.6 }]}
+              >
+                <Text
+                  style={[styles.quoteLine, quotes.source === 'builtin' && styles.off]}
+                  maxFontSizeMultiplier={SCALE.row}
+                  numberOfLines={3}
+                >
+                  “{text}”
+                </Text>
+              </Pressable>
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove quote: ${text}`}
+                onPress={() => removeQuote(text)}
+                style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+              >
+                <CloseGlyph color={palette.inkSoft} size={13} />
+              </Pressable>
+            </View>
+          ))}
+          {quotes.custom.length < MAX_CUSTOM_QUOTES ? (
+            <Pressable
+              onPress={() => setWriting('new')}
+              style={({ pressed }) => [styles.addBtn, styles.addQuote, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.ghostText} maxFontSizeMultiplier={SCALE.heading}>
+                ADD A QUOTE
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.rowSub, styles.quoteCap]} maxFontSizeMultiplier={SCALE.row}>
+              {MAX_CUSTOM_QUOTES} is the most Rin keeps. Remove one to add another.
+            </Text>
+          )}
+        </View>
+
+        <QuoteEditor
+          visible={writing !== null}
+          custom={quotes.custom}
+          index={typeof writing === 'number' ? writing : null}
+          onCancel={() => setWriting(null)}
+          onSave={(text) => {
+            const index = typeof writing === 'number' ? writing : null;
+            onChangeQuotes((q) => {
+              const custom = placeQuote(q.custom, index, text);
+              // a first quote added on built-in would never show, so it joins the rotation
+              const first = q.custom.length === 0 && custom.length === 1;
+              return { custom, source: first && q.source === 'builtin' ? 'both' : q.source };
+            });
+            setWriting(null);
           }}
         />
 
@@ -858,6 +1037,34 @@ const makeStyles = (p: Palette) =>
       height: StyleSheet.hairlineWidth,
       backgroundColor: p.line,
       marginVertical: 12,
+    },
+    missedRow: {
+      marginTop: 8,
+    },
+    quoteHead: {
+      marginBottom: 14,
+    },
+    quoteRow: {
+      paddingVertical: 6,
+    },
+    quoteText: {
+      flex: 1,
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingRight: 8,
+    },
+    quoteLine: {
+      fontSize: 13,
+      fontFamily: FONT.italic,
+      lineHeight: wrapSafe(19),
+      color: p.ink,
+    },
+    addQuote: {
+      marginTop: 12,
+      marginBottom: 0,
+    },
+    quoteCap: {
+      marginTop: 12,
     },
     chips: {
       flexDirection: 'row',

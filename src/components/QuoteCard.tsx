@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { quoteForDate } from '../quotes';
 import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
-/** The day's line on discipline. It changes at midnight and holds nothing of the user's. */
-export default function QuoteCard({ date }: { date: Date }) {
+/** The day's line from the active list, built-in or the user's own. It changes at midnight. */
+export default function QuoteCard({ date, quotes }: { date: Date; quotes: readonly string[] }) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -16,7 +16,7 @@ export default function QuoteCard({ date }: { date: Date }) {
           DISCIPLINE.
         </Text>
       </View>
-      <Text style={styles.quote}>“{quoteForDate(date)}”</Text>
+      <Text style={styles.quote}>“{quoteForDate(date, quotes)}”</Text>
     </View>
   );
 }
