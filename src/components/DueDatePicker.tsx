@@ -128,7 +128,8 @@ export default function DueDatePicker({ visible, value, repeat, onCancel, onConf
               onPress={() => pickDay(day)}
               style={({ pressed }) => [styles.cell, pressed && { opacity: 0.6 }]}
             >
-              <View style={[styles.dayDot, selected && styles.dayDotOn]}>
+              {/* keyed so Android redraws it: rounding added to a drawn view came out square */}
+              <View key={selected ? 'on' : 'off'} style={[styles.dayDot, selected && styles.dayDotOn]}>
                 <Text
                   style={[
                     styles.dayText,

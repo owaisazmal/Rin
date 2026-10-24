@@ -210,7 +210,7 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
                   onChangeText={(text) => setTyped(format(
                     text.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 24)
                   ))}
-                  placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                  placeholder="XXXX-XXXX-XXXX-…"
                   placeholderTextColor={palette.inkSoft}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
