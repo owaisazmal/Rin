@@ -5,14 +5,13 @@ import type { Task } from './tasks';
 import type { DayRef } from './marking';
 import { dayWhen } from './marking';
 import { finishedLate } from './history';
-import { computeStreaks } from './streaks';
 import { monthLength } from './dates';
 
-/** A cell counts once its day is over or it holds a mark, so a running month is judged on what has passed */
+// A cell counts once its day is over or it holds a mark, so a running month is judged on what has passed.
 
-export type MonthPhase = 'past' | 'current' | 'future';
+type MonthPhase = 'past' | 'current' | 'future';
 
-export interface MonthTotals {
+interface MonthTotals {
   habitCount: number;
   done: number;
   missed: number;
@@ -33,7 +32,7 @@ export interface HabitRate {
   pct: number | null;
 }
 
-export interface DeadlineTotals {
+interface DeadlineTotals {
   /** finished by the deadline, or finished with no time recorded */
   met: number;
   /** finished after the deadline */
@@ -62,14 +61,14 @@ export interface MonthSummary extends MonthTotals {
   previous: PreviousMonth | null;
 }
 
-export interface PreviousMonth {
+interface PreviousMonth {
   year: number;
   month: number;
   totals: MonthTotals;
   change: MonthComparison;
 }
 
-export interface MonthComparison {
+interface MonthComparison {
   /** percentage points; null when either month has nothing to count */
   pct: number | null;
   done: number;
@@ -114,22 +113,25 @@ export function monthTotals(
   let done = 0;
   let missed = 0;
   let empty = 0;
+  let run = 0;
+  let longestStreak = 0;
   for (let d = 1; d <= len; d++) {
-    const t = summary.tallies[d];
-    done += t?.done ?? 0;
-    missed += t?.missed ?? 0;
-    if (d <= past) empty += Math.max(0, summary.habitCount - (t?.done ?? 0) - (t?.missed ?? 0));
+    const dayDone = summary.tallies[d]?.done ?? 0;
+    const dayMissed = summary.tallies[d]?.missed ?? 0;
+    done += dayDone;
+    missed += dayMissed;
+    if (d <= past) empty += Math.max(0, summary.habitCount - dayDone - dayMissed);
+    // days in a row with anything done, the rule streaks.ts counts by
+    run = dayDone > 0 ? run + 1 : 0;
+    longestStreak = Math.max(longestStreak, run);
   }
-  const months = Array.from({ length: 12 }, (_, m): YearMonthSummary =>
-    m === month ? summary : { habitCount: 0, tallies: {} }
-  );
   return {
     habitCount: summary.habitCount,
     done,
     missed,
     empty,
     pct: percent(done, done + missed + empty),
-    longestStreak: computeStreaks(year, months, null).best,
+    longestStreak,
   };
 }
 
@@ -157,8 +159,9 @@ export function habitRates(year: number, month: number, data: MonthData, today: 
   });
 }
 
-function bestAndWeakest(rates: HabitRate[]) {
-  const counted = rates.filter((r) => r.pct !== null);
+/** Everything tied at the top and at the bottom by rate; both empty unless rates differ */
+export function extremes<T extends { pct: number | null }>(items: T[]): { best: T[]; weakest: T[] } {
+  const counted = items.filter((r) => r.pct !== null);
   const pcts = counted.map((r) => r.pct as number);
   const top = Math.max(...pcts);
   const bottom = Math.min(...pcts);
@@ -210,7 +213,7 @@ export function summarizeMonth(
     daysInMonth,
     daysPast: daysPastIn(year, month, today),
     habits,
-    ...bestAndWeakest(habits),
+    ...extremes(habits),
     goals: { done: named.filter((g) => g.done).length, total: named.length, named },
     deadlines: deadlinesIn(year, month, tasks, now),
     observations: data.observations.map((o) => o.trim()).filter((o) => o !== ''),

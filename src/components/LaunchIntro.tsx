@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -12,51 +12,12 @@ import { FONT, Palette, useTheme } from '../theme';
 import { FILLED } from '../logo';
 import { MARK_CELLS, MARK_VIEWBOX, MarkCells, MarkTick } from './LogoMark';
 
-/**
- * The opening: the mark fills itself in, the way a month does.
- *
- * The pending ring fades up first, then the marked days land one sector at a
- * time, clockwise from the top, each blooming out from the centre with a
- * little overshoot; the tick drops onto the next day; the name rises under it.
- * Then the whole sheet lifts away, and the app — which has been sitting fully
- * drawn underneath the entire time — is simply there. Nothing is built during
- * the reveal, so the reveal is smooth.
- *
- * One clock drives everything. A single native-driven value counts
- * milliseconds from 0 to the end of the timeline, and every element reads its
- * own opacity and scale off it through keyframe interpolations. That is the
- * whole point: the JS thread is busiest exactly now, mounting the planner
- * underneath, and a stagger built from per-animation delays would wait on JS
- * timers it can't get — on a slow device the ring sat half-drawn for seconds,
- * then everything landed at once. Keyframes sampled from the easing curves
- * give the same motion with nothing left for JS to schedule.
- *
- * The clock starts from the sheet's first layout, and then only once two
- * frames have actually been drawn. Mounting a whole planner's worth of views
- * stalls the UI thread for a moment at launch, and a native animation started
- * into that stall takes its start time from a frame timestamp that is already
- * stale — its first real frame then lands most of the way through the run. On
- * a slow device the first frame anyone saw was the sheet already lifting.
- * Animation frames are only delivered while the UI thread is pumping, so two
- * of them in a row mean the stall is over and the clock's first tick will be
- * fresh. The sheet may sit blank for a beat on a starved device, but the whole
- * run is always watched from the start.
- *
- * Reduce Motion is honoured without waiting for it: the setting arrives
- * asynchronously, and if it says so before the first sector has moved, the
- * clock jumps straight to the settled mark, holds, and lifts. If it arrives
- * late the full run has already begun and is left to finish rather than
- * yanked backwards.
- */
+/** The opening: the mark fills itself in, then the sheet lifts off the already-drawn app. */
 
 type Curve = (t: number) => number;
 type Span = readonly [start: number, end: number];
 
-/**
- * Every span is [start, end] in ms on the one shared clock. The opening is the
- * quiet part — only the pending ring fading up — so a frame or two lost to a
- * slow first paint costs nothing that matters.
- */
+/** [start, end] in ms on the one clock */
 const T = {
   pending: [0, 300] as Span,
   sector: (i: number): Span => [220 + i * 60, 220 + i * 60 + 300],
@@ -88,7 +49,7 @@ export default function LaunchIntro() {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const size = Math.round(Math.min(Math.max(Math.min(width, height) * 0.46, 150), 220));
 
-  /** milliseconds into the timeline; the one value the native driver moves */
+  /** ms into the timeline: one native-driven value, so the busy JS thread can't stall the stagger */
   const clock = useRef(new Animated.Value(0)).current;
   const [gone, setGone] = useState(false);
 
@@ -122,7 +83,7 @@ export default function LaunchIntro() {
       if (unmounted.current) return;
       reduce.current = on;
       const since = startedAt.current === null ? null : Date.now() - startedAt.current;
-      // already running, but still in the quiet opening: skip the build
+      // Reduce Motion answered while only the pending ring has moved: skip the build
       if (on && since !== null && since <= LATEST_SKIP) play(SETTLED);
     });
     return () => {
@@ -131,7 +92,7 @@ export default function LaunchIntro() {
     };
   }, [play]);
 
-  /** the sheet is laid out: start the clock once frames are flowing */
+  // two frames first, so a launch stall can't eat the start of the run
   const begin = () => {
     if (armed.current) return;
     armed.current = true;
@@ -144,11 +105,7 @@ export default function LaunchIntro() {
     );
   };
 
-  /**
-   * A property's journey over one span: `curve` sampled into keyframes, so an
-   * overshooting ease reads as overshoot. Clamped, so the property holds its
-   * start value until the span begins and its end value ever after.
-   */
+  /** `curve` over one span, sampled into clamped keyframes so overshoot survives */
   const over = ([start, end]: Span, curve: Curve, from: number, to: number, steps = 12) => {
     const inputRange: number[] = [];
     const outputRange: number[] = [];

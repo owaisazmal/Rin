@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   LayoutAnimation,
@@ -9,7 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { CloseGlyph, PlusGlyph } from './Glyphs';
 import { useRevealOnFocus } from './KeyboardSafeScroll';
 import MarkButton from './MarkButton';
 import SectionHeader from './SectionHeader';
@@ -17,14 +17,7 @@ import { CellState, Habit, MAX_HABITS, MAX_HABIT_NAME, cellKey } from '../types'
 import { DayWhen } from '../marking';
 import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
-/**
- * The day's habits, and the habits themselves.
- *
- * Two modes in one card: checking (name, done, missed) is what the card shows
- * almost all the time, and editing (rename, remove, add) is a step away behind
- * EDIT. They are kept apart because a remove cross next to a missed cross reads
- * as two of the same thing.
- */
+/** The day's habits to check off, with editing (rename, remove, add) behind EDIT. */
 
 interface Props {
   day: number;
@@ -40,34 +33,6 @@ interface Props {
   onAdd: () => void;
   onRename: (id: string, name: string) => void;
   onRemove: (id: string) => void;
-}
-
-function PlusGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={14} height={14} viewBox="0 0 24 24">
-      <Path
-        d="M12 5.5v13M5.5 12h13"
-        stroke={color}
-        strokeWidth={2.6}
-        strokeLinecap="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-function CloseGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={14} height={14} viewBox="0 0 24 24">
-      <Path
-        d="M7 7 L17 17 M17 7 L7 17"
-        stroke={color}
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        fill="none"
-      />
-    </Svg>
-  );
 }
 
 const modeAnimation = LayoutAnimation.create(180, 'easeInEaseOut', 'opacity');
@@ -105,21 +70,37 @@ export default function DailyCheck({
     requestAnimationFrame(() => inputs.current.get(added.id)?.focus());
   }, [habits]);
 
-  const add = useCallback(() => {
+  const add = () => {
     focusNew.current = true;
     setEditing(true);
     onAdd();
-  }, [onAdd]);
+  };
 
-  const toggleEditing = useCallback(() => {
+  const toggleEditing = () => {
     LayoutAnimation.configureNext(modeAnimation);
     if (editing) Keyboard.dismiss();
     setEditing(!editing);
-  }, [editing]);
+  };
 
   const atLimit = habits.length >= MAX_HABITS;
-  const canPrev = day > 1;
-  const canNext = day < daysInMonth;
+
+  const dayArrow = (delta: -1 | 1) => {
+    const can = delta < 0 ? day > 1 : day < daysInMonth;
+    return (
+      <Pressable
+        hitSlop={8}
+        disabled={!can}
+        accessibilityRole="button"
+        accessibilityLabel={delta < 0 ? 'Previous day' : 'Next day'}
+        onPress={() => onShiftDay(delta)}
+        style={({ pressed }) => [styles.navBtn, (pressed || !can) && { opacity: can ? 0.6 : 0.35 }]}
+      >
+        <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+          {delta < 0 ? '‹' : '›'}
+        </Text>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={styles.card}>
@@ -127,21 +108,7 @@ export default function DailyCheck({
         title="DAILY CHECK"
         right={
           <View style={styles.dayNav}>
-            <Pressable
-              hitSlop={8}
-              disabled={!canPrev}
-              accessibilityRole="button"
-              accessibilityLabel="Previous day"
-              onPress={() => onShiftDay(-1)}
-              style={({ pressed }) => [
-                styles.navBtn,
-                (pressed || !canPrev) && { opacity: canPrev ? 0.6 : 0.35 },
-              ]}
-            >
-              <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
-                ‹
-              </Text>
-            </Pressable>
+            {dayArrow(-1)}
             <View>
               <Text style={styles.dayLabel} maxFontSizeMultiplier={SCALE.figure}>
                 {monthName.slice(0, 3)} {day}
@@ -152,21 +119,7 @@ export default function DailyCheck({
                 </Text>
               )}
             </View>
-            <Pressable
-              hitSlop={8}
-              disabled={!canNext}
-              accessibilityRole="button"
-              accessibilityLabel="Next day"
-              onPress={() => onShiftDay(1)}
-              style={({ pressed }) => [
-                styles.navBtn,
-                (pressed || !canNext) && { opacity: canNext ? 0.6 : 0.35 },
-              ]}
-            >
-              <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
-                ›
-              </Text>
-            </Pressable>
+            {dayArrow(1)}
           </View>
         }
       />
@@ -193,7 +146,6 @@ export default function DailyCheck({
                 placeholder="habit name…"
                 placeholderTextColor={palette.inkSoft}
                 autoCapitalize="sentences"
-                // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
                 onFocus={revealOnFocus}
                 returnKeyType="done"
               />
@@ -232,20 +184,16 @@ export default function DailyCheck({
                 >
                   {h.name || 'Unnamed habit'}
                 </Text>
-                <MarkButton
-                  kind="done"
-                  active={state === 1}
-                  disabled={!canMark(h.id)}
-                  palette={palette}
-                  onPress={() => onSet(day, h.id, state === 1 ? 0 : 1)}
-                />
-                <MarkButton
-                  kind="missed"
-                  active={state === 2}
-                  disabled={!canMark(h.id)}
-                  palette={palette}
-                  onPress={() => onSet(day, h.id, state === 2 ? 0 : 2)}
-                />
+                {([1, 2] as const).map((mark) => (
+                  <MarkButton
+                    key={mark}
+                    kind={mark === 1 ? 'done' : 'missed'}
+                    active={state === mark}
+                    disabled={!canMark(h.id)}
+                    palette={palette}
+                    onPress={() => onSet(day, h.id, state === mark ? 0 : mark)}
+                  />
+                ))}
               </View>
             );
           })}
@@ -263,7 +211,7 @@ export default function DailyCheck({
             onPress={add}
             style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.7 }]}
           >
-            <PlusGlyph color={palette.accent} />
+            <PlusGlyph color={palette.accent} size={14} weight={2.6} />
             <Text style={styles.addText} maxFontSizeMultiplier={SCALE.heading}>
               Add habit
             </Text>
@@ -366,7 +314,6 @@ const makeStyles = (p: Palette) =>
     editList: {
       gap: 8,
     },
-    /** each name is its own raised field, so the mode reads at a glance */
     editRow: {
       flexDirection: 'row',
       alignItems: 'center',

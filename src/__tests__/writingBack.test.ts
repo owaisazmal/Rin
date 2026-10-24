@@ -18,27 +18,7 @@ import type { Task } from '../tasks';
 /** a fixed "today"; these tests never touch the grid */
 const TODAY = { year: 2026, month: 8, day: 15 };
 
-/**
- * What a screen writes back over what it was given.
- *
- * The bug these are written from is not a judgement that could be lifted out
- * into a pure function, which is how everything else about the backup is
- * tested. It is *when an effect fires*. Both of these hooks save on a debounce
- * that is scheduled whenever the data changes — and the data changes once when
- * the month finishes loading, so merely opening a month wrote it straight back.
- * For a record this phone could only half read, that is the surviving half
- * going back over the record it survived: a habit that rotted on disk is gone
- * for good, nobody typed anything, and the record now reads as whole, so the
- * backup carries the thinned month over the good copy on the server without a
- * word. Nothing short of running the effect shows that.
- *
- * So React is replaced below by the five hooks these two files actually use.
- * It is faithful in the ways that decide the answer — a ref that survives a
- * render and state that replaces it, an effect that re-runs only when its deps
- * change and is cleaned up before it does, a callback that keeps its identity —
- * and it is a fake, so what it proves is about these two hooks rather than
- * about React.
- */
+// React is faked with just the hooks these two use, so their save effects really run
 
 interface MockCell {
   value: unknown;
@@ -79,8 +59,6 @@ function mockUseState(initial: unknown): [unknown, (next: unknown) => void] {
     (next: unknown) => {
       const value =
         typeof next === 'function' ? (next as (prev: unknown) => unknown)(cell.value) : next;
-      // React bails out of a render when the state is the value it already
-      // holds, and so does the `edit` door in both hooks
       if (Object.is(value, cell.value)) return;
       cell.value = value;
       mockTree.changed = true;
@@ -148,14 +126,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-/**
- * Put a hook on screen and keep it there.
- *
- * `settle` is the only unusual part: the loads are promises, so a render
- * schedules a read that lands a few microtasks later and sets state, which
- * needs another render. Rather than reaching for a scheduler this simply gives
- * the promises their turns and draws again for as long as anything changed.
- */
+/** Put a hook on screen and keep it there */
 function mount<T>(screen: () => T) {
   mockTree.cells = [];
   mockTree.effects = [];
@@ -204,12 +175,7 @@ const month = {
   grid: { '1:0': 1 as const, '2:1': 2 as const },
 };
 
-/**
- * The same month with one habit rotted on disk — a number where its name was.
- * It parses, so nothing throws and nothing looks broken; the parser drops that
- * habit and the marks that belonged to it, and what is left is an ordinary
- * month with a third of it missing.
- */
+/** The same month with one habit rotted on disk — a number where its name was */
 const halfReadableMonth = JSON.stringify({
   ...month,
   habits: [month.habits[0], { id: '1', name: 42 }],
@@ -241,8 +207,6 @@ describe('a month this phone could only half read', () => {
 
     // byte for byte what was there before the month was opened
     expect(mockLocal.get(MONTH_BLOB)).toBe(halfReadableMonth);
-    // and still readable as damaged, which is the evidence the backup needs:
-    // a rewritten record would read as whole and go up over the good copy
     await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
       status: 'partial',
       lost: '1 of 2 habits, 1 grid entry',
@@ -261,12 +225,6 @@ describe('a month this phone could only half read', () => {
   });
 
   it('saves what somebody deliberately types into it, because that is the repair', async () => {
-    // The line is intent, not damage. Refusing a write nobody asked for is the
-    // whole point of the guard; refusing one somebody typed would freeze the
-    // month — and if the damaged month is the current one, freeze the app for
-    // the only thing it does. Both backup screens tell people to edit a stuck
-    // month to fix it, so swallowing the edit would be the app giving advice it
-    // had made impossible to take.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -284,11 +242,7 @@ describe('a month this phone could only half read', () => {
   });
 
   it('still tells the ledger the phone holds something the backup has not seen', async () => {
-    // The flag is right either way. If the repair saved, the phone holds an
-    // edit the backup has not seen; if it did not, the phone holds a record the
-    // backup cannot read. Both are "something the next run must look at", and a
-    // flag withheld here would be the app going quiet about a month it knows it
-    // cannot vouch for.
+    // saved or not, the phone now holds something the backup has not seen
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -330,8 +284,6 @@ describe('a month this phone read in full', () => {
     await planner.settle();
     planner.shown.setObservation(0, 'Quieter week');
     await planner.settle();
-    // no timer is advanced: this is the flush that happens when somebody pages
-    // to another month before the debounce has run
     planner.shown.flushSave();
     await planner.settle();
 
@@ -341,10 +293,7 @@ describe('a month this phone read in full', () => {
   });
 
   it('writes an empty month back, because an empty month is what is there', async () => {
-    // Nothing is stored under the key at all, which is a month nobody has
-    // opened. That is not damage — writing an empty month over nothing takes
-    // nothing away — and the backup depends on it: this is how paging back
-    // through last year materialises the months it then declines to send.
+    // nothing stored at all is a month nobody has opened, not damage
     const planner = mount(() => useMonthData(2025, 3, TODAY));
     await planner.settle();
     jest.advanceTimersByTime(AFTER_THE_TYPING_STOPS);
@@ -468,8 +417,6 @@ describe('a deadline list this phone could only half read', () => {
   });
 
   it('saves a deadline somebody deliberately adds, because that is the repair', async () => {
-    // Same reasoning as the month above: a list nobody can add to is a list
-    // nobody can use, and adding to it is how someone rebuilds one.
     mockLocal.set(TASKS_BLOB, halfReadableTasks);
 
     const deadlines = mount(() => useTasks());
@@ -509,27 +456,12 @@ describe('a deadline list this phone read in full', () => {
   });
 });
 
-/**
- * What the screen tells the backup about the record it just read.
- *
- * The guards above stop a half-read record being written back, which saves the
- * data and leaves the evidence on disk. They do not tell anybody. A backup run
- * only ever looks at documents whose contents changed; a month that rotted on
- * disk changed nothing, so no run examined it, nothing was ever blocked, and
- * the card in Settings said "Backed up. Everything on this phone is in the
- * backup." over a September missing a third of itself — with no way offered to
- * fetch the whole one the server was holding. Reading the record is the only
- * moment anybody finds out, so reading it is when it gets written down.
- */
+/** What the screen tells the backup about the record it just read */
 describe('telling the backup about a record this phone cannot read', () => {
   /** A backup id of the shape `deriveBackupId` produces, without the crypto */
   const ID = 'a'.repeat(64);
 
-  /**
-   * Give the ledger's own read-modify-write queue its turns. It is a chain of
-   * promises behind the same storage the hooks use, so it lands a few
-   * microtasks after the render that started it.
-   */
+  /** Give the ledger's own read-modify-write queue its turns */
   async function ledgerSettled() {
     for (let turn = 0; turn < 24; turn++) await Promise.resolve();
     return loadLedger();
@@ -547,12 +479,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('does not mark the month dirty, and does not give the backup a reason to run', async () => {
-    // The one that matters most. A dirty flag here would carry the surviving
-    // third of September to the server over the whole copy already sitting
-    // there — the exact loss the guard above refuses to commit to disk, done to
-    // the one copy that is not on this phone. Nothing was edited, so nothing is
-    // waiting, and a phone that has noticed a damaged month still costs no
-    // request, no anonymous sign-in and nothing on the wire.
+    // a dirty flag would send the surviving third over the whole copy on the server
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -579,9 +506,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('stops the card claiming everything on this phone is in the backup', async () => {
-    // End to end, and the sentence this whole change exists to stop. The phone
-    // has backed up, nothing is dirty, nothing was refused; every other signal
-    // says settled, and September is missing half of itself.
+    // every other signal says settled
     await resetFor(ID);
     await recordPushed('2026-09', digestOf('september as it was'), 0);
     expect(statusOf(await loadLedger(), NO_RUNS).reconciled).toBe(true);
@@ -600,7 +525,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('says nothing at all about a month it read in full', async () => {
-    // An undamaged phone does not so much as create the file.
+    // an undamaged phone does not so much as create the file
     await saveMonth(2026, 8, month);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -613,10 +538,6 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('takes the note back when somebody repairs the month', async () => {
-    // The first way out, and the one both backup screens describe: write in the
-    // month and the record goes back to disk whole. The card has to stop
-    // calling it damaged the moment that lands, because a way out that does not
-    // say it worked is not one.
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -635,10 +556,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('keeps the note when somebody typed but nothing was written', async () => {
-    // The narrow case `flushSave` reports without saving. The flag is right —
-    // the phone holds something the backup has not seen — and the note is right
-    // too, because the record on disk is still the damaged one. Clearing it
-    // here would be the app going quiet about a month it knows it cannot read.
+    // the record on disk is still the damaged one
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -654,10 +572,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('takes it back when the whole month is put back from the backup', async () => {
-    // The second way out. `restoreMonth` writes the backup's copy straight to
-    // disk without going anywhere near this hook, so what retires the note here
-    // is the next read: a record this phone can vouch for is the only proof of
-    // a whole one there is.
+    // `restoreMonth` writes straight to disk, so the next read is what retires the note
     mockLocal.set(MONTH_BLOB, halfReadableMonth);
 
     const damaged = mount(() => useMonthData(2026, 8, TODAY));
@@ -675,9 +590,7 @@ describe('telling the backup about a record this phone cannot read', () => {
   });
 
   it('names a document even when it cannot say what was lost', async () => {
-    // Bytes that are not a month at all. Nothing survived to be counted against
-    // anything, so there is no phrase — and the month is named anyway, because
-    // being unable to describe the damage is not being unable to see it.
+    // nothing survived to describe, but the month is named anyway
     mockLocal.set(MONTH_BLOB, '{not json');
 
     const planner = mount(() => useMonthData(2026, 8, TODAY));
@@ -697,9 +610,6 @@ describe('telling the backup about a deadline list this phone cannot read', () =
   }
 
   it('writes it down under the document the open list travels in', async () => {
-    // The deadlines are one record on this phone; the year shards are only how
-    // that record is divided up on the way to the server. `current` is the one
-    // every edit touches, so it is the one to name.
     mockLocal.set(TASKS_BLOB, halfReadableTasks);
 
     const deadlines = mount(() => useTasks());
@@ -708,8 +618,6 @@ describe('telling the backup about a deadline list this phone cannot read', () =
     const ledger = await ledgerSettled();
     expect(unvouchedKeys(ledger)).toEqual(['current']);
     expect(unvouchedNote(ledger, 'current')).toBe('1 of 2 deadlines');
-    // and nothing is waiting: the only list this phone holds is the rows that
-    // survived, and sending those would empty the archive of the ones that did not
     expect(pendingKeys(ledger)).toEqual([]);
   });
 

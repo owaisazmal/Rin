@@ -1,7 +1,26 @@
-import React, { ReactNode, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useMemo } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import type { DayRef } from '../marking';
+import type { MonthData } from '../types';
 import { FONT, Palette, SCALE, useTheme } from '../theme';
+
+/** What the planner hands every month chart */
+export interface MonthChartProps {
+  year: number;
+  month: number;
+  data: MonthData;
+  today: DayRef;
+  width: number;
+  /** 0 → 1 as the chart draws itself in */
+  grow: Animated.Value;
+}
+
+/** For the charts that land on a day when tapped */
+export interface DayPicking {
+  selectedDay: number;
+  onSelectDay: (day: number) => void;
+}
 
 /** The line above a month chart: a figure, what it counts, and anything pinned right */
 export default function ChartHeadline({

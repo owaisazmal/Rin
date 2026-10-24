@@ -118,16 +118,24 @@ real device), and `production` (App Store / Play Store, an Android app bundle,
 with the build number incremented for you). Version numbers live in `app.json`
 rather than on Expo's servers, so what ships is whatever the repo says.
 
-[`ci.yml`](.github/workflows/ci.yml) runs the tests, the rules suite and an
-Android release build on pushes to main and on pull requests.
+[`ci.yml`](.github/workflows/ci.yml) typechecks, lints, runs the tests and
+bundles the JS on pushes to main and on pull requests. The rules suite, an
+Android release build and a typecheck of the iOS widgets run only when a change
+can reach them (the rules and backup code, the native targets, modules and
+plugins, app config, packages); Run workflow checks everything. `.nvmrc` is the
+Node version everywhere, and CI fails if `eas.json` disagrees with it.
+
 [`release.yml`](.github/workflows/release.yml) starts the production builds
 from GitHub (the Run workflow button, or a pushed tag like `v1.0.0` matching
-`version`) with the numbers `app.json` holds, so bump them first. It needs an
-`EXPO_TOKEN` repository secret.
+`version`) with the numbers `app.json` holds, so bump them first:
+`npm run bump` adds one to the iOS build number and the Android versionCode,
+and `npm run bump -- 1.2.0` also sets `version`. A release reruns the checks
+but leaves the native builds to EAS. It needs an `EXPO_TOKEN` secret in the
+`release` environment.
 
 | Every push | A release |
 | :-: | :-: |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/ci-flow-dark.svg"><img alt="Commit and push, CI runs four checks, fix anything red and push again" src="screenshots/readme/ci-flow-light.svg" width="400"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/release-flow-dark.svg"><img alt="Bump app.json, start the release, EAS builds, submit to TestFlight and Play" src="screenshots/readme/release-flow-light.svg" width="400"></picture> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/ci-flow-dark.svg"><img alt="Commit and push, CI runs up to four checks, fix anything red and push again" src="screenshots/readme/ci-flow-light.svg" width="400"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/release-flow-dark.svg"><img alt="Bump app.json, start the release, EAS builds, submit to TestFlight and Play" src="screenshots/readme/release-flow-light.svg" width="400"></picture> |
 
 Firebase's two config files never enter the repo; `.env.example` says where
 they go, locally and for EAS builds.

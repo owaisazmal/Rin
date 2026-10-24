@@ -2,21 +2,7 @@ import { monthDocKey } from '../hooks/useMonthData';
 import { taskShardKey } from '../hooks/useTasks';
 import type { Task } from '../tasks';
 
-/**
- * The names this phone gives the documents it backs up.
- *
- * Everything downstream is a string comparison against these: the ledger files
- * a dirty flag under one, the backup writes a document under one, and the rules
- * refuse anything that isn't shaped the way they expect. Nothing here would
- * throw if a key came out wrong — the flag would simply be set on a document
- * nobody pushes, and the month or the year it named would stop being sent while
- * every screen carried on looking fine. So the keys are pinned in a test even
- * though they are three lines of string handling.
- *
- * The hooks these come from need a React renderer to exercise; the key
- * functions are pure and deliberately exported on their own, so this covers
- * what the sync run has to agree with without pretending to test the hooks.
- */
+/** The names this phone gives the documents it backs up */
 
 /** Both modules reach storage through their imports; none of it is called here */
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -70,8 +56,6 @@ describe('which document a deadline travels in', () => {
     const after = { ...open, done: true, completedAt: at(2026, 0, 3) };
     expect(taskShardKey(before)).toBe('current');
     expect(taskShardKey(after)).toBe('2026');
-    // both ends of that move have to be rewritten, which is only true if the
-    // two keys really are different documents
     expect(taskShardKey(before)).not.toBe(taskShardKey(after));
   });
 
@@ -91,8 +75,6 @@ describe('which document a deadline travels in', () => {
   });
 
   it('refuses to address a year the rules would reject', () => {
-    // a device whose clock has wandered; the shard id has to be 20xx or the
-    // write is refused and the task goes nowhere at all
     expect(taskShardKey({ ...open, done: true, completedAt: at(1999, 11, 31) })).toBe('current');
     expect(taskShardKey({ ...open, done: true, completedAt: at(2100, 0, 1) })).toBe('current');
   });

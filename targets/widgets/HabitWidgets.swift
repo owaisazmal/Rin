@@ -8,14 +8,6 @@ struct StreakWidgetView: View {
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
 
-  /// The seven days leading up to today, for the little run of pips.
-  private var recentDays: [(day: Int, done: Bool)] {
-    let snap = entry.snapshot
-    guard let today = snap.today else { return [] }
-    let first = max(1, today - 6)
-    return (first...today).map { ($0, snap.doneCount(day: $0) > 0) }
-  }
-
   /// Lock Screen flame: filled once today is marked, an outline while the streak waits on today.
   private var flame: String {
     let snap = entry.snapshot
@@ -81,13 +73,7 @@ struct StreakWidgetView: View {
           WidgetHeading(text: "STREAK", theme: theme)
           StatLine(value: "\(snap.bestStreak)", label: "best this year", theme: theme)
           StatLine(value: "\(snap.perfectStreak)", label: "perfect days", theme: theme)
-          HStack(spacing: 4) {
-            ForEach(recentDays, id: \.day) { item in
-              RoundedRectangle(cornerRadius: 2)
-                .fill(item.done ? theme.done : theme.cellEmpty)
-                .frame(width: 12, height: 12)
-            }
-          }
+          RecentPips(snapshot: snap, theme: theme, size: 12)
           Spacer(minLength: 0)
         }
       }
@@ -99,18 +85,12 @@ struct StreakWidgetView: View {
         Text("\(snap.currentStreak)")
           .font(.system(size: 48, weight: .bold, design: .rounded))
           .foregroundColor(theme.done)
-        Text(snap.currentStreak == 1 ? "DAY STREAK" : "DAY STREAK")
+        Text("DAY STREAK")
           .font(.system(size: 9, weight: .bold))
           .kerning(1.4)
           .foregroundColor(theme.inkSoft)
-        HStack(spacing: 3) {
-          ForEach(recentDays, id: \.day) { item in
-            RoundedRectangle(cornerRadius: 1.5)
-              .fill(item.done ? theme.done : theme.cellEmpty)
-              .frame(width: 9, height: 9)
-          }
-        }
-        .padding(.top, 3)
+        RecentPips(snapshot: snap, theme: theme, size: 9, radius: 1.5, spacing: 3)
+          .padding(.top, 3)
         Text("best \(snap.bestStreak)")
           .font(.system(size: 9))
           .foregroundColor(theme.inkSoft)
@@ -122,23 +102,15 @@ struct StreakWidgetView: View {
 }
 
 struct StreakWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [
-        .systemSmall, .systemMedium,
-        .accessoryCircular, .accessoryRectangular, .accessoryInline,
-      ]
-    }
-    return [.systemSmall, .systemMedium]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "Streak", provider: SnapshotProvider()) { entry in
       StreakWidgetView(entry: entry)
     }
     .configurationDisplayName("Streak")
     .description("Consecutive days you've checked something off.")
-    .supportedFamilies(families)
+    .supportedFamilies([
+      .systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline,
+    ])
   }
 }
 
@@ -199,8 +171,7 @@ struct TodayWidgetView: View {
         ForEach(Array(rows.prefix(shown).enumerated()), id: \.offset) { _, row in
           HStack(spacing: 7) {
             StateGlyph(state: row.state, theme: theme)
-            // the glyph already says "done"; a strikethrough on top of it is
-            // redundant, and WidgetKit animates it in unevenly on reload
+            // no strikethrough: the glyph says it, and WidgetKit animates one unevenly
             Text(row.name)
               .font(.system(size: family == .systemSmall ? 11 : 12, weight: .medium))
               .foregroundColor(row.state == 1 ? theme.inkSoft : theme.ink)
@@ -225,21 +196,15 @@ struct StateGlyph: View {
 
   var body: some View {
     RoundedRectangle(cornerRadius: 4)
-      .fill(state == 0 ? theme.cellEmpty : (state == 1 ? theme.done : theme.missed))
+      .fill(theme.stateColor(state))
       .frame(width: 15, height: 15)
-      .overlay(
-        Group {
-          if state == 1 {
-            Image(systemName: "checkmark")
-              .font(.system(size: 9, weight: .bold))
-              .foregroundColor(theme.onState)
-          } else if state == 2 {
-            Image(systemName: "xmark")
-              .font(.system(size: 9, weight: .bold))
-              .foregroundColor(theme.onState)
-          }
+      .overlay {
+        if state != 0 {
+          Image(systemName: state == 1 ? "checkmark" : "xmark")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(theme.onState)
         }
-      )
+      }
   }
 }
 
@@ -258,22 +223,11 @@ struct AccessoryToday: View {
     Group {
       switch family {
       case .accessoryCircular:
-        ZStack {
-          ProgressRing(
-            progress: rows.isEmpty ? 0 : Double(done) / Double(rows.count),
-            theme: .accessory,
-            lineWidth: 6
-          )
-          VStack(spacing: -2) {
-            Text(rows.isEmpty ? "–" : "\(done)/\(rows.count)")
-              .font(.system(size: 17, weight: .bold, design: .rounded))
-              .lineLimit(1)
-              .minimumScaleFactor(0.6)
-            Text("today").font(.system(size: 10, weight: .bold))
-          }
-          .padding(.horizontal, 9)
-        }
-        .padding(3)
+        AccessoryRing(
+          progress: rows.isEmpty ? 0 : Double(done) / Double(rows.count),
+          value: rows.isEmpty ? "–" : "\(done)/\(rows.count)",
+          caption: "today"
+        )
 
       case .accessoryRectangular:
         VStack(alignment: .leading, spacing: 1) {
@@ -322,23 +276,16 @@ struct AccessoryRow: View {
 }
 
 struct TodayWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [
-        .systemSmall, .systemMedium, .systemLarge,
-        .accessoryCircular, .accessoryRectangular, .accessoryInline,
-      ]
-    }
-    return [.systemSmall, .systemMedium, .systemLarge]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "TodayCheck", provider: SnapshotProvider()) { entry in
       TodayWidgetView(entry: entry)
     }
     .configurationDisplayName("Today's Check")
     .description("What you've ticked off today, and what's still open.")
-    .supportedFamilies(families)
+    .supportedFamilies([
+      .systemSmall, .systemMedium, .systemLarge,
+      .accessoryCircular, .accessoryRectangular, .accessoryInline,
+    ])
   }
 }
 
@@ -362,8 +309,7 @@ struct GoalsWidgetView: View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
     let snap = entry.snapshot
     let goals = snap.goals
-    // Empty goals are not counted, matching the app's card: a box marked done
-    // before anything was written in it is not a goal anyone finished.
+    // empty goals don't count as done, matching the app's card
     let doneCount = goals.filter { $0.done && !$0.text.isEmpty }.count
 
     VStack(alignment: .leading, spacing: 8) {
@@ -441,19 +387,12 @@ struct AccessoryGoals: View {
 }
 
 struct GoalsWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [.systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
-    }
-    return [.systemMedium, .systemLarge]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "KeyGoals", provider: SnapshotProvider()) { entry in
       GoalsWidgetView(entry: entry)
     }
     .configurationDisplayName("Key Goals")
     .description("This month's three goals and whether they're done.")
-    .supportedFamilies(families)
+    .supportedFamilies([.systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline])
   }
 }

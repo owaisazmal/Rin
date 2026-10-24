@@ -4,43 +4,41 @@
     "appVersionSource": "local"
   },
   "build": {
+    "base": {
+      "node": "24.9.0",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
     "development": {
+      "extends": "base",
       "distribution": "internal",
       "ios": {
-        "simulator": true,
-        "image": "macos-tahoe-26.6-xcode-27.1"
+        "simulator": true
       },
       "android": {
         "buildType": "apk"
-      },
-      "node": "24.9.0"
+      }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
-      "ios": {
-        "image": "macos-tahoe-26.6-xcode-27.1"
-      },
       "android": {
         "buildType": "apk"
-      },
-      "node": "24.9.0"
+      }
     },
     "production": {
+      "extends": "base",
       "autoIncrement": true,
-      "ios": {
-        "image": "macos-tahoe-26.6-xcode-27.1"
-      },
       "android": {
         "buildType": "app-bundle"
-      },
-      "node": "24.9.0"
+      }
     },
     "production-ci": {
       "extends": "production",
       "autoIncrement": false,
       "environment": "production"
-    },
-    "base": {}
+    }
   },
   "submit": {
     "production": {

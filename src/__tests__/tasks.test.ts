@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loadTasks,
-  nextTaskId,
   readTasksForEditing,
   readTasksVouched,
   saveTasks,
@@ -9,12 +8,8 @@ import {
   vouchTasksValue,
 } from '../tasks';
 import type { Task } from '../tasks';
+import { nextId } from '../types';
 
-/**
- * The only module here that touches storage, so it is the only one that needs a
- * stand-in. Everything worth testing is in what comes back out of a read — the
- * parser is the guard between whatever is on disk and the rest of the app.
- */
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: { getItem: jest.fn(), setItem: jest.fn() },
@@ -84,8 +79,6 @@ describe('loadTasks', () => {
   });
 
   it('clears a completion time left on an unfinished task', async () => {
-    // nothing the app writes looks like this, but a hand-edited or half-migrated
-    // record could — and history would otherwise file it as finished
     stored([{ ...valid, done: false, completedAt: 1_800_000_000_000 }]);
     const [task] = await loadTasks();
     expect(task.completedAt).toBeUndefined();
@@ -195,32 +188,24 @@ describe('toggleDone', () => {
   });
 });
 
-describe('nextTaskId', () => {
+describe('nextId', () => {
   it('starts at zero on an empty list', () => {
-    expect(nextTaskId([])).toBe('0');
+    expect(nextId([])).toBe('0');
   });
 
   it('goes past the highest id in use, not the list length', () => {
     // ids have to stay unique after a removal from the middle
     const tasks = [{ ...valid, id: '0' }, { ...valid, id: '7' }] as Task[];
-    expect(nextTaskId(tasks)).toBe('8');
+    expect(nextId(tasks)).toBe('8');
   });
 
   it('ignores ids that are not numbers', () => {
     const tasks = [{ ...valid, id: 'legacy' }, { ...valid, id: '2' }] as Task[];
-    expect(nextTaskId(tasks)).toBe('3');
+    expect(nextId(tasks)).toBe('3');
   });
 });
 
-/**
- * Reading the deadline list for the backup rather than for a screen.
- *
- * `loadTasks` answers an empty list for a phone with no deadlines and for a
- * file it could not read, and every screen is right not to care. The backup is
- * the one caller for which that difference is the whole question: one of those
- * means the deadlines were deleted and the other means do not touch the
- * archive. This is the reader that can tell them apart.
- */
+/** Reading the deadline list for the backup rather than for a screen */
 describe('readTasksVouched', () => {
   it('says absent when the list has never been written', async () => {
     store.getItem.mockResolvedValue(null);
@@ -290,8 +275,6 @@ describe('readTasksVouched', () => {
   });
 
   it('does not call the completion-time tidy-up a loss', async () => {
-    // the row is all there; clearing a stray finish time off an unfinished task
-    // is the parser doing its documented job, not storage losing a deadline
     stored([{ ...valid, done: false, completedAt: 1_800_000_000_000 }]);
     await expect(readTasksVouched()).resolves.toMatchObject({ status: 'complete' });
   });
@@ -308,16 +291,7 @@ describe('readTasksVouched', () => {
   });
 });
 
-/**
- * The judgement itself, with no store underneath it.
- *
- * A shard of the deadline archive coming down off the wire has to be asked the
- * same question the disk is asked — did this parse with nothing lost — and it
- * has to be asked by the same code, or the two answers drift and the weaker one
- * ends up guarding whichever copy is about to be replaced. `pullTaskShards` in
- * `sync.ts` is the wire caller; these check the reader is genuinely made of
- * this rather than merely agreeing with it.
- */
+/** The judgement itself, with no store underneath it */
 describe('vouchTasksValue', () => {
   it.each([
     ['a list every row of which survived', [valid]],
@@ -330,23 +304,13 @@ describe('vouchTasksValue', () => {
   });
 
   it('has no way of calling a value absent, because a payload never is', () => {
-    // absence is a question about a key in a store. A decrypted document that
-    // holds nothing is a document this phone cannot read, and reading it as an
-    // empty list is how the whole archive gets emptied.
+    // absence is about a key in a store; an empty payload is unreadable
     expect(vouchTasksValue(null)).toEqual({ status: 'unreadable' });
     expect(vouchTasksValue(undefined)).toEqual({ status: 'unreadable' });
   });
 });
 
-/**
- * The reader for the screen that also writes what it read.
- *
- * `loadTasks` hands back the rows that survived, and a screen that loads the
- * list also saves it — so the survivors go over the record they survived and
- * the dropped deadlines stop being recoverable. This says the same thing
- * `readTasksVouched` says, in a shape the screen can render in every case, so
- * the caller has something to draw and something to refuse to save.
- */
+/** The reader for the screen that also writes what it read */
 describe('readTasksForEditing', () => {
   it('hands back a whole list and says so', async () => {
     stored([valid]);

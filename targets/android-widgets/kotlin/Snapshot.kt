@@ -1,36 +1,23 @@
 package com.owaiskhan.monthlyplanning.widgets
 
-import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Mirrors `WidgetSnapshot` in src/widgets/snapshot.ts, same as the Swift
- * `PlannerSnapshot`. Parsed with org.json rather than a serialization library
- * so the widgets pull in no extra dependencies.
- */
+// Mirrors `WidgetSnapshot` in src/widgets/snapshot.ts; org.json keeps the widgets dependency-free.
 data class Habit(val id: String, val name: String)
 
 data class Goal(val text: String, val done: Boolean)
 
-/**
- * A task with a deadline. `due` is the moment itself in epoch milliseconds, not
- * a distance to it — the widget works out how far off it is against its own
- * clock, so the countdown stays true between snapshots.
- */
 data class DeadlineTask(
   val text: String,
+  /** epoch milliseconds */
   val due: Long,
   /** "weekly" / "monthly" / "yearly" on a recurring deadline, null on a one-off */
   val repeats: String? = null,
 )
 
 data class PlannerSnapshot(
-  /**
-   * The app's appearance setting — "dark" or "light". Null for snapshots
-   * written before the widgets followed the app, and for the picker preview;
-   * both fall back to the system setting.
-   */
+  /** "dark" or "light"; null falls back to the system setting */
   val theme: String?,
   val year: Int,
   val month: Int,
@@ -75,52 +62,42 @@ data class PlannerSnapshot(
     quotes.isNotEmpty() && dayOfYear % quotes.size >= ownQuotesFrom
 
   companion object {
-    fun load(context: Context): PlannerSnapshot? {
-      val json = context
-        .getSharedPreferences("widget_snapshot", Context.MODE_PRIVATE)
-        .getString("widgetSnapshot", null) ?: return null
-      return runCatching { parse(JSONObject(json)) }.getOrNull()
+    /** Where WidgetBridgeModule stores the JSON. */
+    const val PREFS = "widget_snapshot"
+    const val KEY = "widgetSnapshot"
+
+    fun from(json: String?): PlannerSnapshot? =
+      json?.let { runCatching { parse(JSONObject(it)) }.getOrNull() }
+
+    /** Maps each index of a possibly missing array; a missing one reads as empty. */
+    private fun <T> JSONArray?.items(read: JSONArray.(Int) -> T): List<T> {
+      val array = this ?: return emptyList()
+      return List(array.length()) { array.read(it) }
     }
 
-    private fun intMatrix(array: JSONArray?): List<List<Int>> {
-      if (array == null) return emptyList()
-      return (0 until array.length()).map { i ->
-        val row = array.optJSONArray(i) ?: JSONArray()
-        (0 until row.length()).map { row.optInt(it) }
-      }
-    }
+    private fun intMatrix(array: JSONArray?): List<List<Int>> =
+      array.items { i -> optJSONArray(i).items { optInt(it) } }
 
     private fun parse(o: JSONObject): PlannerSnapshot {
-      val habits = o.optJSONArray("habits").let { arr ->
-        (0 until (arr?.length() ?: 0)).map {
-          val h = arr!!.getJSONObject(it)
-          Habit(h.optString("id"), h.optString("name"))
-        }
+      val habits = o.optJSONArray("habits").items {
+        val h = getJSONObject(it)
+        Habit(h.optString("id"), h.optString("name"))
       }
-      val goals = o.optJSONArray("goals").let { arr ->
-        (0 until (arr?.length() ?: 0)).map {
-          val g = arr!!.getJSONObject(it)
-          Goal(g.optString("text"), g.optBoolean("done"))
-        }
+      val goals = o.optJSONArray("goals").items {
+        val g = getJSONObject(it)
+        Goal(g.optString("text"), g.optBoolean("done"))
       }
       val grid = mutableMapOf<String, String>()
       o.optJSONObject("grid")?.let { g ->
         g.keys().forEach { key -> grid[key] = g.optString(key) }
       }
-      val quotes = o.optJSONArray("quotes").let { arr ->
-        (0 until (arr?.length() ?: 0)).map { arr!!.optString(it) }
-      }
-      // absent from snapshots written before deadlines existed, which must
-      // still parse rather than taking every other widget down with them
-      val tasks = o.optJSONArray("tasks").let { arr ->
-        (0 until (arr?.length() ?: 0)).map {
-          val t = arr!!.getJSONObject(it)
-          DeadlineTask(
-            t.optString("text"),
-            t.optLong("due"),
-            if (t.isNull("repeats")) null else t.optString("repeats").ifEmpty { null },
-          )
-        }
+      val tasks = o.optJSONArray("tasks").items {
+        val t = getJSONObject(it)
+        DeadlineTask(
+          t.optString("text"),
+          t.optLong("due"),
+          if (t.isNull("repeats")) null else t.optString("repeats").ifEmpty { null },
+        )
       }.sortedBy { it.due }
       return PlannerSnapshot(
         theme = if (o.isNull("theme")) null else o.optString("theme").ifEmpty { null },
@@ -141,11 +118,9 @@ data class PlannerSnapshot(
         goals = goals,
         yearDone = intMatrix(o.optJSONArray("yearDone")),
         yearMissed = intMatrix(o.optJSONArray("yearMissed")),
-        yearHabitCounts = o.optJSONArray("yearHabitCounts").let { arr ->
-          (0 until (arr?.length() ?: 0)).map { arr!!.optInt(it) }
-        },
+        yearHabitCounts = o.optJSONArray("yearHabitCounts").items { optInt(it) },
         yearTotal = o.optInt("yearTotal"),
-        quotes = quotes,
+        quotes = o.optJSONArray("quotes").items { optString(it) },
         ownQuotesFrom = o.optInt("ownQuotesFrom", Int.MAX_VALUE),
         tasks = tasks,
       )
@@ -153,7 +128,6 @@ data class PlannerSnapshot(
 
     /** Shown in the widget picker and before the app has ever written a snapshot. */
     val placeholder = PlannerSnapshot(
-      // the picker preview has no app setting to follow yet
       theme = null,
       year = 2026,
       month = 7,

@@ -6,17 +6,7 @@ import android.content.Intent
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-/**
- * Android half of the widget bridge.
- *
- * Widgets here live in the app's own package, so they read SharedPreferences
- * directly — no App Group equivalent is needed. The stored JSON is byte-for-byte
- * the payload the iOS side writes, so `snapshot.ts` stays the single source.
- *
- * Refreshing is done by broadcasting ACTION_APPWIDGET_UPDATE to every provider
- * this package installs, rather than calling the widget classes directly: the
- * module is a library the app depends on, so it must not depend back on the app.
- */
+// Widgets live in the app's own package and read this SharedPreferences entry; same JSON as iOS.
 const val PREFS_NAME = "widget_snapshot"
 const val SNAPSHOT_KEY = "widgetSnapshot"
 
@@ -32,6 +22,7 @@ class WidgetBridgeModule : Module() {
         .putString(SNAPSHOT_KEY, json)
         .apply()
 
+      // broadcast rather than calling the widget classes: this library can't depend on the app
       runCatching {
         val manager = AppWidgetManager.getInstance(context)
         manager.installedProviders

@@ -3,10 +3,10 @@ import type { CellState, MonthData } from './types';
 import { dayWhen } from './marking';
 import type { DayRef, DayWhen } from './marking';
 import { monthLength } from './dates';
-import { habitRates, monthTotals, tallyMonth } from './monthSummary';
+import { extremes, habitRates, monthTotals, tallyMonth } from './monthSummary';
 import type { HabitRate } from './monthSummary';
 
-/** The arithmetic behind the tracker's month charts; a cell counts once it holds a mark or its day is over, as in monthSummary.ts */
+// The tracker's month charts; a cell counts once it holds a mark or its day is over, as in monthSummary.ts.
 
 /** Monday first, as the due-date calendar sets weeks out; the values are `Date.getDay()` */
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const;
@@ -153,14 +153,14 @@ export function weekPoints(year: number, month: number, data: MonthData, today: 
   return out;
 }
 
-export interface Point {
+interface Point {
   x: number;
   y: number;
 }
 
 const fixed = (n: number) => Number(n.toFixed(2));
 
-/** A monotone cubic through the points, one `C` command per gap, so the curve never swings past a value it was given */
+/** A monotone cubic, one `C` per gap, so the curve never overshoots a value it was given */
 export function smoothSegments(points: Point[]): string[] {
   const n = points.length;
   if (n < 2) return [];
@@ -209,7 +209,7 @@ export function smoothPath(points: Point[]): string {
   return [`M${fixed(points[0].x)} ${fixed(points[0].y)}`, ...smoothSegments(points)].join(' ');
 }
 
-export interface WeekdayRow {
+interface WeekdayRow {
   id: string;
   name: string;
   /** one per WEEKDAYS entry */
@@ -240,20 +240,16 @@ export function weekdayHeat(year: number, month: number, data: MonthData, today:
       add(all[col], state, when);
     }
   }
-  const rated = all.map((t, i) => ({ pct: t.pct, i })).filter((t) => t.pct !== null);
-  const pcts = rated.map((t) => t.pct as number);
-  const top = Math.max(...pcts);
-  const bottom = Math.min(...pcts);
-  const differ = rated.length > 1 && top !== bottom;
+  const { best, weakest } = extremes(all.map((t, i) => ({ pct: t.pct, i })));
   return {
     rows,
     all,
-    weakest: differ ? rated.filter((t) => t.pct === bottom).map((t) => t.i) : [],
-    strongest: differ ? rated.filter((t) => t.pct === top).map((t) => t.i) : [],
+    weakest: weakest.map((t) => t.i),
+    strongest: best.map((t) => t.i),
   };
 }
 
-export type HeatLevel = 0 | 1 | 2 | 3 | 4 | 'missed';
+type HeatLevel = 0 | 1 | 2 | 3 | 4 | 'missed';
 
 /** The year grid's shading: four greens by share done, red when only misses were marked, blank otherwise */
 export function heatLevel(done: number, missed: number, of: number): HeatLevel {

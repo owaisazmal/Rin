@@ -1,17 +1,13 @@
-import React, { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import ChartLegend from './ChartLegend';
 import ChartPicker, { CHART_INFO, ChartGlyph } from './ChartPicker';
 import { PickerChip } from './Picker';
 import SectionHeader from './SectionHeader';
 import type { ChartType } from '../settings';
-import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
 
-/**
- * The card around whichever chart is showing: the picker between them, the
- * animated slot the chart arrives in, the month's progress bar, and the
- * legend. The chart itself is handed in as children — the screen owns the
- * data and the taps; this owns the frame.
- */
+/** The frame around whichever chart is showing: picker, animated slot, progress bar and legend */
 
 /** The done, missed and pending key, for the charts that fill cells or bars */
 const KEYED: ChartType[] = ['radial', 'days', 'habits'];
@@ -128,40 +124,8 @@ export default function TrackerCard({
         </View>
       )}
 
-      {KEYED.includes(chart) && hasHabits && (
-        <View style={styles.legend}>
-          <View style={[styles.legendSwatch, { backgroundColor: palette.done }]} />
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
-            done
-          </Text>
-          <View style={[styles.legendSwatch, { backgroundColor: palette.missed }]} />
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
-            missed
-          </Text>
-          <View style={[styles.legendSwatch, styles.legendEmpty]} />
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
-            pending
-          </Text>
-        </View>
-      )}
-
-      {chart === 'weekdays' && hasHabits && (
-        <View style={styles.legend}>
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
-            less
-          </Text>
-          {palette.ghLevels.map((c, i) => (
-            <View key={i} style={[styles.legendSwatch, styles.rampSwatch, { backgroundColor: c }]} />
-          ))}
-          <Text style={[styles.legendText, styles.rampMore]} maxFontSizeMultiplier={SCALE.figure}>
-            more
-          </Text>
-          <View style={[styles.legendSwatch, { backgroundColor: palette.ghMissed }]} />
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.figure}>
-            missed
-          </Text>
-        </View>
-      )}
+      {KEYED.includes(chart) && hasHabits && <ChartLegend />}
+      {chart === 'weekdays' && hasHabits && <ChartLegend heat />}
     </View>
   );
 }
@@ -211,30 +175,5 @@ const makeStyles = (p: Palette) =>
     statsDone: {
       color: p.done,
       fontFamily: FONT.bold,
-    },
-    legend: {
-      alignSelf: 'center',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 10,
-    },
-    legendSwatch: {
-      width: 12,
-      height: 12,
-      borderRadius: 3,
-    },
-    legendEmpty: {
-      backgroundColor: p.cellEmpty,
-      borderWidth: 1,
-      borderColor: p.line,
-    },
-    rampSwatch: { marginHorizontal: -2 },
-    rampMore: { marginLeft: 2 },
-    legendText: {
-      fontSize: 12,
-      fontFamily: FONT.regular,
-      color: p.inkSoft,
-      marginRight: 8,
     },
   });

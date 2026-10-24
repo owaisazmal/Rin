@@ -1,29 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
+import { setSnapshot } from '../../modules/widget-bridge';
 import { MonthData } from '../types';
 import { Task } from '../tasks';
 import { YearMonthSummary } from '../storage';
 import { ThemeMode } from '../theme';
 import { buildSnapshot } from '../widgets/snapshot';
-import { syncWidgets } from '../widgets/sync';
 import { syncReminders } from '../notifications';
 import type { NotificationPrefs } from '../settings';
 import type { QuoteList } from '../quotes';
 
-/**
- * Everything the planner pushes *out* of the app — to the home screen and to
- * the notification schedule. Kept apart from the screen because none of it
- * affects what's on screen; it's the same data leaving by two other doors.
- */
-
 /** Long enough that a burst of taps produces one push, not one per tap */
 const DEBOUNCE_MS = 1200;
 
-/**
- * Runs `push` once its inputs have been still for DEBOUNCE_MS, or straight away
- * if the app leaves the foreground first: iOS suspends the app before the timer
- * fires, so an edit made just before going home would wait for the next launch.
- */
+/** Runs `push` once its inputs settle, or at once on backgrounding, since iOS suspends before the timer fires */
 function useDebouncedPush(push: (() => void) | null, deps: unknown[]) {
   const pending = useRef<(() => void) | null>(null);
 
@@ -53,15 +43,7 @@ function useDebouncedPush(push: (() => void) | null, deps: unknown[]) {
   }, []);
 }
 
-/**
- * Mirror a snapshot into the shared container the widgets read.
- *
- * Debounced longer than the save itself — WidgetKit rate-limits timeline
- * reloads, so there's no value in pushing one per keystroke. `mode` is a
- * dependency because the widgets take their colour scheme from the snapshot:
- * without it, switching the app's theme would leave every widget on the old
- * one until the next edit happened to push.
- */
+/** Mirrors a snapshot to the widgets; `mode` is a dependency because they take their colours from it */
 export function useWidgetSync(
   enabled: boolean,
   year: number,
@@ -74,20 +56,20 @@ export function useWidgetSync(
 ) {
   useDebouncedPush(
     enabled && yearMonths
-      ? () =>
-          syncWidgets(buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks, quotes))
+      ? () => {
+          const snapshot = buildSnapshot(year, month, data, yearMonths, new Date(), mode, tasks, quotes);
+          try {
+            setSnapshot(JSON.stringify(snapshot));
+          } catch {
+            // a widget failing to update should never surface in the app
+          }
+        }
       : null,
     [enabled, data, year, month, yearMonths, mode, tasks, quotes]
   );
 }
 
-/**
- * Rewrite the reminder schedule on every change, so today's remaining nudges
- * disappear as soon as nothing is left pending.
- *
- * Habits and deadlines are rewritten together because the schedule is rebuilt
- * from empty each time: scheduling either one alone would drop the other.
- */
+/** Habits and deadlines together, since the schedule is rebuilt from empty each time */
 export function useReminderSync(
   enabled: boolean,
   data: MonthData,

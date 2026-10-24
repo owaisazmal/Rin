@@ -1,4 +1,3 @@
-import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 import { Palette, ThemeMode, useTheme } from '../theme';
 import {
@@ -11,11 +10,7 @@ import {
   todayTick,
 } from '../logo';
 
-/**
- * The logo, drawn live from the same geometry as the icon so it takes the
- * current palette rather than shipping a bitmap per theme. Decorative wherever
- * it appears: the wordmark beside it carries the name for screen readers.
- */
+/** The logo, drawn live from the icon's geometry so it takes the current palette */
 
 /** The mark is drawn in a 100-unit box; the ring leaves room for the tick. */
 const MARK_BOX = 100;

@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// One cell of the radial tracker: a wedge of an annulus.
-/// Angles are degrees with 0 at 12 o'clock, increasing clockwise — the same
-/// convention as RadialTracker.tsx.
+/// A wedge of an annulus; degrees from 12 o'clock, clockwise, as in RadialTracker.tsx.
 struct AnnularSector: Shape {
   let innerRadius: CGFloat
   let outerRadius: CGFloat
@@ -37,15 +35,14 @@ struct RadialChart: View {
   let snapshot: PlannerSnapshot
   let theme: Theme
   var minRings: Int = 4
-  var showToday: Bool = true
   /// radius of the empty centre as a share of the chart's side
   var holeRatio: CGFloat = 0.17
 
   var body: some View {
     GeometryReader { geo in
       let side = min(geo.size.width, geo.size.height)
-      // leave a sliver of room outside the rings for the today marker
-      let outer = side / 2 - (showToday ? 5 : 1)
+      // room outside the rings for the today marker
+      let outer = side / 2 - 5
       let inner = side * holeRatio
       let rings = max(snapshot.habits.count, minRings)
       let ringWidth = (outer - inner) / CGFloat(rings)
@@ -71,9 +68,8 @@ struct RadialChart: View {
           }
         }
 
-        if showToday, let today = snapshot.today, today <= days {
-          // a dot outside the rings, rather than a wedge across them — a stroked
-          // wedge reads as a stray line cutting through the chart
+        if let today = snapshot.today, today <= days {
+          // a dot outside the rings; a stroked wedge read as a stray line
           let mid = (Double(today) - 0.5) * sector - 90
           let rad = mid * .pi / 180
           Circle()
@@ -95,10 +91,10 @@ struct RadialChart: View {
 struct YearGrid: View {
   let snapshot: PlannerSnapshot
   let theme: Theme
-  var cell: CGFloat = 7
-  var gap: CGFloat = 2
-  /// show only the last N weeks (medium widgets can't fit a full year legibly)
-  var weekLimit: Int? = nil
+  let cell: CGFloat
+  let gap: CGFloat
+  /// how many weeks up to today to show
+  let weekLimit: Int
 
   private struct Day {
     let month: Int
@@ -115,14 +111,9 @@ struct YearGrid: View {
   }
 
   private var days: [Day] {
-    var out: [Day] = []
-    for m in 0..<12 {
-      let len = snapshot.yearDone.indices.contains(m) ? snapshot.yearDone[m].count : 0
-      for d in 1...max(len, 1) where len > 0 {
-        out.append(Day(month: m, day: d))
-      }
+    snapshot.yearDone.prefix(12).enumerated().flatMap { m, month in
+      month.indices.map { Day(month: m, day: $0 + 1) }
     }
-    return out
   }
 
   private func level(_ day: Day) -> Color {
@@ -159,14 +150,12 @@ struct YearGrid: View {
   var body: some View {
     let all = days
     let totalCols = Int(ceil(Double(startOffset + all.count) / 7.0))
-    // A window has to end at today, not at December — anchoring it to the end
-    // of the year would show only empty future weeks for most of the year.
+    // the window ends at today, not December, or it would mostly show empty future weeks
     let lastCol = todayIndex.map { ($0 + startOffset) / 7 } ?? (totalCols - 1)
-    let firstCol = weekLimit.map { max(0, lastCol - $0 + 1) } ?? 0
-    let endCol = weekLimit == nil ? totalCols : lastCol + 1
+    let firstCol = max(0, lastCol - weekLimit + 1)
 
     HStack(alignment: .top, spacing: gap) {
-      ForEach(firstCol..<endCol, id: \.self) { col in
+      ForEach(firstCol..<(lastCol + 1), id: \.self) { col in
         VStack(spacing: gap) {
           ForEach(0..<7, id: \.self) { row in
             let idx = col * 7 + row - startOffset
@@ -198,6 +187,47 @@ struct ProgressRing: View {
         .trim(from: 0, to: max(0.001, min(1, progress)))
         .stroke(theme.done, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
         .rotationEffect(.degrees(-90))
+    }
+  }
+}
+
+/// Lock Screen ring with a value and a caption inside.
+struct AccessoryRing: View {
+  let progress: Double
+  let value: String
+  let caption: String
+
+  var body: some View {
+    ZStack {
+      ProgressRing(progress: progress, theme: .accessory, lineWidth: 6)
+      VStack(spacing: -2) {
+        Text(value)
+          .font(.system(size: 17, weight: .bold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.6)
+        Text(caption).font(.system(size: 10, weight: .bold))
+      }
+      .padding(.horizontal, 9)
+    }
+    .padding(3)
+  }
+}
+
+/// The last seven days as pips, filled where anything was done.
+struct RecentPips: View {
+  let snapshot: PlannerSnapshot
+  let theme: Theme
+  let size: CGFloat
+  var radius: CGFloat = 2
+  var spacing: CGFloat = 4
+
+  var body: some View {
+    HStack(spacing: spacing) {
+      ForEach(snapshot.recentDays, id: \.day) { item in
+        RoundedRectangle(cornerRadius: radius)
+          .fill(item.done ? theme.done : theme.cellEmpty)
+          .frame(width: size, height: size)
+      }
     }
   }
 }

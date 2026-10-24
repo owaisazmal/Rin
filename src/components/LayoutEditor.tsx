@@ -1,10 +1,8 @@
-import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Keyboard,
-  KeyboardAvoidingView,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,38 +12,19 @@ import {
   ViewStyle,
   useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckGlyph, ChevronGlyph, CloseGlyph } from './Glyphs';
 import SegmentedControl from './SegmentedControl';
+import { Sheet } from './Sheet';
 import { BUILTIN_TITLES, PlannerLayout, canAddCard, isBuiltinCard } from '../layout';
 import { CardKind, MAX_CARD_TITLE, MAX_CUSTOM_CARDS } from '../types';
-import {
-  FONT,
-  MODAL_ORIENTATIONS,
-  Palette,
-  RADIUS,
-  SCALE,
-  cardSurface,
-  useTheme,
-  wrapSafe,
-} from '../theme';
+import { FONT, Palette, RADIUS, SCALE, useTheme, wrapSafe } from '../theme';
 
-/**
- * The sheet for showing, ordering and creating the cards below the daily check.
- * Changes apply as they are made.
- */
+/** The sheet for showing, ordering and creating the cards below the daily check; changes apply as made */
 
-const KINDS: readonly { value: CardKind; label: string }[] = [
-  { value: 'note', label: 'NOTE' },
-  { value: 'list', label: 'LIST' },
-  { value: 'checklist', label: 'CHECKLIST' },
-];
-
-const KIND_LABEL: Record<CardKind, string> = {
-  note: 'NOTE',
-  list: 'LIST',
-  checklist: 'CHECKLIST',
-};
+const KINDS = (['note', 'list', 'checklist'] as const).map((value) => ({
+  value,
+  label: value.toUpperCase(),
+}));
 
 /** A row's height and the gap under it; rows are placed and scrolled by these */
 const ROW_HEIGHT = 52;
@@ -130,7 +109,6 @@ export default function LayoutEditor({
 }: Props) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const insets = useSafeAreaInsets();
   const list = useRef<ScrollView>(null);
   // at large text the whole sheet scrolls, or the hint and the form squeeze the list out
   const stacked = useWindowDimensions().fontScale > 1;
@@ -225,7 +203,7 @@ export default function LayoutEditor({
                 returnKeyType="done"
               />
               <Text style={styles.kind} maxFontSizeMultiplier={SCALE.heading}>
-                {KIND_LABEL[slot.custom.kind]}
+                {slot.custom.kind.toUpperCase()}
               </Text>
             </>
           ) : (
@@ -235,34 +213,22 @@ export default function LayoutEditor({
           )}
         </View>
 
-        <Pressable
-          hitSlop={4}
-          disabled={i === 0}
-          accessibilityRole="button"
-          accessibilityLabel={`Move ${spoken} up`}
-          onPress={() => move(slot.id, -1)}
-          style={({ pressed }) => [
-            styles.arrow,
-            i === 0 && styles.arrowOff,
-            pressed && { opacity: 0.6 },
-          ]}
-        >
-          <ChevronGlyph up color={palette.ink} />
-        </Pressable>
-        <Pressable
-          hitSlop={4}
-          disabled={i === layout.slots.length - 1}
-          accessibilityRole="button"
-          accessibilityLabel={`Move ${spoken} down`}
-          onPress={() => move(slot.id, 1)}
-          style={({ pressed }) => [
-            styles.arrow,
-            i === layout.slots.length - 1 && styles.arrowOff,
-            pressed && { opacity: 0.6 },
-          ]}
-        >
-          <ChevronGlyph color={palette.ink} />
-        </Pressable>
+        {([-1, 1] as const).map((by) => {
+          const end = by < 0 ? i === 0 : i === layout.slots.length - 1;
+          return (
+            <Pressable
+              key={by}
+              hitSlop={4}
+              disabled={end}
+              accessibilityRole="button"
+              accessibilityLabel={`Move ${spoken} ${by < 0 ? 'up' : 'down'}`}
+              onPress={() => move(slot.id, by)}
+              style={({ pressed }) => [styles.arrow, end && styles.arrowOff, pressed && { opacity: 0.6 }]}
+            >
+              <ChevronGlyph up={by < 0} color={palette.ink} />
+            </Pressable>
+          );
+        })}
         {slot.custom && (
           <Pressable
             hitSlop={6}
@@ -329,98 +295,60 @@ export default function LayoutEditor({
   );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-      supportedOrientations={MODAL_ORIENTATIONS}
-    >
-      <KeyboardAvoidingView style={styles.flex} behavior="padding">
-        {/* tapping the dim area behind the sheet dismisses it, as a sheet should */}
-        <Pressable
-          // keeps the sheet below the status bar when the keyboard is up
-          style={[
-            styles.backdrop,
-            {
-              paddingTop: Math.max(22, insets.top + 8),
-              paddingBottom: Math.max(22, insets.bottom + 8),
-            },
-          ]}
-          onPress={onClose}
+    <Sheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
+      {stacked ? (
+        <ScrollView
+          ref={list}
+          style={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            {stacked ? (
-              <ScrollView
-                ref={list}
-                style={styles.scroll}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {head}
-                <View
-                  style={[styles.rows, { height: rowsHeight }]}
-                  onLayout={(e) => {
-                    rowsTop.current = e.nativeEvent.layout.y;
-                  }}
-                >
-                  {rows}
-                </View>
-                {foot}
-              </ScrollView>
-            ) : (
-              <>
-                {head}
-                <ScrollView
-                  ref={list}
-                  style={styles.list}
-                  contentContainerStyle={{ height: rowsHeight }}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  {rows}
-                </ScrollView>
-                {foot}
-              </>
-            )}
+          {head}
+          <View
+            style={[styles.rows, { height: rowsHeight }]}
+            onLayout={(e) => {
+              rowsTop.current = e.nativeEvent.layout.y;
+            }}
+          >
+            {rows}
+          </View>
+          {foot}
+        </ScrollView>
+      ) : (
+        <>
+          {head}
+          <ScrollView
+            ref={list}
+            style={styles.list}
+            contentContainerStyle={{ height: rowsHeight }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {rows}
+          </ScrollView>
+          {foot}
+        </>
+      )}
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [styles.done, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.doneText} maxFontSizeMultiplier={SCALE.heading}>
-                DONE
-              </Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onClose}
+        style={({ pressed }) => [styles.done, pressed && { opacity: 0.85 }]}
+      >
+        <Text style={styles.doneText} maxFontSizeMultiplier={SCALE.heading}>
+          DONE
+        </Text>
+      </Pressable>
+    </Sheet>
   );
 }
 
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
-    flex: {
-      flex: 1,
-    },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 22,
-    },
     sheet: {
-      ...cardSurface(p),
-      backgroundColor: p.bg,
-      width: '100%',
       maxWidth: 380,
       // the list inside is what gives when the keyboard takes the room
       maxHeight: '100%',
-      padding: 20,
     },
     title: {
       fontSize: 13,

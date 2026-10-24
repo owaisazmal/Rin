@@ -1,11 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// One quote per day, rotating at midnight.
-///
-/// The widget picks from the list itself rather than being handed today's quote,
-/// so it rolls over on its own even if the app is never opened — `SnapshotProvider`
-/// already refreshes the timeline just after midnight.
+/// One quote per day, picked from the list here so it rolls over at midnight without the app.
 struct QuoteWidgetView: View {
   var entry: SnapshotEntry
   @Environment(\.widgetFamily) private var family
@@ -22,12 +18,13 @@ struct QuoteWidgetView: View {
 
   var body: some View {
     let theme = Theme.of(entry.snapshot, fallback: scheme)
-    let quote = entry.snapshot.quote(on: entry.date)
-    let heading = entry.snapshot.quoteIsOwn(on: entry.date) ? "YOUR WORDS" : "DISCIPLINE"
+    let rotation = entry.snapshot.rotation(from: entry.date)
+    let quote = rotation.first?.text
+    let heading = rotation.first?.own == true ? "YOUR WORDS" : "DISCIPLINE"
 
     switch family {
     case .accessoryRectangular:
-      let picks = Self.lockPicks(entry.snapshot.rotation(from: entry.date))
+      let picks = Self.lockPicks(rotation)
       // never cut: a quote too long for the slot gives way to the next one that fits whole
       ViewThatFits(in: .vertical) {
         ForEach(Array(picks.enumerated()), id: \.offset) { _, pick in
@@ -47,8 +44,7 @@ struct QuoteWidgetView: View {
     default:
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 10) {
         WidgetHeading(text: "\(heading).", theme: theme)
-        // short quotes would otherwise pool all the slack under the text;
-        // a spacer either side centres them in whatever room is left
+        // a spacer either side centres a short quote
         if family == .systemLarge { Spacer(minLength: 0) }
         if let quote {
           Text("“\(quote)”")
@@ -95,16 +91,10 @@ struct QuoteWidgetView: View {
   }
 }
 
-/// Today at a glance — the last seven days as pips, plus where today stands.
-/// Sits between the quote and the year bar so the large widget has no dead space.
+/// Today's tally and the last seven days, under the quote on the large widget.
 struct TodayStrip: View {
   let snapshot: PlannerSnapshot
   let theme: Theme
-
-  private var recent: [(day: Int, done: Bool)] {
-    guard let today = snapshot.today else { return [] }
-    return (max(1, today - 6)...today).map { ($0, snapshot.doneCount(day: $0) > 0) }
-  }
 
   var body: some View {
     let today = snapshot.today
@@ -127,13 +117,7 @@ struct TodayStrip: View {
             .foregroundColor(theme.inkSoft)
         }
         Spacer()
-        HStack(spacing: 4) {
-          ForEach(recent, id: \.day) { item in
-            RoundedRectangle(cornerRadius: 2)
-              .fill(item.done ? theme.done : theme.cellEmpty)
-              .frame(width: 11, height: 11)
-          }
-        }
+        RecentPips(snapshot: snapshot, theme: theme, size: 11)
         Text(verbatim: "\(snapshot.currentStreak)d")
           .font(.system(size: 12, weight: .bold))
           .foregroundColor(theme.accent)
@@ -142,8 +126,7 @@ struct TodayStrip: View {
   }
 }
 
-/// How far through the calendar year we are, plus what you've banked in it.
-/// Fills the space a quote leaves empty on the large widget.
+/// How far through the calendar year we are, and the year's check-ins.
 struct YearProgress: View {
   let snapshot: PlannerSnapshot
   let date: Date
@@ -168,15 +151,7 @@ struct YearProgress: View {
           .font(.system(size: 11))
           .foregroundColor(theme.inkSoft)
       }
-      GeometryReader { geo in
-        ZStack(alignment: .leading) {
-          Capsule().fill(theme.cellEmpty)
-          Capsule()
-            .fill(theme.accent)
-            .frame(width: max(2, geo.size.width * fraction))
-        }
-      }
-      .frame(height: 6)
+      PressureBar(fraction: fraction, tone: theme.accent, theme: theme, height: 6)
       HStack {
         Text("\(Int(fraction * 100))% through the year")
           .font(.system(size: 11))
@@ -191,19 +166,12 @@ struct YearProgress: View {
 }
 
 struct QuoteWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular]
-    }
-    return [.systemSmall, .systemMedium, .systemLarge]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "DailyQuote", provider: SnapshotProvider()) { entry in
       QuoteWidgetView(entry: entry)
     }
     .configurationDisplayName("Daily Quote")
     .description("One quote a day, built-in or your own, changing at midnight.")
-    .supportedFamilies(families)
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
   }
 }

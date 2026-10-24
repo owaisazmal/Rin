@@ -25,8 +25,6 @@ describe('urgencyOf', () => {
     expect(urgencyOf(task({ done: true, due: NOW - 90 * DAY }), NOW)).toBe('done');
   });
 
-  // The bands are what the colour and the reminders both key off, so the edges
-  // are worth pinning down exactly rather than approximately.
   it.each([
     { when: 'exactly at the deadline', offset: 0, band: 'overdue' },
     { when: 'a second past it', offset: -1_000, band: 'overdue' },

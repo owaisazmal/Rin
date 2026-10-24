@@ -7,14 +7,9 @@ import {
   isCardKind,
 } from './types';
 
-/**
- * Which cards sit below the daily check, and in what order. Pure, so it can be
- * tested without storage or rendering.
- */
-
 /** The cards the app ships with, in the order a new install shows them */
 export const BUILTIN_CARDS = ['deadlines', 'goals', 'observations', 'quote'] as const;
-export type BuiltinCardId = (typeof BUILTIN_CARDS)[number];
+type BuiltinCardId = (typeof BUILTIN_CARDS)[number];
 
 /** What the editor calls each built-in card; the cards title themselves */
 export const BUILTIN_TITLES: Record<BuiltinCardId, string> = {
@@ -49,7 +44,7 @@ export function defaultLayout(): PlannerLayout {
   return { slots: BUILTIN_CARDS.map((id) => ({ id, shown: true })), removed: [] };
 }
 
-export function customCount(layout: PlannerLayout): number {
+function customCount(layout: PlannerLayout): number {
   return layout.slots.filter((slot) => slot.custom).length;
 }
 
@@ -161,10 +156,7 @@ export function removeCard(layout: PlannerLayout, id: string): PlannerLayout {
   };
 }
 
-/**
- * Adds cards a month holds that the layout does not know, skipping deleted ones.
- * The layout is not in the backup, so this is how cards return after a restore.
- */
+/** Adds a month's cards the layout doesn't know, bar deleted ones; how cards return after a restore */
 export function adoptCards(layout: PlannerLayout, held: readonly CustomCard[]): PlannerLayout {
   const known = new Set([...layout.slots.map((slot) => slot.id), ...layout.removed]);
   const slots = [...layout.slots];

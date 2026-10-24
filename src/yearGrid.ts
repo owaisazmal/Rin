@@ -1,25 +1,7 @@
 import type { YearMonthSummary } from './storage';
 import { monthLength } from './dates';
 
-/**
- * The arithmetic behind the year grid: which twelve months it covers, how a
- * month's block of squares is shaped, and what the three numbers above it say.
- *
- * Kept out of both the hook and the component for the reason `streaks.ts`
- * exists: none of it renders and none of it touches storage, so it can be
- * pinned by tests that run in plain Node. The hook does the loading, the
- * component does the drawing, and the rules about dates live here where they
- * can be checked against a calendar.
- */
-
-/**
- * Which twelve months the grid is showing.
- *
- * `rolling` is the year up to this month — the span somebody actually wants to
- * see, and the one the grid opens on. A calendar year is the other question
- * ("how was 2025?"), and it is a different one: it ends in December whether or
- * not December has happened.
- */
+/** The year up to this month (what the grid opens on), or a calendar year that ends in December regardless */
 export type YearSpan = { kind: 'rolling' } | { kind: 'calendar'; year: number };
 
 /** One month of the grid: which month it is, and what was marked in it */
@@ -59,7 +41,7 @@ export function spanContains(
   return months.some((m) => m.year === at.year && m.month === at.month);
 }
 
-export interface BlockShape {
+interface BlockShape {
   /** rows the 1st is pushed down by — 0 when the month starts on a Sunday */
   lead: number;
   days: number;
@@ -70,15 +52,7 @@ export interface BlockShape {
   advance: number;
 }
 
-/**
- * How wide a month's block is, and where its days sit inside it.
- *
- * `width` and `advance` are deliberately two numbers. The label centres over
- * the squares, which end where the last one does; the next block starts a
- * column-gap further right than that. Collapsing them into one is the
- * difference between a label under its month and one that drifts a few points
- * right for every month the grid scrolls past.
- */
+/** Kept as two numbers, `width` and `advance`, or labels drift right with every month scrolled past */
 export function blockShape(
   year: number,
   month: number,
@@ -98,15 +72,7 @@ export function blockShape(
   };
 }
 
-/**
- * The days a given column of a block holds, as `[first, last]` day-of-month.
- *
- * Columns are weeks and rows are weekdays, so the first column is short by the
- * `lead` and the last one stops wherever the month does. Returned as a range
- * rather than an array of cells because the component draws the lead as
- * padding — a year is then 365 views instead of the 430-odd a grid padded with
- * transparent squares would mount, on the platform that can least afford them.
- */
+/** The `[first, last]` days a week column holds; a range, so the lead is padding rather than blank views */
 export function columnDays(
   shape: BlockShape,
   column: number
@@ -117,15 +83,7 @@ export function columnDays(
   };
 }
 
-/**
- * Walked day by day across the whole span rather than per month, because the
- * longest run is the one question here that doesn't respect month ends: a
- * streak running from the 28th to the 3rd is one streak.
- *
- * Only `done` counts as active. A day where every habit was marked missed is a
- * day that was answered, but it is not a day that was kept, and the number
- * above the grid is about what was kept.
- */
+/** Walked across the whole span, so a run from the 28th to the 3rd is one streak; only `done` counts */
 export function spanStats(blocks: YearBlock[]): YearSpanStats {
   let total = 0;
   let activeDays = 0;

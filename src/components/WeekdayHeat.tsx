@@ -1,27 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { DAY_ABBR } from '../dates';
-import type { DayRef } from '../marking';
 import { Tally, WEEKDAYS, WeekdayHeat as Heat, heatLevel, weekdayHeat, weekdayIndex } from '../trackerCharts';
-import type { MonthData } from '../types';
 import { FONT, Palette, RADIUS, SCALE, useTheme, wrapSafe } from '../theme';
-import ChartHeadline from './ChartHeadline';
+import ChartHeadline, { MonthChartProps } from './ChartHeadline';
 
 const GAP = 5;
 const RING = 3;
 const SHORT = WEEKDAYS.map((d) => DAY_ABBR[d]);
 const PLURAL = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
-
-interface Props {
-  year: number;
-  month: number;
-  data: MonthData;
-  today: DayRef;
-  width: number;
-  /** 0 → 1 as the chart draws itself in */
-  grow: Animated.Value;
-}
 
 /** row -1 is the all-habits rings */
 type Pick = { row: number; col: number } | null;
@@ -52,12 +40,12 @@ function headline(heat: Heat, pick: Pick, p: Palette): { figure?: string; text: 
 }
 
 /** Habits across the days of the week, so the days that slip show up; tapping a square or ring gives its count */
-export default function WeekdayHeat({ year, month, data, today, width, grow }: Props) {
+export default function WeekdayHeat({ year, month, data, today, width, grow }: MonthChartProps) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const heat = useMemo(() => weekdayHeat(year, month, data, today), [year, month, data, today]);
+  // the planner keys this by month, which resets it
   const [pick, setPick] = useState<Pick>(null);
-  useEffect(() => setPick(null), [year, month]);
 
   const nameW = Math.round(Math.min(120, Math.max(76, width * 0.3)));
   const cell = Math.floor(Math.min(32, (width - nameW - 7 * GAP) / 7));

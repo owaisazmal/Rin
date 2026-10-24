@@ -1,53 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { VideoPlayer, VideoView, useVideoPlayer } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { COLUMN, Palette, ThemeMode, useTheme } from '../theme';
 
-/**
- * The theme's looping clip, blended into the page rather than sat on it.
- *
- * Both cuts are line art on a solid field — black on white, and colour on
- * black — so a blend mode drops that field out. `multiply` leaves white
- * untouched and keeps the dark strokes; `screen` is the mirror image.
- *
- * The two platforms need genuinely different setups to get there, so they are
- * configured separately below rather than sharing one compromise. The clips
- * themselves are shared, but only because they were re-encoded with pure
- * fields — something both platforms want and neither is harmed by.
- */
+/** The theme's looping clip; its solid field is blended out with multiply (light) or screen (dark) */
 
-// Static paths, so Metro can find and bundle them — a computed path wouldn't
-// be visible to the bundler.
+// static requires, so Metro can bundle them
 const CUTS = {
   dark: require('../../assets/video/dark.mp4'),
   light: require('../../assets/video/light.mp4'),
 } as const;
 
-/**
- * Android blends the video's own layer, so the page — aurora and all — shows
- * straight through the field. Measured across the panel edge: no step at all.
- * Nothing else is needed there, and nothing added for iOS should change it.
- *
- * iOS refuses to blend a video layer. mixBlendMode on the VideoView renders a
- * solid white rectangle in light mode; on a View wrapping the VideoView, the
- * same rectangle. Both were tried and measured. What does work is blending a
- * plain View *downwards* onto the clip, which puts the field on the page's
- * exact background colour — but the clip stays opaque, so the aurora behind it
- * is missing inside the panel. Hence the bleed and the fades: no hard edge
- * left to notice.
- */
+// iOS won't blend video, so a View is blended onto it, with a bleed and edge fades
 const IOS = Platform.OS === 'ios';
 
-/**
- * How far the flat band dissolves back into the page, in points.
- *
- * Long. The fade can only live outside the clip's own box — where the overlay
- * stops being opaque, the raw white field shows through — so length is the one
- * dial available, and a short ramp still reads as an edge.
- */
+/** how far the iOS band dissolves back into the page; a short ramp still reads as an edge */
 const FADE = 46;
+
+/** Silent, looping, and never taking audio focus from the user's music */
+export function quietLoop(p: VideoPlayer) {
+  p.loop = true;
+  p.muted = true;
+  p.audioMixingMode = 'mixWithOthers';
+  p.play();
+}
 
 export default function ThemeBackdrop() {
   const { mode, palette } = useTheme();
@@ -57,51 +35,23 @@ export default function ThemeBackdrop() {
   const beside = 16 + Math.max(0, (width - insets.left - insets.right - COLUMN.maxWidth) / 2);
   const bleed = { left: -(beside + insets.left), right: -(beside + insets.right) };
 
-  /**
-   * The clip lags the palette on purpose.
-   *
-   * Changing the source releases one player and builds another, decoding a
-   * different file. Measured on Android, doing that in the same commit as the
-   * theme change held the repaint for ~1.5–2s — the toggle looked broken. This
-   * lets the palette flip immediately and brings the clip along once the work
-   * of switching is done.
-   *
-   * The blend follows this value rather than `mode`, so the pair never gets out
-   * of step: for the moment in between, the outgoing clip is blended against a
-   * page it now matches inversely and simply fades out of sight, which reads as
-   * a crossfade rather than a glitch.
-   */
+  // lags the palette: swapping the clip in the theme's own commit stalled it ~2s on Android
   const [cut, setCut] = useState<ThemeMode>(mode);
 
-  // Built once, from whichever cut was current at mount. Passing a changing
-  // source to useVideoPlayer is what tore the player down and built a new one.
+  // built once; a changing source would tear the player down and rebuild it
   const first = useRef(mode).current;
-  const player = useVideoPlayer(CUTS[first], (p) => {
-    p.loop = true;
-    // both files carry an audio track; decoration must never make a sound
-    p.muted = true;
-    // ...and must never behave like media, either. Left on the default the
-    // Android player takes audio focus and claims the media-button session,
-    // so a decorative loop would pause the user's music and swallow the play
-    // button on their headphones.
-    p.audioMixingMode = 'mixWithOthers';
-    p.play();
-  });
+  const player = useVideoPlayer(CUTS[first], quietLoop);
 
   useEffect(() => {
     if (cut === mode) return;
     let cancelled = false;
-    // Wait for the theme's own repaint to land, then hand the same player a new
-    // source. replaceAsync loads off the UI thread — expo-video documents it as
-    // the way to avoid exactly this stall. The timeout is a floor: if the app
-    // never goes idle, the clip should still catch up rather than never swap.
+    // after the theme repaints; the timeout makes sure the clip still catches up
     const handle = requestIdleCallback(
       () => {
         player.replaceAsync(CUTS[mode]).then(() => {
           if (cancelled) return;
           player.play();
-          // flip the blend only once the new clip is actually in, so the two
-          // never disagree
+          // flip the blend only once the new clip is in
           setCut(mode);
         });
       },
@@ -120,15 +70,11 @@ export default function ThemeBackdrop() {
       <VideoView
         style={IOS ? styles.fill : [styles.fill, blend]}
         player={player}
-        // `contain`, not `cover`: with the field blended away there is no
-        // letterbox to see, so fitting the whole drawing costs nothing and
-        // stops the panel's shape from cropping it.
+        // with the field blended away there is no letterbox, so never crop
         contentFit="contain"
         nativeControls={false}
         allowsPictureInPicture={false}
-        // Android's default SurfaceView is punched through the view hierarchy
-        // and can't be drawn into the offscreen layer a blend mode needs — the
-        // clip vanishes entirely. A TextureView composites normally.
+        // a SurfaceView can't be drawn into the offscreen layer a blend needs
         surfaceType="textureView"
       />
 
@@ -143,13 +89,7 @@ export default function ThemeBackdrop() {
   );
 }
 
-/**
- * Dissolves the page into the flat band. It sits *outside* the panel, not
- * inside: the inside is already a uniform background colour, so a fade there
- * changes nothing — the visible seam is the aurora stopping dead at the panel's
- * edge. Running the background colour outwards from that edge, fading to
- * nothing, turns a 13-level step into a gradient with no boundary to find.
- */
+/** Runs the page colour outwards from the iOS band's edge, so the aurora doesn't stop dead there */
 function EdgeFade({ palette, placement }: { palette: Palette; placement: 'top' | 'bottom' }) {
   const id = `themeFade-${placement}`;
   const top = placement === 'top';

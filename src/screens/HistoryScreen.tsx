@@ -9,7 +9,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SectionHeader from '../components/SectionHeader';
+import ScreenHeader from '../components/ScreenHeader';
+import SectionHeader, { CountBadge } from '../components/SectionHeader';
 import SegmentedControl from '../components/SegmentedControl';
 import Spinner, { LoadingBlock } from '../components/Spinner';
 import { Task } from '../tasks';
@@ -27,14 +28,7 @@ import { useNow } from '../hooks/useNow';
 import { startOfDay } from '../dates';
 import { COLUMN, FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
-/**
- * What has already happened — habits ticked or missed, deadlines finished —
- * newest first.
- *
- * A record rather than a chart: the tracker already answers "how much", so this
- * answers "what, and when". Nothing here is editable, which is the point; the
- * planner is where a day is changed, and this is where it is read back.
- */
+/** What has already happened — habits ticked or missed, deadlines finished — newest first, read-only */
 
 const FILTERS = [
   { value: 'all' as HistoryFilter, label: 'ALL' },
@@ -46,8 +40,7 @@ interface Props {
   tasks: Task[];
   /** false while the screen is closed, so it doesn't read storage in the background */
   active: boolean;
-  /** which tab to open on — the header opens on everything, the deadlines
-   *  section opens on deadlines */
+  /** which tab to open on */
   initialFilter: HistoryFilter;
   onClose: () => void;
 }
@@ -57,22 +50,15 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const [filter, setFilter] = useState<HistoryFilter>(initialFilter);
 
-  // Adopt the requested tab on the way in, and not after: switching tabs while
-  // the screen is open is the reader's decision, not the caller's.
+  // adopt the requested tab on the way in only; after that it is the reader's choice
   useEffect(() => {
     if (active) setFilter(initialFilter);
   }, [active, initialFilter]);
 
-  // A minute is plenty: the only thing that moves here is "TODAY" rolling over.
+  // a minute is plenty: only "TODAY" rolling over moves here
   const now = useNow(60_000);
 
-  /**
-   * The same instant, rounded down to the day.
-   *
-   * Rows only need `now` to decide whether a date is today or yesterday, and
-   * handing them the raw clock would change their props every minute and defeat
-   * the memo on every visible card. Rounded, the value is stable until midnight.
-   */
+  // rounded to the day, so the memoised cards don't re-render every minute
   const todayStart = useMemo(() => startOfDay(now), [now]);
   const { days, loading, loadingMore, loadMore, canLoadMore } = useHistory(tasks, active, now);
 
@@ -86,26 +72,15 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
     [todayStart, palette, styles]
   );
 
-  // Rebuilt on render but never remounted: same element type each time, so the
-  // segmented control keeps its slide position rather than snapping back.
+  // an element, not a component, so the segmented control isn't remounted
   const header = (
     <>
-      <View style={styles.header}>
-        <Text style={styles.title} maxFontSizeMultiplier={SCALE.heading}>
-          HISTORY
-        </Text>
-        <Pressable
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Close history"
-          onPress={onClose}
-          style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={styles.closeGlyph} maxFontSizeMultiplier={SCALE.glyph}>
-            ✕
-          </Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="HISTORY"
+        closeLabel="Close history"
+        onClose={onClose}
+        style={styles.header}
+      />
 
       <SegmentedControl
         options={FILTERS}
@@ -166,27 +141,12 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
     ) : null;
 
   return (
-    /**
-     * Opaque while there is nothing to show, transparent once there is.
-     *
-     * Screens are see-through so the drifting background reads through them,
-     * which works because their cards cover the planner as they slide over it.
-     * A screen holding only a spinner covers nothing, so the tracker underneath
-     * showed straight through the entrance. Giving it a ground for exactly as
-     * long as it is empty costs the background a few hundred milliseconds and
-     * fixes it.
-     */
+    // opaque while loading, or the planner shows through a screen with only a spinner
     <SafeAreaView
       style={[styles.safe, loading && { backgroundColor: palette.bg }]}
       edges={['top', 'left', 'right', 'bottom']}
     >
-      {/*
-        A list rather than a scroller. Every day is a card of its own and an
-        active year runs to hundreds of them; rendering the lot at once put
-        roughly a thousand views on screen and took the frame time on Android to
-        133ms against a 44ms baseline for the launcher on the same machine.
-        Virtualised, only what is in view is mounted.
-      */}
+      {/* virtualised: an active year runs to hundreds of day cards */}
       <FlatList
         data={shown}
         keyExtractor={keyOf}
@@ -200,8 +160,7 @@ export default function HistoryScreen({ tasks, active, initialFilter, onClose }:
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
-        // detaching offscreen rows helps Android and has a history of leaving
-        // blank patches on iOS, so it is asked for only where it pays
+        // helps Android; on iOS it has left blank patches
         removeClippedSubviews={Platform.OS === 'android'}
       />
     </SafeAreaView>
@@ -236,14 +195,7 @@ function Summary({
   );
 }
 
-/**
- * One day's card.
- *
- * Memoised because the list re-renders whenever the filter changes or a page is
- * added, and none of that alters a day that was already on screen. `today` is
- * rounded to the day for the same reason: an unrounded clock would break every
- * comparison once a minute.
- */
+/** One day's card, memoised: filter changes and new pages don't alter a day already shown */
 const DayCard = React.memo(function DayCard({
   day,
   today,
@@ -263,15 +215,7 @@ const DayCard = React.memo(function DayCard({
     <View style={styles.card}>
       <SectionHeader
         title={dayHeading(day, today)}
-        right={
-          tally ? (
-            <View style={styles.tallyBadge}>
-              <Text style={styles.tallyText} maxFontSizeMultiplier={SCALE.figure}>
-                {tally}
-              </Text>
-            </View>
-          ) : undefined
-        }
+        right={tally ? <CountBadge label={tally} /> : undefined}
       />
 
       {day.marks.length > 0 && (
@@ -348,35 +292,7 @@ const makeStyles = (p: Palette) =>
       paddingBottom: 28,
     },
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
       marginBottom: 18,
-      paddingHorizontal: 4,
-      gap: 12,
-    },
-    title: {
-      flexShrink: 1,
-      fontSize: 26,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.ink,
-    },
-    closeBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: RADIUS.pill,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-      backgroundColor: p.card,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    closeGlyph: {
-      fontSize: 15,
-      fontFamily: FONT.medium,
-      color: p.ink,
-      lineHeight: 18,
     },
     filter: {
       marginBottom: 16,
@@ -412,17 +328,6 @@ const makeStyles = (p: Palette) =>
     card: {
       ...cardSurface(p),
       padding: 16,
-    },
-    tallyBadge: {
-      backgroundColor: p.chip,
-      borderRadius: RADIUS.chip,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    tallyText: {
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      color: p.inkSoft,
     },
     chips: {
       flexDirection: 'row',

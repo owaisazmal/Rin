@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  LayoutAnimation,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Alert, LayoutAnimation, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import CustomCard from '../components/CustomCard';
@@ -15,20 +7,17 @@ import DailyCheck from '../components/DailyCheck';
 import DayBars from '../components/DayBars';
 import Deadlines from '../components/Deadlines';
 import DueDatePicker from '../components/DueDatePicker';
-import EditIcon from '../components/EditIcon';
+import { EditIcon, HistoryIcon, SettingsIcon, SummaryIcon } from '../components/Glyphs';
 import HabitBars from '../components/HabitBars';
-import HistoryIcon from '../components/HistoryIcon';
 import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import KeyGoals from '../components/KeyGoals';
 import LayoutEditor from '../components/LayoutEditor';
 import LogoMark from '../components/LogoMark';
 import MonthNav from '../components/MonthNav';
-import Observations from '../components/Observations';
 import QuoteCard from '../components/QuoteCard';
 import RadialTracker from '../components/RadialTracker';
-import SettingsIcon from '../components/SettingsIcon';
+import RoundButton from '../components/RoundButton';
 import StreakBadge from '../components/StreakBadge';
-import SummaryIcon from '../components/SummaryIcon';
 import TrackerCard from '../components/TrackerCard';
 import WeekdayHeat from '../components/WeekdayHeat';
 import WeekTrend from '../components/WeekTrend';
@@ -59,16 +48,12 @@ import type { SummarySource } from './SummaryScreen';
 import { ChartType, NotificationPrefs } from '../settings';
 import { QuotePrefs, activeQuotes } from '../quotes';
 import { CARD_PADDING, RAIL_TOP, SPLIT_MAX, plannerFit, usesSideRail } from '../fit';
-import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
-import { CardKind, CardRef, cardItemsIn } from '../types';
+import { COLUMN, FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
+import { CardKind, CardRef, MAX_OBSERVATIONS, MAX_OBSERVATION_LEN, cardItemsIn } from '../types';
 
 const rowsAnimation = LayoutAnimation.create(200, 'easeInEaseOut', 'opacity');
 
-/**
- * Wraps a list mutation so the rows animate open or closed around it. Done
- * here rather than in the hooks: the list moving is a property of this screen,
- * not of the month's data.
- */
+/** Wraps a list mutation so the rows animate open or closed around it */
 function animateRows<A extends unknown[]>(fn: (...args: A) => void) {
   return (...args: A) => {
     LayoutAnimation.configureNext(rowsAnimation);
@@ -76,12 +61,7 @@ function animateRows<A extends unknown[]>(fn: (...args: A) => void) {
   };
 }
 
-/**
- * The planner itself: layout and gestures only. What a month contains, how it
- * persists, and what gets pushed to the widgets and the notification schedule
- * all live in hooks, and the tracker card and the month bar carry their own
- * motion, so this file reads as the screen's shape.
- */
+/** The planner's layout and gestures; the month's data, saving and syncing live in hooks */
 export default function PlannerScreen({
   chart,
   onSetChart,
@@ -111,20 +91,7 @@ export default function PlannerScreen({
   onOpenSummary: (source: SummarySource) => void;
   /** owned by the Navigator, because history reads the same list */
   taskStore: TaskStore;
-  /**
-   * The month Settings is offering to put back, by document name, or null.
-   *
-   * The notice below tells somebody that writing in a damaged month lets go of
-   * what did not survive, and until this existed that was the end of it — the
-   * remedy lived behind a card they had no reason to open. This is that remedy,
-   * handed down as a name so the screen need learn nothing about backups to
-   * point at it: whether there is a copy, whether anything has looked, and what
-   * looking costs are all decided above the Navigator. All this screen does is
-   * notice that the month being warned about is the month being offered.
-   *
-   * Defaulted rather than required, because a caller with no answer is the
-   * ordinary case and the notice is completely true without the clause.
-   */
+  /** the month Settings is offering to restore, so the damage notice can point there */
   restorableMonth?: string | null;
 }) {
   const { mode, palette } = useTheme();
@@ -132,8 +99,7 @@ export default function PlannerScreen({
   const windowSize = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // One clock for everything that depends on the date: the deadlines age on
-  // it, and "today" rolls over with it at midnight.
+  // one clock: deadlines age on it and "today" rolls over with it
   const nowMs = useNow();
   const now = useMemo(() => new Date(nowMs), [nowMs]);
 
@@ -202,29 +168,21 @@ export default function PlannerScreen({
 
   const yearMonths = useYearSummary(year, month, data, daysInMonth);
   const streakDays = useCurrentStreak(year, yearMonths);
-  /*
-    The year grid's own span, which is not the browsed year. It opens on the
-    twelve months up to this one — a span that crosses New Year, and so cannot
-    be the calendar-year array above: that one is a contract the streak badge,
-    the widget snapshot and both native widget targets index as January-first.
-  */
+  // the year grid's own span, which crosses New Year, unlike the January-first yearMonths
   const yearWindow = useYearWindow({
-    now: { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() },
+    now: todayRef,
     browsedYear: year,
     browsedMonth: month,
     browsedMonths: yearMonths,
   });
-  // Both, not just the month: pushing before the deadlines have loaded would
-  // put a snapshot on the home screen saying nothing is due, and only correct
-  // it on the next edit.
   const quoteList = useMemo(() => activeQuotes(quotes), [quotes]);
+  // wait for the deadlines too, or the widget would briefly say nothing is due
   useWidgetSync(loaded && tasksLoaded, year, month, data, yearMonths, mode, tasks, quoteList);
   useReminderSync(loaded && tasksLoaded, data, today, tasks, notifications);
 
   const { chartAnim, monthAnim, growAnim, enterFrom } = useChartTransition(chart, year * 12 + month);
 
-  // Opening a month lands on today when it's the current one, on the 1st
-  // otherwise — unless a date was picked from the year grid on the way in.
+  // a month opens on today, else the 1st, unless the year grid picked a date
   useEffect(() => {
     const n = new Date();
     setSelectedDay(
@@ -244,12 +202,7 @@ export default function PlannerScreen({
     [flushSave, year, month]
   );
 
-  /**
-   * Takes the year as well as the month, because the grid it is called from
-   * shows the twelve months up to this one and those straddle New Year —
-   * moving on the month alone would land a tap on last December in this year's
-   * December, silently.
-   */
+  // takes the year too: the year grid's months straddle New Year
   const gotoDate = useCallback(
     (y: number, m: number, day: number) => {
       if (y === year && m === month) {
@@ -345,10 +298,14 @@ export default function PlannerScreen({
         );
       case 'observations':
         return (
-          <Observations
+          <CustomCard
             key={slot.id}
-            observations={data.observations}
-            onChange={setObservation}
+            title="Observations"
+            kind="list"
+            items={data.observations.map((text) => ({ text, done: false }))}
+            maxItems={MAX_OBSERVATIONS}
+            maxLength={MAX_OBSERVATION_LEN}
+            onChangeText={setObservation}
             onAdd={animateRows(addObservation)}
             onRemove={animateRows(removeObservation)}
           />
@@ -412,7 +369,7 @@ export default function PlannerScreen({
             years={yearWindow.years}
             stats={yearWindow.stats}
             focus={{ year, month }}
-            now={{ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() }}
+            now={todayRef}
             selected={{ year, month, day: selectedDay }}
             onSelectDate={gotoDate}
           />
@@ -420,11 +377,11 @@ export default function PlannerScreen({
       case 'days':
         return <DayBars {...shared} selectedDay={selectedDay} onSelectDay={setSelectedDay} />;
       case 'habits':
-        return <HabitBars {...shared} />;
+        return <HabitBars key={year * 12 + month} {...shared} />;
       case 'weeks':
         return <WeekTrend {...shared} selectedDay={selectedDay} onSelectDay={setSelectedDay} />;
       case 'weekdays':
-        return <WeekdayHeat {...shared} />;
+        return <WeekdayHeat key={year * 12 + month} {...shared} />;
     }
   };
 
@@ -436,56 +393,29 @@ export default function PlannerScreen({
   const actions = (
     <>
       <StreakBadge days={streakDays} palette={palette} />
-      <Pressable
-        hitSlop={4}
-        accessibilityRole="button"
-        accessibilityLabel="Month summary"
-        onPress={openSummary}
-        style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-      >
-        <SummaryIcon color={palette.ink} />
-      </Pressable>
-      <Pressable
-        hitSlop={4}
-        accessibilityRole="button"
-        accessibilityLabel="Customize cards"
-        onPress={() => setEditingLayout(true)}
-        style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-      >
-        <EditIcon color={palette.ink} />
-      </Pressable>
-      <Pressable
-        hitSlop={4}
-        accessibilityRole="button"
-        accessibilityLabel="History"
-        onPress={() => onOpenHistory()}
-        style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-      >
-        <HistoryIcon color={palette.ink} />
-      </Pressable>
-      <Pressable
-        hitSlop={4}
-        accessibilityRole="button"
-        accessibilityLabel="Settings"
-        onPress={onOpenSettings}
-        style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-      >
-        <SettingsIcon color={palette.ink} />
-      </Pressable>
+      {[
+        { label: 'Month summary', onPress: openSummary, Icon: SummaryIcon },
+        { label: 'Customize cards', onPress: () => setEditingLayout(true), Icon: EditIcon },
+        { label: 'History', onPress: () => onOpenHistory(), Icon: HistoryIcon },
+        { label: 'Settings', onPress: onOpenSettings, Icon: SettingsIcon },
+      ].map(({ label, onPress, Icon }) => (
+        <RoundButton key={label} label={label} onPress={onPress} hitSlop={4}>
+          <Icon color={palette.ink} />
+        </RoundButton>
+      ))}
     </>
+  );
+
+  const notice = (text: string) => (
+    <View style={styles.damaged}>
+      <Text style={styles.damagedText}>{text}</Text>
+    </View>
   );
 
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-        {/*
-          The keyboard handling — getting out of its way, putting the focused
-          field where it can be seen, and what does and does not dismiss it —
-          all lives in the wrapper. Padding on Android as well as iOS, for the
-          reason set out there: the app draws edge to edge, so the window no
-          longer shrinks when the keyboard opens.
-        */}
         <KeyboardSafeScroll
           contentContainerStyle={[styles.content, split && styles.contentSplit]}
           // the card editor has fields of its own, and is drawn over this page
@@ -506,34 +436,11 @@ export default function PlannerScreen({
             enterFrom={enterFrom}
           />
 
-          {/*
-            A record this phone could only half read is drawn but never written
-            back, so anything typed into it goes nowhere. That has to be said
-            out loud and at the top: the alternative is a month that accepts
-            edits all afternoon and keeps none of them. Both notices can be up
-            at once — they are two different records — and each waits for its
-            own load, since nothing is vouched for before it has been read.
-          */}
-          {loaded && !vouched ? (
-            <View style={styles.damaged}>
-              <Text style={styles.damagedText}>
-                {/*
-                  The clause about Settings appears for the month it is
-                  actually about and for no other. Comparing the names rather
-                  than taking a bare flag is what keeps that exact: the card
-                  offers one document at a time, and a phone with two damaged
-                  months would otherwise carry the promise into the one that
-                  has no copy waiting for it.
-                */}
-                {damagedNotice('month', restorableMonth === monthDocKey(year, month))}
-              </Text>
-            </View>
-          ) : null}
-          {tasksLoaded && !tasksVouched ? (
-            <View style={styles.damaged}>
-              <Text style={styles.damagedText}>{damagedNotice('deadlines')}</Text>
-            </View>
-          ) : null}
+          {/* a half-read record is never written back, so edits to it would be lost */}
+          {loaded && !vouched
+            ? notice(damagedNotice('month', restorableMonth === monthDocKey(year, month)))
+            : null}
+          {tasksLoaded && !tasksVouched ? notice(damagedNotice('deadlines')) : null}
 
           {/* the same tree either way, so folding or turning the phone keeps every card mounted */}
           <View style={split ? styles.columns : styles.stack}>
@@ -646,22 +553,6 @@ const makeStyles = (p: Palette) =>
       gap: 8,
     },
     rail: { position: 'absolute', right: 0, alignItems: 'center', gap: 10 },
-    iconBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: RADIUS.pill,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: p.card,
-    },
-    /**
-     * The one card on this screen that is not part of the month. It takes the
-     * accent border the tracker's alerts use rather than the quiet card
-     * surface, because it is the difference between typing that is kept and
-     * typing that is not.
-     */
     damaged: {
       ...cardSurface(p),
       borderColor: p.accent,

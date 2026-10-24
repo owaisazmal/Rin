@@ -2,21 +2,12 @@ import SwiftUI
 import WidgetKit
 
 extension View {
-  /// iOS 17 requires widgets to declare their background this way; older
-  /// versions just take a plain background.
-  @ViewBuilder
   func widgetBackground(_ color: Color) -> some View {
-    if #available(iOS 17.0, *) {
-      modifier(FlatWidgetBackground(color: color))
-    } else {
-      background(color)
-    }
+    modifier(FlatWidgetBackground(color: color))
   }
 }
 
-/// The Home Screen lays a highlight over a container background, which greys a
-/// dark one. Painting the ground in the content too keeps it the theme's colour.
-@available(iOS 17.0, *)
+/// Paints the ground in the content too, since the Home Screen greys a dark container background.
 private struct FlatWidgetBackground: ViewModifier {
   let color: Color
   @Environment(\.widgetContentMargins) private var margins
@@ -145,31 +136,21 @@ struct LegendDot: View {
 }
 
 struct RadialTrackerWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular]
-    }
-    return [.systemSmall, .systemMedium, .systemLarge]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "RadialTracker", provider: SnapshotProvider()) { entry in
       RadialWidgetView(entry: entry)
     }
     .configurationDisplayName("Radial Tracker")
     .description("This month as rings: one ring per habit, one wedge per day.")
-    .supportedFamilies(families)
-    // the view pads itself; the system's own margins on top left the rings
-    // at barely half the square
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular])
+    // the view pads itself; system margins on top shrank the rings
     .contentMarginsDisabled()
   }
 }
 
 // MARK: - Year tracker
 
-/// Medium only on the Home Screen. A full year needs ~53 columns, which at a
-/// large widget's width forces cells down to ~5pt — a stripe of confetti with
-/// most of the card empty. The recent stretch at a legible size says more.
+/// Medium only: a full year at large width shrinks cells to ~5pt, so it shows the recent weeks.
 struct YearWidgetView: View {
   var entry: SnapshotEntry
   @Environment(\.widgetFamily) private var family
@@ -214,20 +195,13 @@ struct YearWidgetView: View {
 }
 
 struct YearTrackerWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [.systemMedium, .accessoryRectangular]
-    }
-    return [.systemMedium]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "YearTracker", provider: SnapshotProvider()) { entry in
       YearWidgetView(entry: entry)
     }
     .configurationDisplayName("Year Tracker")
     .description("The last 17 weeks, shaded by how much you checked off.")
-    .supportedFamilies(families)
+    .supportedFamilies([.systemMedium, .accessoryRectangular])
   }
 }
 
@@ -313,19 +287,7 @@ struct AccessoryProgress: View {
     Group {
       switch family {
       case .accessoryCircular:
-        ZStack {
-          ProgressRing(progress: progress, theme: .accessory, lineWidth: 6)
-          VStack(spacing: -2) {
-            Text("\(snap.monthPct)%")
-              .font(.system(size: 17, weight: .bold, design: .rounded))
-              .lineLimit(1)
-              .minimumScaleFactor(0.6)
-            Text(String(snap.monthName.prefix(3)))
-              .font(.system(size: 10, weight: .bold))
-          }
-          .padding(.horizontal, 9)
-        }
-        .padding(3)
+        AccessoryRing(progress: progress, value: "\(snap.monthPct)%", caption: String(snap.monthName.prefix(3)))
 
       case .accessoryRectangular:
         VStack(alignment: .leading, spacing: 2) {
@@ -350,22 +312,14 @@ struct AccessoryProgress: View {
 }
 
 struct MonthProgressWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [
-        .systemSmall, .systemMedium,
-        .accessoryCircular, .accessoryRectangular, .accessoryInline,
-      ]
-    }
-    return [.systemSmall, .systemMedium]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "MonthProgress", provider: SnapshotProvider()) { entry in
       ProgressWidgetView(entry: entry)
     }
     .configurationDisplayName("Month Progress")
     .description("How much of this month you've actually checked off.")
-    .supportedFamilies(families)
+    .supportedFamilies([
+      .systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline,
+    ])
   }
 }

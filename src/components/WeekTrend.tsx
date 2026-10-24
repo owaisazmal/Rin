@@ -2,11 +2,9 @@ import React, { useMemo } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { MONTH_ABBR } from '../dates';
-import type { DayRef } from '../marking';
 import { WeekPoint, smoothSegments, weekPoints } from '../trackerCharts';
-import type { MonthData } from '../types';
 import { FONT, Palette, SCALE, useTheme } from '../theme';
-import ChartHeadline, { Delta } from './ChartHeadline';
+import ChartHeadline, { DayPicking, Delta, MonthChartProps } from './ChartHeadline';
 
 const TOP = 16;
 const PLOT = 112;
@@ -14,22 +12,10 @@ const BOTTOM = 8;
 const HEIGHT = TOP + PLOT + BOTTOM;
 const PAD = 6;
 
-interface Props {
-  year: number;
-  month: number;
-  data: MonthData;
-  today: DayRef;
-  width: number;
-  selectedDay: number;
-  onSelectDay: (day: number) => void;
-  /** 0 → 1 as the chart draws itself in */
-  grow: Animated.Value;
-}
-
 const span = (w: WeekPoint) => (w.first === w.last ? String(w.first) : `${w.first}–${w.last}`);
 
 /** Each week's rate as a rising curve; the week still running is drawn dashed, and tapping a week opens its first day */
-export default function WeekTrend({ year, month, data, today, width, selectedDay, onSelectDay, grow }: Props) {
+export default function WeekTrend({ year, month, data, today, width, selectedDay, onSelectDay, grow }: MonthChartProps & DayPicking) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const weeks = useMemo(() => weekPoints(year, month, data, today), [year, month, data, today]);

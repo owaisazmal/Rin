@@ -103,10 +103,6 @@ describe('blockShape', () => {
 });
 
 describe('columnDays', () => {
-  /**
-   * Every cell the component would draw for a month, in the order it draws
-   * them: column by column, and within a column top to bottom after the lead.
-   */
   const layout = (year: number, month: number) => {
     const s = shape(year, month);
     const seen: { day: number; column: number }[] = [];
@@ -136,8 +132,6 @@ describe('columnDays', () => {
   it.each(cases)('puts every day of %s in the row its weekday says', (_name, year, month) => {
     const { shape: s, seen } = layout(year, month);
     for (const { day, column } of seen) {
-      // the component pads the first column by `lead` rows and stacks from
-      // there, so a day's place in the grid is fixed by its offset from the 1st
       const slot = day - 1 + s.lead;
       expect(slot % 7).toBe(new Date(year, month, day).getDay());
       expect(Math.floor(slot / 7)).toBe(column);

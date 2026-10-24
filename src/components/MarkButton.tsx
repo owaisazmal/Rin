@@ -1,46 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Pressable } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { Palette, RADIUS } from '../theme';
+import { Glyph } from './Glyphs';
 
-/**
- * Done / missed toggle.
- *
- * The glyphs are stroked SVG paths rather than the "✓" and "✗" text characters —
- * those render at whatever weight and baseline the system font decides on, which
- * is what made the old buttons look uneven.
- */
+/** Done / missed toggle. */
 
 const SIZE = 40;
-
-function CheckGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24">
-      <Path
-        d="M5 12.8 L9.7 17.5 L19 6.8"
-        stroke={color}
-        strokeWidth={2.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-function CrossGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24">
-      <Path
-        d="M7 7 L17 17 M17 7 L7 17"
-        stroke={color}
-        strokeWidth={2.8}
-        strokeLinecap="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
+const CHECK = 'M5 12.8 L9.7 17.5 L19 6.8';
+const CROSS = 'M7 7 L17 17 M17 7 L7 17';
 
 export default function MarkButton({
   kind,
@@ -72,7 +39,6 @@ export default function MarkButton({
 
   const fill = kind === 'done' ? palette.done : palette.missed;
   const soft = kind === 'done' ? palette.doneSoft : palette.missedSoft;
-  const Glyph = kind === 'done' ? CheckGlyph : CrossGlyph;
 
   return (
     <Pressable hitSlop={6} onPress={onPress} disabled={disabled}>
@@ -93,7 +59,12 @@ export default function MarkButton({
             transform: [{ scale }],
           }}
         >
-          <Glyph color={active ? palette.onState : palette.inkSoft} />
+          <Glyph
+            d={kind === 'done' ? CHECK : CROSS}
+            color={active ? palette.onState : palette.inkSoft}
+            size={20}
+            weight={2.8}
+          />
         </Animated.View>
       )}
     </Pressable>

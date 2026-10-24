@@ -12,18 +12,9 @@ extension Color {
   }
 }
 
-/// Mirrors src/theme.ts. Brand colours, the shades derived from them, and the
-/// two state colours (green / red) that are the deliberate exception.
-enum Brand {
-  static let charcoal = Color(hex: 0x4A4A4A)
-  static let grey = Color(hex: 0xCBCBCB)
-  static let ivory = Color(hex: 0xFFFFE3)
-  static let slate = Color(hex: 0x6D8196)
-}
-
+/// Mirrors src/theme.ts.
 struct Theme {
   let bg: Color
-  let card: Color
   let ink: Color
   let inkSoft: Color
   let line: Color
@@ -37,18 +28,15 @@ struct Theme {
 
   static let dark = Theme(
     bg: Color(hex: 0x0D0D0D),
-    card: Color(hex: 0x161616),
-    ink: Brand.ivory,
-    inkSoft: Brand.grey,
+    ink: Color(hex: 0xFFFFE3),
+    inkSoft: Color(hex: 0xCBCBCB),
     line: Color(hex: 0x4A4A4A),
     accent: Color(hex: 0x8FA5BA),
     cellEmpty: Color(hex: 0x1A1A1A),
     done: Color(hex: 0x93C63F),
     missed: Color(hex: 0xEF4C63),
     onState: Color(hex: 0x0D0D0D),
-    // index 0 and 1 lifted to clear the card they sit on — see the note in
-    // src/theme.ts. The widget's card is opaque 0x161616 rather than the app's
-    // translucent one, but it lands in the same place, so the fault was the same.
+    // first two lifted to clear the card, as in src/theme.ts
     ghLevels: [
       Color(hex: 0x2A2A2A), Color(hex: 0x386021), Color(hex: 0x497B2D),
       Color(hex: 0x6DA939), Color(hex: 0x93C63F),
@@ -56,11 +44,10 @@ struct Theme {
   )
 
   static let light = Theme(
-    bg: Brand.ivory,
-    card: Color(hex: 0xFFFFFA),
-    ink: Brand.charcoal,
+    bg: Color(hex: 0xFFFFE3),
+    ink: Color(hex: 0x4A4A4A),
     inkSoft: Color(hex: 0x5F6B78),
-    line: Brand.grey,
+    line: Color(hex: 0xCBCBCB),
     accent: Color(hex: 0x57697C),
     cellEmpty: Color(hex: 0xE5E5D5),
     done: Color(hex: 0x7FB32E),
@@ -75,7 +62,6 @@ struct Theme {
   /// Lock Screen: the system keeps only brightness, so every state is a shade of white.
   static let accessory = Theme(
     bg: .clear,
-    card: .clear,
     ink: .white,
     inkSoft: .white.opacity(0.7),
     line: .white.opacity(0.3),
@@ -89,13 +75,7 @@ struct Theme {
     ]
   )
 
-  /// Widgets follow the app's own appearance setting, not the phone's — the
-  /// planner is the thing they are an extension of, so a light app next to a
-  /// dark widget would read as a bug.
-  ///
-  /// `scheme` is only the fallback, for a snapshot written before the app
-  /// started sending its theme, or the gallery preview which has no app
-  /// setting to follow.
+  /// Follows the app's appearance setting; the system scheme is only the fallback.
   static func of(_ snapshot: PlannerSnapshot, fallback scheme: ColorScheme) -> Theme {
     switch snapshot.theme {
     case "dark": return .dark

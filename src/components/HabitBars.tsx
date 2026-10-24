@@ -1,23 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Animated, LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native';
 import { dayWhen } from '../marking';
-import type { DayRef } from '../marking';
 import { HabitBar, habitBars } from '../trackerCharts';
-import type { MonthData } from '../types';
 import { FONT, Palette, RADIUS, SCALE, useTheme, wrapSafe } from '../theme';
-import ChartHeadline from './ChartHeadline';
+import ChartHeadline, { MonthChartProps } from './ChartHeadline';
 import { ChevronGlyph } from './Glyphs';
 
 const openAnimation = LayoutAnimation.create(200, 'easeInEaseOut', 'opacity');
-
-interface Props {
-  year: number;
-  month: number;
-  data: MonthData;
-  today: DayRef;
-  /** 0 → 1 as the chart draws itself in */
-  grow: Animated.Value;
-}
 
 function headline(bars: HabitBar[]): { figure?: string; text: string } {
   const top = bars.filter((b) => b.rank === 1);
@@ -30,12 +19,12 @@ function headline(bars: HabitBar[]): { figure?: string; text: string } {
 }
 
 /** Habits ranked by how much of the month they kept; tapping one opens its month day by day */
-export default function HabitBars({ year, month, data, today, grow }: Props) {
+export default function HabitBars({ year, month, data, today, grow }: MonthChartProps) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const bars = useMemo(() => habitBars(year, month, data, today), [year, month, data, today]);
+  // the planner keys this by month, which resets it
   const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => setOpen(null), [year, month]);
   const todayDay = today.year === year && today.month === month ? today.day : null;
 
   const toggle = (id: string) => {

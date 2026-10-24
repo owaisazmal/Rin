@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 import { CellState, Habit, cellKey } from '../types';
 import { useTheme, FONT } from '../theme';
@@ -69,13 +69,12 @@ export default function RadialTracker({
   const ringCount = Math.max(habits.length, MIN_RINGS);
   const ringWidth = (outerR - innerR) / ringCount;
 
-  const cellFill: Record<CellState, string> = {
-    0: palette.cellEmpty,
-    1: palette.done,
-    2: palette.missed,
-  };
-
   const cells = useMemo(() => {
+    const cellFill: Record<CellState, string> = {
+      0: palette.cellEmpty,
+      1: palette.done,
+      2: palette.missed,
+    };
     const out: {
       d: string;
       fill: string;
@@ -103,7 +102,6 @@ export default function RadialTracker({
       }
     }
     return out;
-    // cellFill derives from palette
   }, [daysInMonth, habits, grid, cx, cy, innerR, ringWidth, ringCount, sector, gap, palette]);
 
   return (

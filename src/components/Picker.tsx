@@ -1,6 +1,7 @@
-import React, { ReactNode, useMemo } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FONT, MODAL_ORIENTATIONS, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
+import { ReactNode, useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
+import { Sheet } from './Sheet';
 
 /** The chip that opens a choice and the sheet it is made in; the year grid's span and the tracker's chart share them */
 
@@ -29,8 +30,7 @@ export function PickerChip({
       <Text style={styles.chipText} maxFontSizeMultiplier={SCALE.heading}>
         {label}
       </Text>
-      {/* drawn rather than typed: no caret glyph in Josefin, and a fallback
-          one lands at a different height on each platform */}
+      {/* drawn: Josefin has no caret, and a fallback sits differently per platform */}
       <View style={styles.caret} />
     </Pressable>
   );
@@ -51,30 +51,13 @@ export function PickerSheet({
 }) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  /*
-    A Modal, not an overlay drawn in place. The planner's back handler
-    hands an unclaimed Android back press to the system, which closes the
-    app — and a panel this tall would hang outside the planner's scroll
-    view, where Android draws it but won't route a touch to it.
-  */
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-      supportedOrientations={MODAL_ORIENTATIONS}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { maxWidth }]} onPress={() => {}}>
-          <Text style={styles.sheetTitle} maxFontSizeMultiplier={SCALE.heading}>
-            {title}
-          </Text>
-          {children}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose} style={{ maxWidth, padding: 16 }}>
+      <Text style={styles.sheetTitle} maxFontSizeMultiplier={SCALE.heading}>
+        {title}
+      </Text>
+      {children}
+    </Sheet>
   );
 }
 
@@ -105,20 +88,6 @@ const makeStyles = (p: Palette) =>
       borderBottomWidth: 1.5,
       borderColor: p.inkSoft,
       transform: [{ rotate: '45deg' }, { translateY: -1 }],
-    },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 22,
-    },
-    sheet: {
-      // solid like the due-date sheet, since it floats over a dimmed page, not the aurora
-      ...cardSurface(p),
-      backgroundColor: p.bg,
-      width: '100%',
-      padding: 16,
     },
     sheetTitle: {
       fontSize: 13,

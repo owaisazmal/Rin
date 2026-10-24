@@ -15,26 +15,17 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LogoMark from '../components/LogoMark';
 import { COLUMN, FONT, Palette, RADIUS, useTheme, wrapSafe } from '../theme';
-import { FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
+import { ArtBox, FadingStreak, MarkAndFlame, OpenSource, ThinkingClip } from './introArt';
 import { device } from '../device';
 
-/**
- * What the app is for, before anyone is asked to sign in.
- *
- * Terms first: what the app does with your data is the one thing a stranger
- * has no way to verify from the outside, so it is answered before any pitch
- * rather than buried in a policy nobody opens. Then the case, in the order
- * someone actually meets it — the problem, the part that turns out to matter,
- * and what it costs them daily. Two of the illustrations are the app's own
- * grid and marks, so the pitch is showing the product rather than stock
- * artwork of it.
- */
+/** What the app is for, before anyone is asked to sign in; what it does with your data comes first */
 
-type PageKind = 'open' | 'grid' | 'clip' | 'marks';
+type Art = (props: { palette: Palette; box: ArtBox }) => ReactNode;
 
-const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] = [
+const PAGES: { kind: string; Art: Art; eyebrow: string; title: string; body: string }[] = [
   {
     kind: 'open',
+    Art: OpenSource,
     eyebrow: 'BEFORE ANYTHING ELSE',
     title: 'Built for myself.\nOpen to everyone.',
     body:
@@ -42,6 +33,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
   },
   {
     kind: 'grid',
+    Art: FadingStreak,
     eyebrow: 'THE PROBLEM',
     title: 'Habits don’t break.\nThey fade.',
     body:
@@ -49,6 +41,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
   },
   {
     kind: 'clip',
+    Art: ThinkingClip,
     eyebrow: 'THE USEFUL PART',
     title: 'The reason matters\nmore than the miss.',
     body:
@@ -56,6 +49,7 @@ const PAGES: { kind: PageKind; eyebrow: string; title: string; body: string }[] 
   },
   {
     kind: 'marks',
+    Art: MarkAndFlame,
     eyebrow: 'WHAT IT COSTS YOU',
     title: 'One mark a day.',
     body:
@@ -78,18 +72,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
   const height = windowSize.height;
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
-  /**
-   * One box for all four illustrations, so the words under them don't move.
-   *
-   * They used to size themselves — 116pt of padlock, 100 of grid, 250 of clip,
-   * 92 of marks — which put the eyebrow, the title and the body at a different
-   * height on every page. Swiping shuffled the whole block up and down. Now the
-   * box is fixed and each drawing fits itself into it.
-   *
-   * Taken from the window rather than written down, because the page is centred
-   * and only scrolls as a last resort: on a short phone a fixed box plus five
-   * lines of body copy is taller than the space there is.
-   */
+  // one box for every illustration, so the words under them don't move between pages
   const box = useMemo(
     () => ({
       width: Math.min(width, COLUMN.maxWidth) - 60, // the page's 30pt gutters
@@ -147,14 +130,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
         style={styles.flex}
       >
         {PAGES.map((p, i) => {
-          /*
-            The page already travels with the scroll; these move against it, so
-            the drawing and the words arrive at slightly different speeds and
-            the turn reads as depth rather than as one flat sheet sliding. The
-            art is the further of the two, and neither fades to nothing —
-            mid-swipe both pages are on screen at once, and a full cross-fade
-            leaves that moment looking washed out.
-          */
+          // art and words drift against the scroll at different speeds, for depth
           const span = [(i - 1) * width, i * width, (i + 1) * width];
           const drift = (d: number) =>
             scrollX.interpolate({
@@ -172,10 +148,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
               <Animated.View
                 style={[styles.art, { height: box.height, opacity, transform: [{ translateX: drift(width * 0.22) }] }]}
               >
-                {p.kind === 'open' ? <OpenSource palette={palette} box={box} /> : null}
-                {p.kind === 'grid' ? <FadingStreak palette={palette} box={box} /> : null}
-                {p.kind === 'clip' ? <ThinkingClip palette={palette} box={box} /> : null}
-                {p.kind === 'marks' ? <MarkAndFlame palette={palette} box={box} /> : null}
+                <p.Art palette={palette} box={box} />
               </Animated.View>
               <Animated.View
                 style={{ opacity, transform: [{ translateX: drift(width * 0.08) }] }}
@@ -190,19 +163,7 @@ export default function IntroScreen({ onDone }: { onDone: () => void }) {
       </Animated.ScrollView>
 
       <View style={styles.footer}>
-        {/*
-          A capsule that slides along a row of dots, rather than a dot that
-          stretches into one.
-
-          Stretching was the old trick and it could not work: `scaleX` scales
-          the rendered layer, corner radius and all, so a 7pt circle pulled out
-          to 3.1× came out as an ellipse with 11pt ends — a lopsided blob, not a
-          pill. Width would keep the ends round, but width is not a property the
-          native driver can animate, and this is driven by the scroll offset on
-          the native thread. So the thing that moves keeps one size and one
-          shape, and only travels: `translateX` distorts nothing, and it tracks
-          the finger continuously instead of snapping when the page lands.
-        */}
+        {/* a capsule sliding along the dots: scaling a dot would distort its round ends */}
         <View style={styles.dots}>
           <View style={[styles.track, { width: PAGES.length * PITCH - DOT_GAP }]}>
             {PAGES.map((p) => (
@@ -311,10 +272,7 @@ const makeStyles = (p: Palette) =>
       fontFamily: FONT.bold,
       color: p.ink,
       marginBottom: 14,
-      // Two lines' worth, because one page's title is a single line and the
-      // rest are two. The block is centred, so without this that page's copy
-      // sits lower than its neighbours' and the words step down as you swipe
-      // onto it. The art box above holds its own height for the same reason.
+      // two lines' worth, so the one-line title doesn't shift its centred page
       minHeight: 2 * wrapSafe(35),
     },
     body: {
@@ -322,12 +280,7 @@ const makeStyles = (p: Palette) =>
       lineHeight: wrapSafe(22),
       fontFamily: FONT.regular,
       color: p.inkSoft,
-      // Five lines, which is what the longest of the four runs to on a phone of
-      // ordinary width. Same reason as the title above: the block is centred,
-      // so a page whose copy runs a line longer than its neighbours' would lift
-      // the whole thing and the words would step as you swipe onto it. On a
-      // narrow enough screen a page can still outgrow this, and then it lifts —
-      // but by the one line it has gained, not by the four the art used to.
+      // five lines, the longest body on an ordinary phone, for the same reason
       minHeight: 5 * wrapSafe(22),
     },
     footer: {

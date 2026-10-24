@@ -1,31 +1,17 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import { MONTH_ABBR } from '../dates';
-import type { DayRef } from '../marking';
 import { DayBar, axisDays, dayBars, weekdayIndex } from '../trackerCharts';
-import type { MonthData } from '../types';
 import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
-import ChartHeadline, { Spark } from './ChartHeadline';
+import ChartHeadline, { DayPicking, MonthChartProps, Spark } from './ChartHeadline';
 
 const SPARK = 12;
 const PLOT = 124;
 const LABELS = 20;
 
-interface Props {
-  year: number;
-  month: number;
-  data: MonthData;
-  today: DayRef;
-  width: number;
-  selectedDay: number;
-  onSelectDay: (day: number) => void;
-  /** 0 → 1 as the chart draws itself in */
-  grow: Animated.Value;
-}
-
 /** One bar a day, filled by how many habits were done (green) and missed (red); a spark crowns a perfect day */
-export default function DayBars({ year, month, data, today, width, selectedDay, onSelectDay, grow }: Props) {
+export default function DayBars({ year, month, data, today, width, selectedDay, onSelectDay, grow }: MonthChartProps & DayPicking) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const chart = useMemo(() => dayBars(year, month, data, today), [year, month, data, today]);

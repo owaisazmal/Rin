@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { CloseGlyph, PlusGlyph, RepeatGlyph } from './Glyphs';
 import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
 import SectionHeader from './SectionHeader';
 import { MAX_TASK_TEXT, Task } from '../tasks';
@@ -8,21 +8,7 @@ import { Urgency, dueLabel, pressureOf, timeLeftLabel, unfinished, urgencyOf } f
 import { repeatLabel } from '../recurring';
 import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
 
-/**
- * Tasks with a date on them, and how close that date is.
- *
- * The section's whole job is to make proximity legible without the reader doing
- * arithmetic: a phrase for the time left, a colour for the band it falls in,
- * and a bar that fills over the last week so the pressure is visible even
- * between bands. Colour alone would only ever give three or four steps, and
- * would say nothing at all to anyone who can't separate the reds from the
- * greens — the phrase and the bar carry the same information without it.
- *
- * Only what is still outstanding appears. A finished task has stopped being a
- * deadline the moment it is ticked, and leaving it here would push the ones
- * that still matter down the page — which is the opposite of the point. It goes
- * to history instead, and the footer says so.
- */
+/** Unfinished tasks with a date on them; ticking one files it away to history. */
 
 interface Props {
   tasks: Task[];
@@ -36,54 +22,6 @@ interface Props {
   onShowHistory: () => void;
 }
 
-function PlusGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24">
-      <Path
-        d="M12 5.5v13M5.5 12h13"
-        stroke={color}
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-function CloseGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={14} height={14} viewBox="0 0 24 24">
-      <Path
-        d="M7 7 L17 17 M17 7 L7 17"
-        stroke={color}
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-function RepeatGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={11} height={11} viewBox="0 0 24 24">
-      <Path
-        d="M19 12a7 7 0 1 1-2.05-4.95M17.5 3v4.5H13"
-        stroke={color}
-        strokeWidth={2.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-/**
- * One colour per band, drawn from the palette the rest of the app already uses:
- * green means finished, red means the deadline has arrived or gone, slate means
- * it is in view, and muted ink means it is far enough off to ignore.
- */
 function colourFor(u: Urgency, p: Palette): string {
   switch (u) {
     case 'done':
@@ -162,8 +100,6 @@ export default function Deadlines({
             return (
               <View key={t.id} style={styles.row}>
                 <View style={styles.rowTop}>
-                  {/* ticking this files the task away into history, so the
-                      row itself is the last thing anyone sees of it */}
                   <Pressable
                     hitSlop={8}
                     accessibilityRole="checkbox"
@@ -180,13 +116,9 @@ export default function Deadlines({
                     onChangeText={(v) => onChangeText(t.id, withoutTabs(v).slice(0, MAX_TASK_TEXT))}
                     placeholder="what has to be finished…"
                     placeholderTextColor={palette.inkSoft}
-                    // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
                     onFocus={revealOnFocus}
                     returnKeyType="done"
-                    // `multiline` here is for wrapping, not for paragraphs — these
-                    // fields hold one short line. Left on the default, Return types a
-                    // newline into them and nothing on screen dismisses the keyboard,
-                    // so Android's back button was the only way out of an edit.
+                    // multiline only to wrap; Return still closes the keyboard
                     submitBehavior="blurAndSubmit"
                     multiline
                   />
@@ -389,7 +321,6 @@ const makeStyles = (p: Palette) =>
       fontFamily: FONT.semibold,
       color: p.inkSoft,
     },
-    /** where the finished ones went, since they are no longer listed above */
     historyLink: {
       flexDirection: 'row',
       alignItems: 'center',

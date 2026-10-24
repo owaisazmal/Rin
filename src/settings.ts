@@ -1,24 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlannerLayout, defaultLayout, parseLayout } from './layout';
 import { QuotePrefs, defaultQuotePrefs, parseQuotePrefs } from './quotes';
+import { readJson, writeJson } from './storage';
+import { isRecord } from './types';
 import type { ColorSchemeName } from 'react-native';
 import type { ThemeMode, ThemePreference } from './theme';
-
-/**
- * What the app remembers about how it is shown: which palette, which chart the
- * tracker opens on, which cards the planner carries below the daily check,
- * when it sends reminders, and which quotes it shows. Kept apart from the month store because they change for
- * different reasons and are read at different times — once at launch here, once
- * per month there.
- */
 
 /** Every chart the tracker offers, in the picker's order; `github` is the year grid */
 export const CHART_TYPES = ['radial', 'github', 'days', 'habits', 'weeks', 'weekdays'] as const;
 export type ChartType = (typeof CHART_TYPES)[number];
-
-export function isChartType(value: unknown): value is ChartType {
-  return CHART_TYPES.includes(value as ChartType);
-}
 
 export interface ReminderSlot {
   on: boolean;
@@ -27,7 +16,7 @@ export interface ReminderSlot {
 }
 
 /** The deadline run-up points, in the order `LEADS` in notifications.ts fires them */
-export const DEADLINE_LEADS = ['3d', '1d', '3h', '1h', 'due'] as const;
+const DEADLINE_LEADS = ['3d', '1d', '3h', '1h', 'due'] as const;
 export type DeadlineLead = (typeof DEADLINE_LEADS)[number];
 
 export interface NotificationPrefs {
@@ -67,16 +56,8 @@ export interface Settings {
 }
 
 const SETTINGS_KEY = '@monthly-planning/settings';
-const DEFAULTS: Settings = {
-  theme: 'dark',
-  chart: 'radial',
-  layout: defaultLayout(),
-  notifications: defaultNotifications(),
-  quotes: defaultQuotePrefs(),
-};
 
 const minutesOf = (s: ReminderSlot) => s.hour * 60 + s.minute;
-const byTime = (a: ReminderSlot, b: ReminderSlot) => minutesOf(a) - minutesOf(b);
 
 function isClock(n: unknown, max: number): n is number {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
@@ -92,7 +73,7 @@ function parseSlots(raw: unknown): ReminderSlot[] {
   return slots.length ? slots.slice(0, MAX_SLOTS) : defaultNotifications().slots;
 }
 
-/** Same rule as `loadSettings`: anything missing or unknown takes its own default */
+/** Anything missing or unknown takes its own default */
 export function parseNotifications(raw: unknown): NotificationPrefs {
   const d = defaultNotifications();
   if (!raw || typeof raw !== 'object') return d;
@@ -123,25 +104,20 @@ export function placeSlot(
   if (clash >= 0) return rest.map((s, i) => (i === clash ? { ...s, on: true } : s));
   if (index === null && slots.length >= MAX_SLOTS) return slots;
   const on = index === null ? true : (slots[index]?.on ?? true);
-  return [...rest, { on, hour, minute }].sort(byTime);
+  return [...rest, { on, hour, minute }].sort((a, b) => minutesOf(a) - minutesOf(b));
 }
 
 /** Coerced field by field, so an unknown value falls back on its own rather than taking the rest with it */
 export async function loadSettings(): Promise<Settings> {
-  try {
-    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      theme: parsed.theme === 'light' || parsed.theme === 'system' ? parsed.theme : 'dark',
-      chart: isChartType(parsed.chart) ? parsed.chart : 'radial',
-      layout: parseLayout(parsed.layout),
-      notifications: parseNotifications(parsed.notifications),
-      quotes: parseQuotePrefs(parsed.quotes),
-    };
-  } catch {
-    return DEFAULTS;
-  }
+  const raw = await readJson(SETTINGS_KEY);
+  const p = isRecord(raw) ? raw : {};
+  return {
+    theme: p.theme === 'light' || p.theme === 'system' ? p.theme : 'dark',
+    chart: CHART_TYPES.includes(p.chart as ChartType) ? (p.chart as ChartType) : 'radial',
+    layout: parseLayout(p.layout),
+    notifications: parseNotifications(p.notifications),
+    quotes: parseQuotePrefs(p.quotes),
+  };
 }
 
 /** The mode to draw in; `system` follows the OS and falls back to dark when it gives no answer */
@@ -150,10 +126,6 @@ export function resolveTheme(preference: ThemePreference, os: ColorSchemeName | 
   return os === 'light' ? 'light' : 'dark';
 }
 
-export async function saveSettings(settings: Settings): Promise<void> {
-  try {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    // best-effort persistence, matching the rest of the app's stores
-  }
+export function saveSettings(settings: Settings): Promise<void> {
+  return writeJson(SETTINGS_KEY, settings);
 }

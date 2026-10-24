@@ -1,58 +1,37 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# dependencies and build output
 node_modules/
-
-# Expo
 .expo/
 dist/
 web-build/
 expo-env.d.ts
-
-# Native
 .kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
 .metro-health-check*
-
-# debug
+*.tsbuildinfo
+*.orig.*
+.DS_Store
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
-.DS_Store
-*.pem
-
-
-
-.env
-.env.*
-!.env.example
-
-
-service-account*.json
-*-service-account.json
-*-firebase-adminsdk-*.json
-
-# typescript
-*.tsbuildinfo
-
-# generated native folders
+# generated native folders and local module builds
 /ios
 /android
-
-# local module build output
 modules/*/android/build/
 modules/*/android/.gradle/
 
-# backend config: Firebase's two config files, uploaded to EAS as file variables
+# secrets; the Firebase config files go to EAS as file variables
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+service-account*.json
+*-service-account.json
+*-firebase-adminsdk-*.json
 google-services.json
 GoogleService-Info.plist
 

@@ -5,17 +5,11 @@ import android.content.res.Configuration
 import androidx.compose.ui.graphics.Color
 import androidx.glance.unit.ColorProvider
 
-/**
- * Mirrors src/theme.ts and targets/widgets/Theme.swift. Colours are held as
- * plain Ints as well as Compose Colors, because the charts are drawn with
- * android.graphics.Paint, which takes Ints.
- */
+// Mirrors src/theme.ts; Ints because the charts draw with android.graphics.Paint.
 data class WidgetTheme(
   val bg: Int,
-  val card: Int,
   val ink: Int,
   val inkSoft: Int,
-  val line: Int,
   val accent: Int,
   val cellEmpty: Int,
   val done: Int,
@@ -23,13 +17,6 @@ data class WidgetTheme(
   val onState: Int,
   val ghLevels: List<Int>,
 ) {
-  val bgColor get() = Color(bg)
-  val inkColor get() = Color(ink)
-  val inkSoftColor get() = Color(inkSoft)
-  val accentColor get() = Color(accent)
-  val doneColor get() = Color(done)
-  val cellEmptyColor get() = Color(cellEmpty)
-
   fun provider(value: Int) = ColorProvider(Color(value))
 
   fun stateColor(state: Int): Int = when (state) {
@@ -41,19 +28,14 @@ data class WidgetTheme(
   companion object {
     val dark = WidgetTheme(
       bg = 0xFF0D0D0D.toInt(),
-      card = 0xFF161616.toInt(),
       ink = 0xFFFFFFE3.toInt(),
       inkSoft = 0xFFCBCBCB.toInt(),
-      line = 0xFF4A4A4A.toInt(),
       accent = 0xFF8FA5BA.toInt(),
       cellEmpty = 0xFF1A1A1A.toInt(),
       done = 0xFF93C63F.toInt(),
       missed = 0xFFEF4C63.toInt(),
       onState = 0xFF0D0D0D.toInt(),
-      // index 0 and 1 lifted to clear the card they sit on — see the note in
-      // src/theme.ts. The widget's card is opaque 0xFF161616 rather than the
-      // app's translucent one, but it lands in the same place, so the fault
-      // was the same.
+      // first two lifted to clear the card, as in src/theme.ts
       ghLevels = listOf(
         0xFF2A2A2A.toInt(), 0xFF386021.toInt(), 0xFF497B2D.toInt(),
         0xFF6DA939.toInt(), 0xFF93C63F.toInt(),
@@ -62,10 +44,8 @@ data class WidgetTheme(
 
     val light = WidgetTheme(
       bg = 0xFFFFFFE3.toInt(),
-      card = 0xFFFFFFFA.toInt(),
       ink = 0xFF4A4A4A.toInt(),
       inkSoft = 0xFF5F6B78.toInt(),
-      line = 0xFFCBCBCB.toInt(),
       accent = 0xFF57697C.toInt(),
       cellEmpty = 0xFFE5E5D5.toInt(),
       done = 0xFF7FB32E.toInt(),
@@ -77,15 +57,7 @@ data class WidgetTheme(
       ),
     )
 
-    /**
-     * Widgets follow the app's own appearance setting, not the phone's — the
-     * planner is the thing they are an extension of, so a light app next to a
-     * dark widget would read as a bug.
-     *
-     * The system setting is only the fallback, for a snapshot written before
-     * the app started sending its theme, or the picker preview which has no
-     * app setting to follow.
-     */
+    /** Follows the app's appearance setting; the system one is only the fallback. */
     fun of(context: Context, snapshot: PlannerSnapshot?): WidgetTheme = when (snapshot?.theme) {
       "dark" -> dark
       "light" -> light

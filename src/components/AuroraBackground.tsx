@@ -1,15 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../theme';
 
-/**
- * Slow-drifting soft blobs behind the whole app.
- *
- * Every blob picks a fresh random direction, distance and duration for each leg
- * of its journey, so the motion never settles into a visible loop. Only opacity
- * and transforms animate, which keeps the whole thing on the native driver.
- */
+/** Slow-drifting soft blobs behind the whole app; each leg is random, so no loop shows */
 
 interface BlobSpec {
   key: string;
@@ -61,8 +55,7 @@ function DriftBlob({
   useEffect(() => {
     let alive = true;
 
-    // Each leg eases out from wherever the previous one stopped, so the blob
-    // wanders continuously instead of snapping back to a home position.
+    // each leg starts wherever the last one stopped
     const leg = () => {
       if (!alive) return;
       const angle = Math.random() * Math.PI * 2;
@@ -108,17 +101,7 @@ function DriftBlob({
     >
       <Svg width={diameter} height={diameter}>
         <Defs>
-          {/*
-           * The radius reaches the square's corner, not its edge — so the ramp
-           * is still at roughly a quarter alpha where the circle below clips
-           * it, and every blob keeps a faint rim.
-           *
-           * That rim is the whole effect. `r="50%"` lands the transparent stop
-           * exactly on the rim instead, and the blobs stop reading as circles
-           * at all: they blur out into one formless wash, and a third of the
-           * spread goes with them. Corner distance is `√2 / 2` of the box, so
-           * the gradient has to be given the radius outright.
-           */}
+          {/* radius to the corner, not the edge, so the clipped circle keeps a faint rim */}
           <RadialGradient
             id={gradientId}
             gradientUnits="userSpaceOnUse"
@@ -153,8 +136,7 @@ export default function AuroraBackground() {
       style={[StyleSheet.absoluteFill, { backgroundColor: palette.bg, overflow: 'hidden' }]}
     >
       {SPECS.map((spec, i) => (
-        // Remounting on theme change swaps the gradient stops cleanly; the
-        // reset in blob position is hidden by the full-screen colour change.
+        // remounted per theme; the position reset hides behind the colour change
         <DriftBlob
           key={`${mode}-${spec.key}`}
           spec={spec}

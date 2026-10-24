@@ -1,7 +1,4 @@
-/**
- * What sentences like "everything on this phone" call the device. The app
- * loads device.native.ts instead; this plain version is the one Jest runs.
- */
+/** What "everything on this phone" calls the device; Jest runs this, the app loads device.native.ts */
 export function device(): string {
   return 'phone';
 }

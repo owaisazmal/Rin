@@ -1,10 +1,3 @@
-/**
- * Tests cover the pure logic only: streaks, deadlines, history, what the month
- * and task stores accept off disk, and the session adapter. None of it renders,
- * so this runs in plain Node rather than a React Native environment — faster,
- * and it keeps the suite honest about what it actually exercises.
- */
-
 // a zone with daylight saving, so local-date tests run the same on every machine
 process.env.TZ = 'America/Los_Angeles';
 
@@ -12,14 +5,8 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['<rootDir>/src/**/__tests__/**/*.test.ts'],
   clearMocks: true,
-  // generated native projects and the scratch worktrees each carry their own
-  // package.json, which Jest would otherwise treat as a duplicate of this one
-  modulePathIgnorePatterns: [
-    '<rootDir>/ios/',
-    '<rootDir>/android/',
-    '<rootDir>/.claude/',
-  ],
-  // @noble/* ship ESM only. Metro reads them as-is; Jest needs to be told to
-  // transform them, since it skips node_modules by default.
+  // these carry their own package.json, which Jest would treat as a duplicate
+  modulePathIgnorePatterns: ['<rootDir>/ios/', '<rootDir>/android/', '<rootDir>/.claude/'],
+  // @noble/* ship ESM only
   transformIgnorePatterns: ['node_modules/(?!@noble/)'],
 };

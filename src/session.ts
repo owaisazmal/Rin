@@ -1,50 +1,17 @@
 import * as SecureStore from 'expo-secure-store';
 
-/**
- * Where the auth session lives.
- *
- * Deliberately not AsyncStorage. AsyncStorage is plaintext on disk — a SQLite
- * row on Android, a file in the app container on iOS — readable from any debug
- * build with `adb run-as`, and from any release build on a rooted or
- * jailbroken device. That is fine for habit grids and fine for the name and
- * email in `auth.ts`; it is not fine for a credential that grants access to an
- * account.
- *
- * SecureStore puts the value in the iOS Keychain and the Android Keystore
- * instead, so it is encrypted at rest and tied to this app. `THIS_DEVICE_ONLY`
- * keeps it out of backups too: a restored phone starts signed out.
- *
- * What goes here is the backup code: the one secret in the design, from which
- * both the id a backup is stored under and the key it is encrypted with are
- * derived (see firestore.rules for the other half). There are no accounts, so
- * there is no session token to keep — but the shape exposed is the
- * getItem / setItem / removeItem adapter Firebase's persistence accepts, in
- * case one is ever wanted, and values are split across entries to stay under
- * SecureStore's documented 2 KB ceiling, in case one is ever that large. A
- * code never is; the seams cost nothing when there is only one piece. Writes
- * are not atomic across pieces, so don't write the same key concurrently.
- *
- * Nothing calls this yet — there is no backend. Needs a native rebuild before
- * first use, since SecureStore ships native code.
- */
+// Keychain / Keystore storage, split across entries to stay under SecureStore's 2 KB ceiling.
 
 const PREFIX = 'monthly-planning.session';
 
-/**
- * Characters per entry. Comfortably inside the documented ceiling even if
- * every character were a three-byte one.
- */
+// characters per entry, inside the ceiling even if every one were three bytes
 export const CHUNK_SIZE = 1024;
 
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
-/**
- * SecureStore keys may only contain alphanumerics, `.`, `-` and `_`. The keys
- * clients choose don't oblige (Firebase's has colons in it), so anything else
- * becomes an underscore. The prefix keeps them out of anyone else's way.
- */
+// SecureStore keys may only hold alphanumerics, `.`, `-` and `_`
 function namespace(key: string): string {
   return `${PREFIX}.${key.replace(/[^A-Za-z0-9._-]/g, '_')}`;
 }
@@ -52,17 +19,13 @@ function namespace(key: string): string {
 const countKey = (key: string) => `${namespace(key)}.n`;
 const chunkKey = (key: string, i: number) => `${namespace(key)}.${i}`;
 
-/** How many entries the value under `key` was last written as; 0 if none */
 async function chunkCount(key: string): Promise<number> {
   const raw = await SecureStore.getItemAsync(countKey(key), OPTIONS);
   const n = raw === null ? 0 : Number(raw);
   return Number.isInteger(n) && n > 0 ? n : 0;
 }
 
-/**
- * Cuts on character boundaries, never through a surrogate pair — half an
- * emoji would not survive the round trip through a native string.
- */
+// never cuts through a surrogate pair, which would not survive the native round trip
 function split(value: string): string[] {
   const parts: string[] = [];
   let start = 0;
@@ -81,19 +44,10 @@ async function deleteChunks(key: string, from: number, to: number): Promise<void
   }
 }
 
-/** The getItem / setItem / removeItem shape Firebase's persistence accepts */
-export interface SessionStorage {
-  getItem(key: string): Promise<string | null>;
-  setItem(key: string, value: string): Promise<void>;
-  removeItem(key: string): Promise<void>;
-}
-
-export const sessionStorage: SessionStorage = {
-  /**
-   * The stored value, or null if there isn't one or it can't be read back
-   * whole — a corrupt session should sign the user out, not crash the app.
-   */
-  async getItem(key) {
+// Best-effort, and not atomic across pieces: don't write one key concurrently.
+export const sessionStorage = {
+  // null when absent or not readable back whole
+  async getItem(key: string): Promise<string | null> {
     try {
       const n = await chunkCount(key);
       if (n === 0) return null;
@@ -109,13 +63,8 @@ export const sessionStorage: SessionStorage = {
     }
   },
 
-  /**
-   * Pieces first, count last, then whatever the previous value left behind
-   * past the new end. Best-effort, like the rest of the app's stores: a
-   * session that fails to persist signs the user out on the next launch
-   * rather than crashing this one.
-   */
-  async setItem(key, value) {
+  // pieces first, count last, then whatever the previous value left past the new end
+  async setItem(key: string, value: string): Promise<void> {
     try {
       const previous = await chunkCount(key);
       const parts = split(value);
@@ -125,11 +74,11 @@ export const sessionStorage: SessionStorage = {
       await SecureStore.setItemAsync(countKey(key), String(parts.length), OPTIONS);
       await deleteChunks(key, parts.length, previous);
     } catch {
-      // see above
+      // a code that fails to persist is simply absent next launch
     }
   },
 
-  async removeItem(key) {
+  async removeItem(key: string): Promise<void> {
     try {
       const n = await chunkCount(key);
       await SecureStore.deleteItemAsync(countKey(key), OPTIONS);

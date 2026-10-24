@@ -24,7 +24,6 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
-    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0",
@@ -36,18 +35,21 @@
     "@types/react": "~19.2.2",
     "babel-jest": "^29.7.0",
     "babel-preset-expo": "^57.0.10",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
+    "expo-doctor": "1.20.4",
     "firebase": "^12.18.0",
     "jest": "~29.7.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
     "test": "jest",
-    "test:rules": "npx --yes firebase-tools@15.31.0 emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\""
+    "lint": "expo lint .",
+    "test:rules": "npx --yes firebase-tools@15.31.0 emulators:exec --only firestore --project demo-rin \"jest --config firebase/jest.config.js\"",
+    "bump": "node .github/scripts/bump.js"
   },
   "private": true,
   "expo": {

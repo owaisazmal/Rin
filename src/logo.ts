@@ -1,16 +1,4 @@
-/**
- * The mark: the app's own radial tracker, caught mid-month.
- *
- * Twelve sectors — one per day, and twelve also reads as the months — and four
- * rings, one per habit with the first habit innermost, exactly as the tracker
- * draws them. The first eight days are marked, three of them missed, the rest
- * are still pending, and a slate tick sits outside the ring on the day that is
- * up next, the way the tracker picks out today's label in the accent colour.
- *
- * Pure geometry, no React: the in-app renderers draw it live, and the brand
- * assets committed under assets/logo were generated from these same numbers,
- * so the header, the launch animation and the app icon are the one shape.
- */
+// The mark, a radial tracker caught mid-month; assets/logo was generated from these same numbers.
 
 export const SECTORS = 12;
 export const RINGS = 4;
@@ -25,11 +13,7 @@ export const TICK_WIDTH = 0.04;
 /** everything, tick included, fits inside this multiple of the outer radius */
 export const MARK_EXTENT = 1.1;
 
-/**
- * Pending cells are a shade of the ground rather than a palette colour: the
- * tracker's own `cellEmpty` is tuned to sit inside a card, and on the bare
- * background it all but disappears, taking the ring's shape with it.
- */
+/** A shade of the ground, since the palette's `cellEmpty` all but vanishes outside a card */
 export const EMPTY_FILL = { dark: '#363636', light: '#e4e4d2' } as const;
 
 export type MarkCellState = 'done' | 'missed' | 'empty';
@@ -65,11 +49,7 @@ function annularSector(
   return `M${x1} ${y1}A${f2(r2)} ${f2(r2)} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${f2(r1)} ${f2(r1)} 0 0 0 ${x4} ${y4}Z`;
 }
 
-/**
- * Stroke width that rounds the cell corners. Every renderer strokes each cell
- * in its own fill colour with round joins; the outlines below are already
- * pulled in by half of this, so the rounded result lands exactly on the grid.
- */
+/** Round-joined stroke that rounds the cell corners; outlines are pulled in by half of it */
 export function cornerStroke(R: number): number {
   return R * 0.034;
 }

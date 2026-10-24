@@ -6,17 +6,7 @@ import { dueLabel, pendingTasks } from './deadlines';
 import { DAY, HOUR } from './dates';
 import { DeadlineLead, NotificationPrefs, ReminderSlot } from './settings';
 
-/**
- * Daily nudges for habits you haven't ticked off yet.
- *
- * iOS delivers local notifications from a schedule fixed in advance — nothing
- * runs at delivery time to ask "did they do it?". So instead the app rewrites
- * the whole schedule every time the data changes: today's remaining nudges are
- * dropped the moment nothing is left pending, and a week of them is queued ahead
- * so reminders still arrive if the app is never opened.
- */
-
-/** How many days of nudges to keep queued, so silence never means "app unopened". */
+// Nothing runs at delivery time, so the whole schedule is rewritten on every change, a week ahead.
 const DAYS_AHEAD = 7;
 
 const TITLES = ['Still pending', 'Evening check', 'Last call'];
@@ -57,14 +47,7 @@ const CONGRATS = [
 const HABIT_CHANNEL = 'reminders';
 const DEADLINE_CHANNEL = 'deadlines';
 
-/**
- * The run-up to a deadline, and what to say at each point.
- *
- * Getting louder as the date approaches is the whole feature, so the spacing
- * tightens rather than staying even: three days, then one, then hours. Anything
- * further out than three days is left alone — a reminder a fortnight ahead
- * teaches you to swipe reminders away.
- */
+/** The run-up to a deadline, tightening as it nears; nothing further out than three days */
 const LEADS: { id: DeadlineLead; before: number; line: string }[] = [
   { id: '3d', before: 3 * DAY, line: 'Three days out. Comfortable. Enjoy that while it lasts.' },
   { id: '1d', before: DAY, line: 'One day left. This is the part where it stops being theoretical.' },
@@ -79,14 +62,7 @@ const OVERDUE_LINE =
 /** Morning-after hour for the one nag an already-missed deadline gets */
 const OVERDUE_HOUR = 9;
 
-/**
- * How many notifications the deadline reminders may claim.
- *
- * iOS keeps only the 64 soonest pending local notifications and silently drops
- * everything past that, and the habit nudges above already hold up to 35. This
- * cap stops a long task list from quietly evicting them — whatever else is on,
- * a full week of habit reminders still fits, even at `MAX_SLOTS` a day.
- */
+/** iOS keeps only the 64 soonest notifications; this leaves room for a full week of habit nudges */
 const DEADLINE_BUDGET = 28;
 
 /** Never let one very distant task spend the whole allowance on itself */
@@ -106,11 +82,7 @@ export interface Planned {
   channelId: string;
 }
 
-/**
- * The run-up for every task with a deadline still ahead of it, soonest first,
- * until the allowance runs out. A task that doesn't fit simply gets its
- * reminders on the next sync, once the ones ahead of it have fired.
- */
+/** Soonest first until the budget runs out; a task that doesn't fit is picked up on a later sync */
 function planDeadlines(
   tasks: Task[],
   now: Date,
@@ -163,9 +135,7 @@ async function ensurePermission(): Promise<boolean> {
         name: 'Habit reminders',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
-      // Its own channel, and a louder one: a deadline is a thing with a
-      // consequence, and Android lets someone mute the daily nagging without
-      // also muting the reminder that something is due in an hour.
+      // louder, and separate so the habit nagging can be muted on its own
       await Notifications.setNotificationChannelAsync(DEADLINE_CHANNEL, {
         name: 'Deadlines',
         importance: Notifications.AndroidImportance.HIGH,

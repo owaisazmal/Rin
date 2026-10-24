@@ -1,14 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-/**
- * Whether the intro has been shown.
- *
- * Kept apart from `backupState.ts` on purpose: making a backup, restoring one
- * and forgetting a code all rewrite that state, and none of them should bring
- * the intro back.
- * It is answered once, by this install, and never again.
- */
-
+// Kept apart from backupState.ts, so making, restoring or forgetting a backup never brings the intro back.
 const INTRO_KEY = '@monthly-planning/intro-seen';
 
 export async function loadIntroSeen(): Promise<boolean> {

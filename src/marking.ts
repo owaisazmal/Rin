@@ -1,10 +1,6 @@
 import { CellState } from './types';
 
-/**
- * Which cells can be marked. Today can be marked and changed freely. A past day,
- * in any month, can be filled in wherever it was left blank, but a mark already
- * there stays as it was; a day that hasn't come yet can't be marked at all.
- */
+// Today changes freely, a past day only fills its blanks, and a future day can't be marked.
 
 export interface DayRef {
   year: number;
@@ -21,10 +17,7 @@ export function dayWhen(year: number, month: number, day: number, today: DayRef)
   return a < b ? 'past' : a > b ? 'future' : 'today';
 }
 
-/**
- * `filledNow` is a past-day cell filled in during this visit to the month, which
- * stays changeable until the visit ends, so a mis-tap isn't permanent.
- */
+/** `filledNow`: a past cell filled during this visit stays changeable, so a mis-tap isn't permanent */
 export function canMark(when: DayWhen, state: CellState, filledNow = false): boolean {
   if (when === 'today') return true;
   if (when === 'future') return false;

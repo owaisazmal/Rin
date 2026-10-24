@@ -2,27 +2,19 @@ import { cellKey } from './types';
 import type { CellState, Habit } from './types';
 import type { MonthRecord } from './storage';
 import type { RepeatEvery, Task } from './tasks';
-import { DAY, DAY_ABBR, HOUR, MINUTE, MONTH_ABBR, monthLength, startOfDay } from './dates';
+import { DAY, monthLength, shortDate, startOfDay } from './dates';
+import { coarse } from './deadlines';
 import { repeatLabel } from './recurring';
 
-/**
- * What actually happened, day by day.
- *
- * Derived, not recorded. Every fact here is already in the month grids and the
- * task list, so there is no second store to keep in step and nothing to migrate
- * — editing August in August changes what August's history says, which is the
- * honest answer rather than a stale one. The only thing history needed that
- * wasn't already stored is *when* a deadline was ticked off, which is why
- * `Task.completedAt` exists.
- */
+// Derived from the month grids and the task list rather than stored, so editing a month rewrites its history.
 
-export interface HabitMark {
+interface HabitMark {
   name: string;
   /** 1 done, 2 missed — pending marks aren't events, so they never appear */
   state: Exclude<CellState, 0>;
 }
 
-export interface DeadlineEvent {
+interface DeadlineEvent {
   text: string;
   due: number;
   /** null on a task ticked off before completion times were recorded */
@@ -65,15 +57,7 @@ function marksFor(habits: Habit[], grid: Record<string, CellState>, day: number)
   return out;
 }
 
-/**
- * Folds the loaded months and the task list into one reverse-chronological
- * list, dropping days where nothing happened.
- *
- * Only completed deadlines appear. One that has blown past its date without
- * being ticked is not history yet — it is still open, still in the Deadlines
- * section, and still capable of being finished; filing it as a past event would
- * mean moving it back out again the moment it was.
- */
+/** Newest day first, skipping empty days; an open deadline isn't history yet, however overdue */
 export function buildHistory(
   months: MonthRecord[],
   tasks: Task[],
@@ -95,12 +79,10 @@ export function buildHistory(
     return entry;
   };
 
-  for (const record of months) {
-    const { year, month, data } = record;
+  for (const { year, month, data } of months) {
     const len = monthLength(year, month);
     for (let day = 1; day <= len; day++) {
-      const key = new Date(year, month, day).getTime();
-      if (key > today) break; // nothing has happened in the future
+      if (new Date(year, month, day).getTime() > today) break;
       const marks = marksFor(data.habits, data.grid, day);
       if (marks.length === 0) continue;
       const entry = dayAt(year, month, day);
@@ -113,12 +95,9 @@ export function buildHistory(
 
   for (const task of tasks) {
     if (!task.done) continue;
-    // A task ticked off before completion times were kept has no moment of its
-    // own; the deadline is the only date it can honestly be filed under.
-    const at = task.completedAt ?? task.due;
-    const d = new Date(at);
-    const entry = dayAt(d.getFullYear(), d.getMonth(), d.getDate());
-    entry.deadlines.push({
+    // with no completion time recorded, the deadline is the only honest date to file it under
+    const d = new Date(task.completedAt ?? task.due);
+    dayAt(d.getFullYear(), d.getMonth(), d.getDate()).deadlines.push({
       text: task.text.trim() || 'Untitled task',
       due: task.due,
       completedAt: task.completedAt ?? null,
@@ -127,9 +106,7 @@ export function buildHistory(
     });
   }
 
-  return [...days.values()]
-    .filter((d) => d.marks.length > 0 || d.deadlines.length > 0)
-    .sort((a, b) => b.key - a.key);
+  return [...days.values()].sort((a, b) => b.key - a.key);
 }
 
 export function filterHistory(days: HistoryDay[], filter: HistoryFilter): HistoryDay[] {
@@ -146,24 +123,20 @@ export function dayHeading(entry: HistoryDay, now: number): string {
   const diff = Math.round((startOfDay(now) - entry.key) / DAY);
   if (diff === 0) return 'TODAY';
   if (diff === 1) return 'YESTERDAY';
-  const d = new Date(entry.key);
-  return `${DAY_ABBR[d.getDay()].toUpperCase()} ${entry.day} ${MONTH_ABBR[entry.month].toUpperCase()}`;
+  return shortDate(entry.key).toUpperCase();
 }
 
 /** Which occurrence of a series this was — "monthly · due Sat 31 Oct" — or null for a one-off */
 export function occurrenceLabel(event: DeadlineEvent): string | null {
   if (!event.repeat) return null;
-  const d = new Date(event.due);
-  return `${repeatLabel(event.repeat)} · due ${DAY_ABBR[d.getDay()]} ${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`;
+  return `${repeatLabel(event.repeat)} · due ${shortDate(event.due)}`;
 }
 
 /** How late, in the coarsest unit that still says something — "2d late" */
 export function lateness(event: DeadlineEvent): string | null {
   if (!event.late || event.completedAt == null) return null;
-  const over = event.completedAt - event.due;
-  if (over >= DAY) return `${Math.floor(over / DAY)}d late`;
-  if (over >= HOUR) return `${Math.floor(over / HOUR)}h late`;
-  return `${Math.max(1, Math.floor(over / MINUTE))}m late`;
+  const over = coarse(event.completedAt - event.due);
+  return `${over === 'moments' ? '1m' : over} late`;
 }
 
 /** Totals across everything currently in view, for the summary strip */

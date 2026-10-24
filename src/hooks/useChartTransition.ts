@@ -2,16 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing } from 'react-native';
 import type { ChartType } from '../settings';
 
-/**
- * How the tracker and the month label arrive.
- *
- * Swapping chart type is a swap in place, so it cross-fades. Moving month is
- * travel, so whatever arrives comes in from the side the month came from —
- * `enterFrom` is -1 going back, +1 going forward, and 0 for a swap, which
- * collapses the slide back into a plain cross-fade. Both values are native-
- * driven and replayed from 0 whenever their key changes; the label only moves
- * when the month does, not when the chart is swapped.
- */
+/** A chart swap cross-fades; a month change slides in from `enterFrom` (-1 back, +1 forward, 0 for a swap) */
 export function useChartTransition(chart: ChartType, monthIndex: number) {
   const chartAnim = useRef(new Animated.Value(1)).current;
   const monthAnim = useRef(new Animated.Value(1)).current;

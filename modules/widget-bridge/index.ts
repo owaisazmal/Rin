@@ -4,13 +4,10 @@ interface WidgetBridgeNativeModule {
   setSnapshot(json: string): void;
 }
 
-/**
- * Optional on purpose: the native side only exists in a dev/release build, so
- * requiring it strictly would crash anything running without it.
- */
+// optional: the native side only exists in a dev or release build
 const WidgetBridge = requireOptionalNativeModule<WidgetBridgeNativeModule>('WidgetBridge');
 
-/** Writes the snapshot into the App Group and asks WidgetKit to redraw. */
+/** Stores the snapshot where the widgets read it and asks them to redraw. */
 export function setSnapshot(json: string): void {
   WidgetBridge?.setSnapshot(json);
 }

@@ -1,5 +1,4 @@
 import {
-  BACKUP_FORMAT,
   MAX_MONTH_CT,
   MAX_TASKS_CT,
   Sealed,
@@ -7,22 +6,15 @@ import {
   deriveBackupId,
   deriveKey,
   format,
-  fromBase64,
   generateCode,
   normalizeCode,
   open,
   seal,
-  toBase64,
 } from '../backup';
 
-/**
- * The backup code is the only secret in the design, so this is where the
- * design is checked: that a code round-trips, that the id it is filed under
- * gives nothing away about the key it is encrypted with, and that anything
- * short of the right code fails cleanly rather than half-working.
- */
+const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
 
-/** Deterministic bytes, so a test can name the code it is about to get */
+// deterministic bytes, so a test can name the code it is about to get
 let mockNextRandom: Uint8Array | null = null;
 jest.mock('expo-crypto', () => ({
   __esModule: true,
@@ -130,7 +122,7 @@ describe('sealing a record', () => {
     mockNextRandom = new Uint8Array(24).fill(3);
     const record = seal(key, plaintext);
     expect(Object.keys(record).sort()).toEqual(['ct', 'iv', 'v']);
-    expect(record.v).toBe(BACKUP_FORMAT);
+    expect(record.v).toBe(1);
     // the rules require the nonce between 16 and 32 characters
     expect(record.iv.length).toBeGreaterThanOrEqual(16);
     expect(record.iv.length).toBeLessThanOrEqual(32);
@@ -205,18 +197,18 @@ describe('opening a record that should not open', () => {
   });
 
   it('refuses a tampered ciphertext rather than returning something plausible', () => {
-    const flipped = fromBase64(record.ct)!;
+    const flipped = Buffer.from(record.ct, 'base64');
     flipped[0] ^= 1;
-    expect(open(key, { ...record, ct: toBase64(flipped) })).toBeNull();
+    expect(open(key, { ...record, ct: base64(flipped) })).toBeNull();
   });
 
   it('refuses a swapped nonce', () => {
-    expect(open(key, { ...record, iv: toBase64(new Uint8Array(24).fill(1)) })).toBeNull();
+    expect(open(key, { ...record, iv: base64(new Uint8Array(24).fill(1)) })).toBeNull();
   });
 
   it.each([
-    ['a newer format version', { v: BACKUP_FORMAT + 1 }],
-    ['a nonce of the wrong length', { iv: toBase64(new Uint8Array(12)) }],
+    ['a newer format version', { v: 2 }],
+    ['a nonce of the wrong length', { iv: base64(new Uint8Array(12)) }],
     ['a nonce that is not base64', { iv: '!!!!' }],
     ['ciphertext that is not base64', { ct: '!!!!' }],
     ['empty ciphertext', { ct: '' }],
@@ -231,17 +223,24 @@ describe('opening a record that should not open', () => {
 });
 
 describe('base64', () => {
+  const key = deriveKey(CODE);
+
   it('round-trips every byte value at every alignment', () => {
     for (let length = 0; length < 5; length++) {
-      const bytes = new Uint8Array(length).map((_, i) => (i * 37) & 255);
-      expect(fromBase64(toBase64(bytes))).toEqual(bytes);
+      mockNextRandom = new Uint8Array(24).map((_, i) => (i * 37 + length) & 255);
+      const record = seal(key, 'a'.repeat(length));
+      // standard base64, exactly as Node writes it, and read back by `open`
+      expect(base64(Buffer.from(record.iv, 'base64'))).toBe(record.iv);
+      expect(base64(Buffer.from(record.ct, 'base64'))).toBe(record.ct);
+      expect(open(key, record)).toBe('a'.repeat(length));
     }
-    const all = new Uint8Array(256).map((_, i) => i);
-    expect(fromBase64(toBase64(all))).toEqual(all);
+    mockNextRandom = new Uint8Array(24).map((_, i) => 232 + i);
+    expect(seal(key, '').iv).toBe(base64(new Uint8Array(24).map((_, i) => 232 + i)));
   });
 
   it('rejects what is not base64', () => {
-    expect(fromBase64('a')).toBeNull();
-    expect(fromBase64('****')).toBeNull();
+    const record = seal(key, 'x');
+    expect(open(key, { ...record, iv: 'a' })).toBeNull();
+    expect(open(key, { ...record, ct: '****' })).toBeNull();
   });
 });

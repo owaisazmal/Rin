@@ -15,7 +15,6 @@ import KeyboardSafeScroll from '../components/KeyboardSafeScroll';
 import BackButton from '../components/BackButton';
 import LogoMark from '../components/LogoMark';
 import SegmentedControl from '../components/SegmentedControl';
-import { authStyles } from './authStyles';
 import { format, generateCode, normalizeCode } from '../backup';
 import { loadCode, saveCode } from '../backupState';
 import { restoreEverything } from '../sync';
@@ -23,7 +22,7 @@ import { backupNow } from '../hooks/backupRuns';
 import { sentAnything } from '../hooks/autoBackupPolicy';
 import { restoreReport, runReport } from './backupWording';
 import { device } from '../device';
-import { FONT, Palette, RADIUS, useTheme, wrapSafe } from '../theme';
+import { COLUMN, FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 
 type Tab = 'create' | 'restore';
 
@@ -35,56 +34,23 @@ const TABS = [
 /** The two panes are different heights, so the card grows rather than snapping */
 const paneAnimation = LayoutAnimation.create(240, 'easeInEaseOut', 'opacity');
 
-/**
- * What this screen managed, which is more than "it worked".
- *
- * `restored` tells the app above that everything on this phone has just been
- * replaced and whatever it is holding in memory is now a month out of date.
- *
- * `unsent` is a run that finished without putting a single byte on the server,
- * and it covers two things that look nothing alike and mean the same here: a
- * document the server would not take, and a phone that had nothing to send. The
- * date in Settings hangs off this, so both have to fall on the same side of it.
- * The old gate was "was anything refused", which got the answer wrong in both
- * directions at once — a run that sent two months and was refused a third went
- * undated, and a run that opened no connection at all stamped "last sent today"
- * across the whole phone.
- */
+/** `unsent` is a run that put no bytes on the server, so Settings keeps its old date */
 export type BackupOutcome = 'sent' | 'restored' | 'unsent';
 
 interface Props {
-  /**
-   * `onboarding` is the first-open screen and offers a way past it;
-   * `standalone` is reached from Settings and offers a way back instead.
-   */
+  /** `onboarding` offers a way past it; `standalone` is reached from Settings and offers a way back */
   variant: 'onboarding' | 'standalone';
-  /** Called once a backup has been made or restored, with which of them it was */
   onDone: (code: string, outcome: BackupOutcome) => void;
   onDismiss: () => void;
 }
 
-/**
- * Backing this phone up, and restoring it onto another one.
- *
- * There is no account here and nothing to sign into: a backup is reached by a
- * code, and the code is the only thing that can reach it. That is what makes
- * the contents unreadable to the server, and it is also why there is no
- * "forgot code" — a way to reset one would be a way in. The screen says so
- * plainly rather than burying it, because someone who loses the code loses the
- * backup, and they should hear that before they rely on it.
- */
+// No account and no "forgot code": the code is the only way in, which is why the server cannot read it.
 export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
   const [tab, setTab] = useState<Tab>('create');
-  /**
-   * Held rather than regenerated on every render, so it can't change under
-   * someone who is halfway through writing it down — and replaced by the
-   * phone's existing code as soon as that loads, because backing up a second
-   * time has to overwrite the first backup rather than strand it under a code
-   * nobody wrote down.
-   */
+  // swapped for the saved code once loaded, so a second backup overwrites the first
   const [fresh, setFresh] = useState(generateCode);
   const [loadingCode, setLoadingCode] = useState(true);
   const [typed, setTyped] = useState('');
@@ -98,8 +64,7 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
     let cancelled = false;
     loadCode().then((saved) => {
       if (cancelled) return;
-      // stored bare, shown in groups — the dashes are a reading aid, not part
-      // of the code, and `normalizeCode` throws them away again on the way in
+      // stored bare, shown in groups
       if (saved) setFresh(format(saved));
       setLoadingCode(false);
     });
@@ -123,45 +88,22 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
     setCopied(true);
   };
 
-  /**
-   * The button, and it goes through the same door the phone's own runs do.
-   *
-   * It used to call `backupEverything` directly, which read as the shorter way
-   * of saying the same thing and was not: everything that decides what a run
-   * *meant* lives on the other side of `backupNow` — whether the install was
-   * turned away, whether anything is still stuck, whether this phone can now be
-   * said to be accounted for. Skipping it left the one run somebody actually
-   * watches as the one run nothing learned from, and a whole-install refusal
-   * pressed by hand parked every document with nothing to take the park off
-   * again. Two paths that disagree about what happened is one path too many.
-   */
+  // through backupNow, so a run somebody watches is settled like the automatic ones
   const runBackup = async () => {
     setBusy(true);
     setError(null);
     const result = await backupNow(fresh);
     setBusy(false);
     if (!result.ok) {
-      // Losing the connection is the only thing that ends a run outright. A
-      // document the server refuses, or one too big to send, is recorded
-      // against that document and stepped over, and comes back in `blocked`.
+      // only a lost connection ends a run outright; refusals come back in `blocked`
       setError("Couldn't reach the backup. Check your connection and try again.");
       return;
     }
-    // The code is worth keeping either way: this phone really does back up
-    // under it now, and a refusal that has to be worked through is easier to
-    // work through from a phone that remembers which backup it belongs to.
+    // kept even when something was refused: this phone backs up under it now
     await saveCode(normalizeCode(fresh) ?? fresh);
-    /**
-     * Both lines come from one place, which is the point: a run that half
-     * worked has something to warn about and something to be pleased about, and
-     * this screen used to print them from two functions that had never been
-     * introduced. One transient rejection was enough to get "nothing was sent"
-     * and "2 months are safe" onto the card together.
-     */
     const report = runReport(result);
     setError(report.problem);
     setDone(report.progress);
-    // Only bytes on the wire are worth a date, whatever else the run decided.
     onDone(fresh, sentAnything(result) ? 'sent' : 'unsent');
   };
 
@@ -186,12 +128,6 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
       return;
     }
     await saveCode(code);
-    /**
-     * A restore steps over a month it cannot decrypt and leaves the deadline
-     * list alone when the backup's own will not open, both of which are right
-     * and neither of which used to be said: "3 months are back" was printed over
-     * the top of them, and it reads as the whole backup having arrived.
-     */
     const report = restoreReport(result);
     setError(report.problem);
     setDone(report.progress);
@@ -204,13 +140,7 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
           {variant === 'standalone' ? <BackButton onPress={onDismiss} /> : null}
         </View>
 
-        {/*
-          The keyboard handling all lives in the wrapper, including the done
-          bar. It matters more here than on the planner: this field's own
-          return key is GO and runs the restore, which replaces everything on
-          this phone, so the one control that is always safe to press has to be
-          the one that only puts the keyboard away.
-        */}
+        {/* the wrapper's done bar is the safe way out, since GO here runs the restore */}
         <KeyboardSafeScroll
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -340,8 +270,97 @@ export default function BackupScreen({ variant, onDone, onDismiss }: Props) {
 
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
-    ...authStyles(p),
+    safe: { flex: 1, backgroundColor: 'transparent' },
+    topBar: {
+      height: 44,
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+      marginTop: 4,
+    },
+    content: {
+      ...COLUMN,
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+      paddingBottom: 28,
+    },
+    brand: {
+      alignItems: 'center',
+      marginBottom: 22,
+    },
     brandMark: { marginBottom: 14 },
+    brandSub: {
+      fontSize: 11,
+      fontFamily: FONT.bold,
+      letterSpacing: 4,
+      color: p.accent,
+      marginBottom: 2,
+    },
+    brandTitle: {
+      fontSize: 34,
+      fontFamily: FONT.bold,
+      letterSpacing: 1,
+      color: p.ink,
+    },
+    tagline: {
+      marginTop: 8,
+      fontSize: wrapSafe(13),
+      fontFamily: FONT.regular,
+      color: p.inkSoft,
+      textAlign: 'center',
+    },
+    card: {
+      ...cardSurface(p),
+      padding: 18,
+    },
+    label: {
+      fontSize: 10,
+      fontFamily: FONT.bold,
+      letterSpacing: 2,
+      color: p.inkSoft,
+      marginBottom: 6,
+    },
+    input: {
+      backgroundColor: p.chip,
+      borderRadius: RADIUS.control,
+      borderWidth: 1,
+      borderColor: p.lineFaint,
+      paddingHorizontal: 13,
+      paddingVertical: Platform.OS === 'ios' ? 13 : 9,
+      fontSize: 15,
+      fontFamily: FONT.medium,
+      color: p.ink,
+    },
+    inputFocused: {
+      borderColor: p.accent,
+    },
+    error: {
+      fontSize: wrapSafe(12),
+      fontFamily: FONT.medium,
+      color: p.missed,
+      marginBottom: 12,
+    },
+    primary: {
+      height: 48,
+      borderRadius: RADIUS.control,
+      backgroundColor: p.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primaryText: {
+      fontSize: 12,
+      fontFamily: FONT.bold,
+      letterSpacing: 2,
+      color: p.onAccent,
+    },
+    fine: {
+      marginTop: 14,
+      fontSize: 11,
+      fontFamily: FONT.regular,
+      lineHeight: wrapSafe(16),
+      color: p.inkSoft,
+      textAlign: 'center',
+    },
     segment: { marginBottom: 18 },
     codeBox: {
       backgroundColor: p.chip,

@@ -1,11 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { CHUNK_SIZE, sessionStorage } from '../session';
 
-/**
- * SecureStore minus the keychain: a map, plus the one rule the real module
- * enforces on keys. Everything worth testing is whether a value survives the
- * trip through the size ceiling and comes back whole — or not at all.
- */
+// SecureStore as a map, plus the key rule the real module enforces
 jest.mock('expo-secure-store', () => {
   const store = new Map<string, string>();
   const check = (key: string) => {

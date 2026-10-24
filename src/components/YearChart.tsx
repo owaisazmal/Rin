@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -12,6 +12,7 @@ import { MONTH_ABBR } from '../dates';
 import { YearBlock, YearSpan, YearSpanStats, blockShape, columnDays } from '../yearGrid';
 import { heatLevel } from '../trackerCharts';
 import { FONT, Palette, RADIUS, SCALE, useTheme } from '../theme';
+import ChartLegend from './ChartLegend';
 import { PickerChip, PickerSheet } from './Picker';
 
 const CELL = 12;
@@ -34,11 +35,7 @@ interface Props {
   stats: YearSpanStats;
   /** month currently open in the planner; the grid scrolls itself to it */
   focus: { year: number; month: number };
-  /**
-   * The real current date, not the browsed one — the grid shows a whole year
-   * at a time, so it needs to know where today falls in it even when that is
-   * some other year entirely.
-   */
+  /** the real current date, not the browsed one */
   now: { year: number; month: number; day: number };
   selected: { year: number; month: number; day: number };
   onSelectDate: (year: number, month: number, day: number) => void;
@@ -67,23 +64,12 @@ export default function YearChart({
     [blocks]
   );
 
-  /**
-   * Days that haven't happened yet are dead to the touch.
-   *
-   * Only the real today can ever be marked, so tapping into the future would
-   * page the planner to a month whose every row is locked — a dead end that
-   * looks like the app broke rather than a rule being enforced.
-   */
+  // future days don't respond: they would page the planner to a locked month
   const isFuture = (year: number, month: number, day: number) =>
     year > now.year ||
     (year === now.year && (month > now.month || (month === now.month && day > now.day)));
 
-  /**
-   * Where the open month's block starts, so the grid can scroll to it — and 0
-   * when the span doesn't hold it at all, which is what picking a past year
-   * from the chip does. A year being reviewed rather than written in has no
-   * month to land on, so it opens at its first one.
-   */
+  // where the open month's block starts, or 0 when the span doesn't hold it
   const focusX = useMemo(() => {
     const index = blocks.findIndex((b) => b.year === focus.year && b.month === focus.month);
     if (index < 0) return 0;
@@ -92,17 +78,7 @@ export default function YearChart({
     return Math.max(0, x - SCROLL_LEAD);
   }, [blocks, shapes, focus.year, focus.month]);
 
-  /**
-   * Both halves of this are load-bearing, and for different platforms.
-   *
-   * iOS clamps a programmatic offset to the content size it knows about, and
-   * before the first layout that is zero — so a scroll issued from an effect
-   * on mount is silently dropped, and only the content-size callback ever
-   * lands. Android replays a pending offset at layout instead, un-animated,
-   * so the same call arrives there as a jump. Re-anchoring on a content-size
-   * *change* rather than on every callback is what keeps the second one from
-   * yanking the grid back while somebody is scrolling it by hand.
-   */
+  // iOS drops a scroll issued before layout, so it is re-issued when the content width changes
   const wantX = useRef(0);
   const lastWidth = useRef(0);
 
@@ -191,11 +167,9 @@ export default function YearChart({
         ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        // the grid sits inside the planner's scroll view; without this the
-        // first tap on a cell with the keyboard up is eaten as a dismiss
+        // or the first tap with the keyboard up is eaten as a dismiss
         keyboardShouldPersistTaps="always"
-        // Android's stretch at either end spins up a layer over a grid that is
-        // nothing but small squares, and the rubber band reads as a glitch
+        // Android's stretch over a grid of small squares reads as a glitch
         overScrollMode="never"
         onContentSizeChange={(width) => {
           if (width === lastWidth.current) return;
@@ -210,10 +184,7 @@ export default function YearChart({
             <View key={`${block.year}-${block.month}`} style={styles.block}>
               <View style={styles.columns}>
                 {Array.from({ length: shape.columns }, (_, column) => {
-                  // the days this column holds, after the lead-in that the 1st
-                  // starts partway down — that lead is padding, not cells, so
-                  // a year is 365 views instead of the 430-odd a padded grid
-                  // would mount on the platform that can least afford them
+                  // the lead-in before the 1st is padding, not cells, to keep the view count down
                   const { first, last } = columnDays(shape, column);
                   const rows = Array.from({ length: last - first + 1 }, (_, k) => first + k);
                   return (
@@ -244,11 +215,7 @@ export default function YearChart({
                             style={[
                               styles.cell,
                               { backgroundColor: colorFor(block, day) },
-                              // Deliberately not dimmed. An empty cell is
-                              // already near-invisible against the dark card,
-                              // so fading the rest of the year erases the
-                              // grid's shape instead of reading as "not yet" —
-                              // the days ahead just don't respond.
+                              // future days aren't dimmed: that would erase the grid's shape
                               isToday && { borderWidth: 1.5, borderColor: palette.accent },
                               isSelected && { borderWidth: 1.5, borderColor: palette.ink },
                             ]}
@@ -275,25 +242,10 @@ export default function YearChart({
       </ScrollView>
 
       {legend ? (
-        <View
-          style={styles.legend}
-          accessible
+        <ChartLegend
+          heat
           accessibilityLabel="Colour key: the greens run from one habit kept to all of them; red is a day marked missed."
-        >
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
-            less
-          </Text>
-          {palette.ghLevels.map((c, i) => (
-            <View key={i} style={[styles.legendCell, { backgroundColor: c }]} />
-          ))}
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
-            more
-          </Text>
-          <View style={[styles.legendCell, styles.legendMissed]} />
-          <Text style={styles.legendText} maxFontSizeMultiplier={SCALE.heading}>
-            missed
-          </Text>
-        </View>
+        />
       ) : null}
 
       <PickerSheet visible={picking} title="SHOW" onClose={() => setPicking(false)}>
@@ -386,9 +338,7 @@ const makeStyles = (p: Palette) =>
       borderColor: p.accent,
       backgroundColor: p.accentSoft,
     },
-    // Josefin sets a tall, top-heavy line box; without the explicit height and
-    // the padding off, Android drops the glyph a couple of points and the dot
-    // over the i clips against the circle
+    // a set line height, or Josefin's tall line box clips the i's dot on Android
     infoGlyph: {
       fontSize: 9,
       lineHeight: 13,
@@ -412,8 +362,7 @@ const makeStyles = (p: Palette) =>
       includeFontPadding: false,
     },
     statNum: { fontFamily: FONT.bold, color: p.ink },
-    // the same treatment as the labels either side of it: left to the system
-    // font it sits a couple of points lower on Android than on iOS
+    // styled like its neighbours, or it sits lower on Android
     statDot: {
       fontSize: 11,
       fontFamily: FONT.regular,
@@ -431,8 +380,7 @@ const makeStyles = (p: Palette) =>
       borderRadius: 3,
       marginBottom: GAP,
     },
-    // in normal flow under the block and sized to it, so centring is arithmetic
-    // rather than text measurement — the one way it lands identically on both
+    // sized to the block, so it centres the same on both platforms
     monthLabel: {
       marginTop: 7,
       textAlign: 'center',
@@ -444,24 +392,7 @@ const makeStyles = (p: Palette) =>
     },
     monthLabelOn: { color: p.accent },
 
-    legend: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 3,
-      marginTop: 10,
-    },
-    legendText: {
-      fontSize: 10,
-      fontFamily: FONT.regular,
-      color: p.inkSoft,
-      marginHorizontal: 3,
-      includeFontPadding: false,
-    },
-    legendCell: { width: 10, height: 10, borderRadius: 2 },
-    legendMissed: { backgroundColor: p.ghMissed, marginLeft: 6 },
-
-    // capped so a phone that has been kept for years can't push the list off
-    // the bottom of the screen
+    // capped, so many years of data can't push the list off screen
     sheetList: { maxHeight: 260 },
     option: {
       flexDirection: 'row',

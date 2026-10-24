@@ -3,15 +3,7 @@ import { MonthRecord, loadMonthWindow } from '../storage';
 import { Task } from '../tasks';
 import { HistoryDay, buildHistory } from '../history';
 
-/**
- * The history timeline: how far back it reaches, and what is in it.
- *
- * Months are read in a window rather than all at once — there is no upper bound
- * on how long someone has been using this, and a full read would grow forever.
- * Six months is roughly a screen's worth of scrolling for an active month, and
- * `loadMore` extends it by six more.
- */
-
+// Read in a window, since a full read would grow with every month of use.
 const INITIAL_MONTHS = 6;
 const MORE_MONTHS = 6;
 
@@ -20,9 +12,7 @@ export function useHistory(tasks: Task[], enabled: boolean, now: number) {
   const [records, setRecords] = useState<MonthRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Re-read on every open rather than caching across them: the planner is right
-  // underneath, and anything marked there while history was closed has to show
-  // up when it is opened again.
+  // re-read on every open, so marks made in the planner meanwhile show up
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -40,8 +30,7 @@ export function useHistory(tasks: Task[], enabled: boolean, now: number) {
     };
   }, [enabled, span]);
 
-  // Collapsing the window on close means the next open starts cheap again,
-  // instead of re-reading however many months were paged in last time.
+  // collapsed on close, so the next open starts cheap again
   useEffect(() => {
     if (!enabled) setSpan(INITIAL_MONTHS);
   }, [enabled]);
@@ -53,14 +42,7 @@ export function useHistory(tasks: Task[], enabled: boolean, now: number) {
 
   const loadMore = useCallback(() => setSpan((s) => s + MORE_MONTHS), []);
 
-  /**
-   * Whether asking for more could plausibly return anything.
-   *
-   * Judged on the oldest batch rather than the single oldest month: one quiet
-   * month at the far end says nothing about the year behind it, and testing
-   * only that month would hide everything older the moment someone took a
-   * month off. A whole empty batch is a fair sign the trail has run out.
-   */
+  // judged on the oldest batch, since one quiet month says nothing about the year behind it
   const canLoadMore =
     !loading &&
     !!records?.length &&
@@ -68,18 +50,10 @@ export function useHistory(tasks: Task[], enabled: boolean, now: number) {
 
   return {
     days,
-    /**
-     * Nothing to show yet, whether or not a read is actually in flight.
-     *
-     * Derived from the absence of records rather than from the request, so the
-     * screen shows the spinner from its first frame — the entrance plays before
-     * the read is even allowed to start, and an "it is empty" message during
-     * those few hundred milliseconds would be a lie.
-     */
+    /** nothing to show yet, so the spinner shows before the first read has even started */
     loading: records === null,
     /** a later read, with the previous page still in place underneath */
     loadingMore: loading && records !== null,
-    span,
     loadMore,
     canLoadMore,
   };

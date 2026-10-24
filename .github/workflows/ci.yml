@@ -10,6 +10,7 @@ on:
       - 'assets/store/**'
       - '**.md'
       - '.github/workflows/pages.yml'
+      - '.github/dependabot.yml'
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -17,8 +18,14 @@ on:
       - 'assets/store/**'
       - '**.md'
       - '.github/workflows/pages.yml'
+      - '.github/dependabot.yml'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      release:
+        description: Skip the native Android build and the widget typecheck; EAS builds the apps next
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,21 +34,65 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  NODE_VERSION: 24.9.0 # same as eas.json
-
 jobs:
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    # manual runs check everything; release runs skip the native checks
+    outputs:
+      native: ${{ !inputs.release && steps.filter.outputs.native != 'false' }}
+      widgets: ${{ !inputs.release && steps.filter.outputs.widgets != 'false' }}
+      rules: ${{ inputs.release || steps.filter.outputs.rules != 'false' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push' && !inputs.release
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: (github.event_name == 'push' || github.event_name == 'pull_request') && !inputs.release
+        with:
+          filters: |
+            native:
+              - 'targets/**'
+              - 'modules/**'
+              - 'plugins/**'
+              - 'app.json'
+              - 'app.config.js'
+              - 'eas.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/scripts/firebase-stub.js'
+              - '.github/workflows/ci.yml'
+            widgets:
+              - 'targets/widgets/**'
+              - '.github/workflows/ci.yml'
+            rules:
+              - 'firestore.rules'
+              - 'firebase.json'
+              - 'firebase/**'
+              - 'src/backup.ts'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+
   test:
-    name: Typecheck, tests, bundle
+    name: Typecheck, tests, bundle, lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Node version matches eas.json
+        run: node .github/scripts/node-version-check.js
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Typecheck
@@ -54,12 +105,16 @@ jobs:
           EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: 1
           EXPO_DOCTOR_ENABLE_DIRECTORY_CHECK: 0
           EXPO_DOCTOR_WARN_ON_NETWORK_ERRORS: 1
-        run: npx --yes expo-doctor@1.20.4
+        run: npx expo-doctor
       - name: Bundle JS for iOS and Android
         run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/export"
+      - name: Lint
+        run: npm run lint
 
   rules:
     name: Firestore rules
+    needs: changes
+    if: needs.changes.outputs.rules == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -68,17 +123,37 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
       - run: npm ci
-      - run: npm run test:rules
+      - name: Firebase CLI version
+        id: firebase
+        run: node -p "'version=' + /firebase-tools@([\d.]+)/.exec(require('./package.json').scripts['test:rules'])[1]" >> "$GITHUB_OUTPUT"
+      - name: Cache Firebase CLI and emulator
+        id: firebase-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/firebase-cli
+            ~/.cache/firebase/emulators
+          key: firebase-${{ runner.os }}-${{ steps.firebase.outputs.version }}
+      - name: Install Firebase CLI
+        if: steps.firebase-cache.outputs.cache-hit != 'true'
+        env:
+          VERSION: ${{ steps.firebase.outputs.version }}
+        run: npm install --global --prefix ~/.cache/firebase-cli "firebase-tools@$VERSION"
+      - name: Rules tests
+        # npx runs the cached CLI from this global prefix instead of downloading it
+        run: NPM_CONFIG_PREFIX="$HOME/.cache/firebase-cli" npm run test:rules
 
   native:
     name: Prebuild + Android release build
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -87,19 +162,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
-      - uses: actions/cache@v6
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: gradle-${{ runner.os }}-
+      # default caching is free for public repos under Gradle's terms; `cache-provider: basic` is the MIT one
+      - uses: gradle/actions/setup-gradle@v6
       - run: npm ci
       - name: Placeholder Firebase config
         run: node .github/scripts/firebase-stub.js "$RUNNER_TEMP/firebase"
@@ -111,7 +181,9 @@ jobs:
 
   ios-widgets:
     name: iOS widget typecheck
-    runs-on: macos-latest
+    needs: changes
+    if: needs.changes.outputs.widgets == 'true'
+    runs-on: macos-26
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

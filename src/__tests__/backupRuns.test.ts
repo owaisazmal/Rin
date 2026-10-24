@@ -1,5 +1,8 @@
-import { generateCode } from '../backup';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setDoc } from '@react-native-firebase/firestore';
+import { deriveBackupId, generateCode, normalizeCode } from '../backup';
 import { saveCode } from '../backupState';
+import * as sync from '../sync';
 import { backupEverything } from '../sync';
 import { saveMonth } from '../storage';
 import { saveTasks } from '../tasks';
@@ -16,24 +19,6 @@ import {
 } from '../hooks/backupRuns';
 import { emptyMonthData } from '../types';
 import type { Task } from '../tasks';
-
-/**
- * A morning when the server would not talk to this install, and the morning
- * after it.
- *
- * The failure these are written from is the worst one this app has had, because
- * nothing about it is visible from inside the app: an App Check token expires
- * between two writes, every document offered comes back refused, each refusal is
- * remembered against the document it happened to — and a document the server
- * refused stops being counted as waiting. On a phone that has pushed before that
- * leaves nothing waiting, nothing to run for, and a card saying everything is
- * fine, for good. Only editing every month on the phone by hand would bring it
- * back, and nobody would ever know to.
- *
- * So the tests are written as the two mornings rather than as assertions about
- * functions: refused on Monday, and sending again on Tuesday with nobody having
- * touched anything.
- */
 
 const mockLocal = new Map<string, string>();
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -151,9 +136,7 @@ beforeEach(async () => {
   mockServer.refuseWith = null;
   mockServer.refuseAfter = null;
   mockServer.writes = 0;
-  // a launch is a process, and each of these is a fresh one. Only the process
-  // is ended here: what a run writes down is on the disk that was just cleared,
-  // and a test that wiped it twice could never notice it had stopped being written.
+  // each test is a fresh launch; only the process ends here, the disk was cleared above
   endLaunch();
 });
 
@@ -186,19 +169,14 @@ async function wouldRunOnOpening(): Promise<boolean> {
     ledger: await loadLedger(),
     seen: '',
     ...(await launchMoment()),
-    // the throttles are about how recently something was tried; every question
-    // here is about the day after, so none of them is what is under test
+    // the day after, so the throttles are not what is under test
     since: 24 * 60 * 60_000,
   });
 }
 
 describe('the morning the server turned this install away', () => {
   it('parks every document it was refused, which is what nobody may leave standing', async () => {
-    // The raw run, straight from `sync`. From where that code stands a refusal
-    // is a refusal and it is right to record one — and this is exactly why
-    // nothing in the app is allowed to call it without settling it afterwards:
-    // parked, a document stops being counted as waiting, and nothing but an
-    // edit to it ever brings it back.
+    // the raw sync run, which is why every caller has to settle it afterwards
     await alreadyBackedUp();
     await saveMonth(2026, 8, { ...month, observations: ['typed', '', '', ''] });
     await markDirty('2026-09');
@@ -216,10 +194,6 @@ describe('the morning the server turned this install away', () => {
   });
 
   it('takes the park off again the moment the run is accounted for', async () => {
-    // The same refusal through the door every caller goes through — the button
-    // on the backup screen, and the phone's own triggers, are the same door.
-    // The month is waiting again afterwards, because it is: the server said no
-    // to this install, not to September.
     await alreadyBackedUp();
     await saveMonth(2026, 8, { ...month, observations: ['typed', '', '', ''] });
     await markDirty('2026-09');
@@ -241,8 +215,6 @@ describe('the morning the server turned this install away', () => {
     mockServer.refuseWith = 'firestore/permission-denied';
     await backupNow(CODE);
 
-    // the following morning: the token is fine again, and the only thing that
-    // has happened in between is that the app was opened
     mockServer.refuseWith = null;
     expect(await wouldRunOnOpening()).toBe(true);
     await runAndSettle();
@@ -253,14 +225,6 @@ describe('the morning the server turned this install away', () => {
 });
 
 describe('the first backup this phone ever made, refused', () => {
-  /**
-   * The hardest version of it, because there is nothing on record to recover
-   * from. A first run re-keys the ledger before it starts, so nothing is dirty
-   * and nothing has a digest: refused, the ledger afterwards knows literally
-   * nothing, and the only thing standing between this phone and a backup it
-   * never makes again is the refusal to call a turned-away run a run that
-   * checked anything.
-   */
   it('does not let a run it was refused everything of count as having checked the phone', async () => {
     await saveCode(CODE);
     await saveMonth(2026, 8, month);
@@ -294,11 +258,6 @@ describe('the first backup this phone ever made, refused', () => {
   });
 
   it('comes back for the half of a run that was refused, dirty flag or no dirty flag', async () => {
-    // September goes up and then the token expires, so August is refused with
-    // nothing on this phone recording that it did not go: it was never dirty —
-    // a first run has no flags at all — and the park comes off it a moment
-    // later. The ledger now looks like a phone that has backed up. Only this
-    // launch remembers being refused, so only this launch can insist.
     await saveCode(CODE);
     await saveMonth(2026, 7, month);
     await saveMonth(2026, 8, month);
@@ -329,9 +288,6 @@ describe('the first backup this phone ever made, refused', () => {
   });
 
   it('still lets somebody ask for it by hand, and says the same thing afterwards', async () => {
-    // The retry in Settings is the other half of the story and it must not have
-    // become the only half: it takes the park off everything, whatever put it
-    // there, and runs without asking the throttles a thing.
     await saveCode(CODE);
     await saveMonth(2026, 8, month);
     await saveTasks(tasks);
@@ -347,38 +303,11 @@ describe('the first backup this phone ever made, refused', () => {
 });
 
 describe('the retry that got nowhere', () => {
-  /**
-   * The tap is the one moment in this app where somebody is actually watching,
-   * and it used to be the moment the phone forgot everything it knew.
-   *
-   * Clearing what is stuck was done first, before the run — the ledger's parks
-   * and this launch's memory of why each document was refused, both at once —
-   * and nothing put either back when the run then failed to report. A refusal
-   * the *server* made lives in that memory and nowhere else, because the park is
-   * lifted on purpose so one expired token is not permanent, so a tap answered
-   * by a dead connection left a phone with an empty blocked list, nothing
-   * counted as waiting, no reason for any trigger to start, and a card saying
-   * everything was in the backup. Pressing "try again" made the phone quieter
-   * than not pressing it at all.
-   *
-   * Both routes a run has to get nowhere are below, because both went through
-   * that same erasure: an answer that never comes back, and a run that never
-   * starts because the Keychain would not give up the code.
-   */
-
   /** What Settings would put in front of somebody right now */
   async function card() {
     return statusOf(await loadLedger(), await launchMemory());
   }
 
-  /**
-   * Monday, half way through the run: September lands and then the token
-   * expires, so August and the deadline list come back refused. Nothing on the
-   * phone records that they did not go — a first run has no dirty flags, and the
-   * park comes off a refusal about the install the moment the run is accounted
-   * for — so this launch's memory of the refusal is the only thing standing
-   * between this phone and a backup it never makes again.
-   */
   async function turnedAwayHalfWay() {
     await saveCode(CODE);
     await saveMonth(2026, 7, month);
@@ -395,8 +324,6 @@ describe('the retry that got nowhere', () => {
     await turnedAwayHalfWay();
     expect((await launchMoment()).turnedAway).toBe(2);
 
-    // The person opens Settings, reads that the phone is not reaching the
-    // backup, and taps TRY IT AGAIN NOW — in a lift.
     mockServer.refuseWith = 'firestore/unavailable';
     await retryEverything();
 
@@ -404,8 +331,6 @@ describe('the retry that got nowhere', () => {
     expect((await card()).blocked.map((doc) => doc.key)).toEqual(['2026-08', 'current']);
     expect(await wouldRunOnOpening()).toBe(true);
 
-    // and out of the lift, with nobody having touched anything, the two
-    // documents that never went finally go
     mockServer.refuseWith = null;
     await runAndSettle();
     expect(paths()).toEqual([
@@ -416,10 +341,8 @@ describe('the retry that got nowhere', () => {
   });
 
   it('still knows what the server turned away when the run never starts', async () => {
-    // The other route to the same nothing: the Keychain does not answer, so no
-    // code is read and no request is made. A run that never happened has said
-    // even less about what is stuck than one that came back empty-handed.
     await turnedAwayHalfWay();
+    // the Keychain gives nothing, so no request is made at all
     keychain.clear();
 
     await retryEverything();
@@ -430,11 +353,6 @@ describe('the retry that got nowhere', () => {
   });
 
   it('leaves the ledger holding the month the server would not take', async () => {
-    // The other class of refusal, and the one the ledger itself remembers. A
-    // September over the size cap is parked against the document with no dirty
-    // flag of its own, so the blocked list is the only record there is that the
-    // month is not up there; erasing it left a card reading "everything on this
-    // phone is in the backup" about a month the run had just refused to send.
     await saveCode(CODE);
     await saveMonth(2026, 7, month);
     await saveMonth(2026, 8, { ...month, observations: ['x'.repeat(60_000), '', '', ''] });
@@ -452,12 +370,7 @@ describe('the retry that got nowhere', () => {
   });
 
   it('does let go of a park a finished run no longer stands behind', async () => {
-    // The half of the old behaviour worth keeping, and the reason a retry
-    // clears anything at all. A month already on the server character for
-    // character is stepped over in silence by every run — no push, no skip, so
-    // nothing on the ordinary path will ever take a park off it — and a retry is
-    // where a park like that is meant to end. It ends after the run rather than
-    // before it, once the run has come back without naming it.
+    // a month already on the server is stepped over in silence, so only a retry unparks it
     await alreadyBackedUp();
     await recordBlocked('2026-09');
     expect((await loadLedger()).blocked).toEqual(['2026-09']);
@@ -470,15 +383,6 @@ describe('the retry that got nowhere', () => {
 });
 
 describe('what a finished run may leave counted as waiting', () => {
-  /**
-   * Reached by two taps and a wait. Ticking a deadline off files it under the
-   * year it was finished in and reports that year as changed; un-ticking it, or
-   * deleting it, before the next run leaves that year holding nothing. Nothing
-   * was ever sent under it, so there is no digest to make it an orphan, and no
-   * loop in the run has any reason to look at it — so the flag stood there for
-   * the life of the phone, the card said the deadlines were waiting, and a run
-   * started every half hour to send a document that does not exist.
-   */
   it('retires a year whose only deadline was ticked off and un-ticked again', async () => {
     await alreadyBackedUp();
     const sent = mockServer.writes;
@@ -491,16 +395,10 @@ describe('what a finished run may leave counted as waiting', () => {
 
     expect(pendingKeys(await loadLedger())).toEqual([]);
     expect(paths()).not.toContain('backups/<id>/tasks/2026');
-    // and nothing went on the wire to achieve it: the open list is unchanged
-    // and the year never existed
     expect(mockServer.writes).toBe(sent);
   });
 
   it('leaves a year the backup does hold to be emptied rather than forgotten', async () => {
-    // The other side of the same line. A year with a digest against it is a
-    // document the backup is still holding deadlines in, so a flag on it means
-    // the last of them was deleted and the document has to be emptied — which
-    // is a write, not a retirement.
     await saveCode(CODE);
     await saveMonth(2026, 8, month);
     await saveTasks([
@@ -522,26 +420,6 @@ describe('what a finished run may leave counted as waiting', () => {
 });
 
 describe('the morning after the phone was closed', () => {
-  /**
-   * The refusal nothing on this phone writes down, and then somebody closes the
-   * app.
-   *
-   * September lands and the token expires behind it, so August and the deadline
-   * list come back refused. Neither was ever dirty — a first run has no flags at
-   * all — and the park comes off a refusal about the *install* the moment the
-   * run is accounted for, on purpose, because a park that stays on is a phone
-   * that never backs up again after one bad token. What the ledger holds
-   * afterwards is a binding, a date and nothing waiting: character for character
-   * a phone that has sent everything it has.
-   *
-   * All of that was already true and already covered, and it worked, for
-   * exactly as long as the process lived. The refusal was held in this launch
-   * and nowhere else, so closing the app took the last record of it: nothing
-   * waiting, nothing stuck, no trigger with a reason to start, and a card in
-   * front of somebody saying their history was in the backup while two
-   * documents of it had never left the phone. It recovered only if nobody shut
-   * the app, which is not how anybody uses a phone.
-   */
   async function refusedHalfWayAndClosed() {
     await saveCode(CODE);
     await saveMonth(2026, 7, month);
@@ -575,24 +453,18 @@ describe('the morning after the phone was closed', () => {
   it('knows it is behind, and does not tell anybody otherwise', async () => {
     await refusedHalfWayAndClosed();
 
-    // the ledger has nothing to say about either document, which is the whole
-    // of the difficulty: this is what a backed-up phone looks like
     const ledger = await loadLedger();
     expect(pendingKeys(ledger)).toEqual([]);
     expect(ledger.blocked).toEqual([]);
     expect(ledger.lastPushAt).not.toBeNull();
 
     expect((await launchMoment()).turnedAway).toBe(2);
-    // so the card may say it has not checked this phone, and may not say the
-    // backup holds everything on it
     expect((await card()).reconciled).toBe(false);
   });
 
   it('starts a run of its own, with nobody having touched anything', async () => {
     await refusedHalfWayAndClosed();
 
-    // asked the way the app asks it: nothing edited, nothing tapped, and the
-    // throttles reading whatever they really read on the first look of a launch
     expect(await opening()).toBe(true);
     await runAndSettle();
 
@@ -604,10 +476,6 @@ describe('the morning after the phone was closed', () => {
   });
 
   it('goes quiet again once a run has been refused nothing', async () => {
-    // The half that keeps this from becoming the thing it replaced. A status
-    // that could only climb would be the per-document park under another name,
-    // so one good morning has to take it to nothing — on the disk as well, or
-    // the phone would open every day afterwards insisting it was behind.
     await refusedHalfWayAndClosed();
     await runAndSettle();
     endLaunch();
@@ -618,16 +486,103 @@ describe('the morning after the phone was closed', () => {
   });
 
   it('does not describe the next backup with what the last one refused', async () => {
-    // A restore, or NEW CODE. The count was about a server this phone has left,
-    // and every other thing a launch knows is dropped at that point for exactly
-    // this reason; the one thing that survives being closed has to be dropped
-    // there too, or it would be describing somebody else's backup.
     await refusedHalfWayAndClosed();
     await forgetLaunch();
 
-    // and the app is closed again, so the answer comes off the disk rather than
-    // out of the assignment `forgetLaunch` just made
+    // closed again, so the answer comes off the disk
     endLaunch();
     expect((await launchMoment()).turnedAway).toBe(0);
   });
+});
+
+describe('one run at a time', () => {
+  const TURNED_AWAY_KEY = '@monthly-planning/backup-turned-away';
+
+  /** How many runs wrote down what they were turned away from, which every settled run does */
+  const settles = () =>
+    (AsyncStorage.setItem as jest.Mock).mock.calls.filter(([key]) => key === TURNED_AWAY_KEY).length;
+
+  it('shares the run in the air with every caller under the same code, and settles it once', async () => {
+    await alreadyBackedUp();
+    await saveMonth(2026, 8, { ...month, observations: ['typed', '', '', ''] });
+    await markDirty('2026-09');
+
+    const sent = mockServer.writes;
+    (AsyncStorage.setItem as jest.Mock).mockClear();
+    // the screen's code is bare, the saved one grouped; both are the same backup
+    const [mine, timer, retry] = await Promise.all([
+      backupNow(normalizeCode(CODE) as string),
+      runAndSettle(),
+      retryEverything(),
+    ]);
+
+    expect(mockServer.writes).toBe(sent + 1);
+    expect(mine).toMatchObject({ ok: true, pushed: 1 });
+    // the screen started it, so the others leave the bookkeeping to it
+    expect(timer).toBeNull();
+    expect(retry).toBeNull();
+    expect(settles()).toBe(1);
+  });
+
+  it('has a different code wait for the run in the air, then run on its own', async () => {
+    await saveCode(CODE);
+    await saveMonth(2026, 8, month);
+    await saveTasks(tasks);
+    const other = generateCode();
+
+    (setDoc as jest.Mock).mockClear();
+    const [mine, timer] = await Promise.all([backupNow(other), runAndSettle()]);
+
+    expect(mine).toMatchObject({ ok: true, pushed: 2 });
+    expect(timer).not.toBeNull();
+    const ids = (setDoc as jest.Mock).mock.calls.map(([ref]) => ref.path.split('/')[1]);
+    const [theirs, ours] = [deriveBackupId(other), deriveBackupId(CODE)];
+    expect(ids).toEqual([theirs, theirs, ours, ours]);
+  });
+
+  it('answers a run that threw as a lost connection, and still settles it', async () => {
+    await alreadyBackedUp();
+    const spy = jest.spyOn(sync, 'backupEverything').mockRejectedValueOnce(new Error('disk'));
+
+    await expect(backupNow(CODE)).resolves.toEqual({ ok: false, reason: 'offline' });
+    expect((await launchMoment()).stalled).toBe(true);
+    spy.mockRestore();
+  });
+});
+
+describe('the turned-away count on the disk', () => {
+  const TURNED_AWAY_KEY = '@monthly-planning/backup-turned-away';
+
+  it('still reads the record older builds wrote, so the phone keeps its count', async () => {
+    mockLocal.set(TURNED_AWAY_KEY, JSON.stringify({ count: 2, at: 1_700_000_000_000 }));
+    expect((await launchMoment()).turnedAway).toBe(2);
+  });
+
+  it('keeps the count of a record dated from the future', async () => {
+    mockLocal.set(TURNED_AWAY_KEY, JSON.stringify({ count: 3, at: Date.now() + 86_400_000 }));
+    expect((await launchMoment()).turnedAway).toBe(3);
+  });
+
+  it('writes a bare count from now on', async () => {
+    await saveCode(CODE);
+    await saveMonth(2026, 7, month);
+    await saveMonth(2026, 8, month);
+    await saveTasks(tasks);
+
+    mockServer.refuseWith = 'firestore/permission-denied';
+    mockServer.refuseAfter = 1;
+    await backupNow(CODE);
+
+    expect(mockLocal.get(TURNED_AWAY_KEY)).toBe('2');
+    endLaunch();
+    expect((await launchMoment()).turnedAway).toBe(2);
+  });
+
+  it.each(['"2"', '-1', '1.5', '0', 'null', '[2]', '{"count":0}', '{"count":"2"}', 'not json'])(
+    'reads %s as nothing turned away',
+    async (raw) => {
+      mockLocal.set(TURNED_AWAY_KEY, raw);
+      expect((await launchMoment()).turnedAway).toBe(0);
+    }
+  );
 });

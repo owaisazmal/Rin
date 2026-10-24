@@ -1,12 +1,3 @@
-/**
- * Calendar arithmetic, and the names that go with it.
- *
- * Every module that reasons about time used to carry its own copy of these —
- * month names in three cases, a `startOfDay` in four files, the length of a
- * month in six. One place, so a change to how a date reads is a change in one
- * file, and so the tests pin one implementation rather than several.
- */
-
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
@@ -34,4 +25,15 @@ export function monthLength(year: number, month: number): number {
 export function startOfDay(ms: number): number {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** "Fri 3 Oct" */
+export function shortDate(ms: number): string {
+  const d = new Date(ms);
+  return `${DAY_ABBR[d.getDay()]} ${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`;
+}
+
+/** "2026-09": a month's name on disk, in the backup and in exports, always zero-padded */
+export function monthDocKey(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
 }

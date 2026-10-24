@@ -3,18 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { FONT, useTheme } from '../theme';
 
-/**
- * The waiting indicator, drawn rather than imported.
- *
- * `ActivityIndicator` renders the platform's own spinner, which arrives in the
- * platform's own colours and sits in this app about as comfortably as the system
- * date picker did. This is the same shape the tracker is built from: a ring with
- * an arc travelling round it, in the palette's accent over its faintest line.
- *
- * The rotation runs on the native driver, which matters here more than usual —
- * the thing it is covering for is a busy JS thread, and a spinner that stutters
- * whenever the work it represents is happening would be worse than none.
- */
+/** The waiting indicator in the palette's colours, spun on the native driver so a busy JS thread can't stall it */
 export default function Spinner({ size = 28 }: { size?: number }) {
   const { palette: p } = useTheme();
 

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { QuoteList, quoteForDate, quoteHeading } from '../quotes';
 import { FONT, Palette, SCALE, cardSurface, useTheme, wrapSafe } from '../theme';
@@ -28,8 +28,7 @@ const makeStyles = (p: Palette) =>
       paddingVertical: 16,
       paddingHorizontal: 18,
     },
-    // an inline accent bar, matching every other section — a borderLeft would
-    // detach into a floating arc against the card's large corner radius
+    // an inline accent bar: a borderLeft would curl against the card's corner radius
     head: {
       flexDirection: 'row',
       alignItems: 'center',

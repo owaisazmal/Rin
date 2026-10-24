@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SectionHeader from '../components/SectionHeader';
+import ScreenHeader from '../components/ScreenHeader';
+import SectionHeader, { CountBadge } from '../components/SectionHeader';
 import { MONTH_NAMES } from '../dates';
 import { device } from '../device';
 import { useNow } from '../hooks/useNow';
@@ -87,33 +88,13 @@ export default function SummaryScreen({ source, tasks, onClose }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.titleBlock}>
-            <Text
-              style={styles.title}
-              accessibilityRole="header"
-              maxFontSizeMultiplier={SCALE.heading}
-            >
-              SUMMARY
-            </Text>
-            {source ? (
-              <Text style={styles.subtitle} maxFontSizeMultiplier={SCALE.figure}>
-                {MONTH_NAMES[source.month]} {source.year}
-              </Text>
-            ) : null}
-          </View>
-          <Pressable
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close summary"
-            onPress={onClose}
-            style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={styles.closeGlyph} maxFontSizeMultiplier={SCALE.glyph}>
-              ✕
-            </Text>
-          </Pressable>
-        </View>
+        <ScreenHeader
+          title="SUMMARY"
+          subtitle={source ? `${MONTH_NAMES[source.month]} ${source.year}` : undefined}
+          closeLabel="Close summary"
+          onClose={onClose}
+          style={styles.header}
+        />
 
         {source && !source.vouched ? (
           <View style={styles.damaged}>
@@ -243,13 +224,7 @@ function Body({
         <SectionHeader
           title="KEY GOALS"
           right={
-            s.goals.total ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText} maxFontSizeMultiplier={SCALE.figure}>
-                  {s.goals.done}/{s.goals.total}
-                </Text>
-              </View>
-            ) : undefined
+            s.goals.total ? <CountBadge label={`${s.goals.done}/${s.goals.total}`} /> : undefined
           }
         />
         {s.goals.total ? (
@@ -340,13 +315,7 @@ function Overview({
       <SectionHeader
         title="COMPLETION"
         right={
-          s.phase === 'current' && !note ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText} maxFontSizeMultiplier={SCALE.figure}>
-                SO FAR
-              </Text>
-            </View>
-          ) : undefined
+          s.phase === 'current' && !note ? <CountBadge label="SO FAR" /> : undefined
         }
       />
       {note ? (
@@ -507,44 +476,7 @@ const makeStyles = (p: Palette) =>
       paddingBottom: 28,
       gap: 14,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 4,
-      paddingHorizontal: 4,
-      gap: 12,
-    },
-    titleBlock: { flexShrink: 1 },
-    title: {
-      fontSize: 26,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.ink,
-    },
-    subtitle: {
-      marginTop: 2,
-      fontSize: 12,
-      fontFamily: FONT.bold,
-      letterSpacing: 2,
-      color: p.inkSoft,
-    },
-    closeBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: RADIUS.pill,
-      borderWidth: 1,
-      borderColor: p.lineFaint,
-      backgroundColor: p.card,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    closeGlyph: {
-      fontSize: 15,
-      fontFamily: FONT.medium,
-      color: p.ink,
-      lineHeight: 18,
-    },
+    header: { marginBottom: 4 },
     card: {
       ...cardSurface(p),
       padding: 18,
@@ -568,18 +500,6 @@ const makeStyles = (p: Palette) =>
       color: p.inkSoft,
     },
     noteGap: { marginBottom: 6 },
-    badge: {
-      backgroundColor: p.chip,
-      borderRadius: RADIUS.chip,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    badgeText: {
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      letterSpacing: 0.5,
-      color: p.inkSoft,
-    },
     hero: {
       flexDirection: 'row',
       flexWrap: 'wrap',

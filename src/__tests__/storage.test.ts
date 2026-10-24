@@ -10,12 +10,6 @@ import {
 } from '../storage';
 import { MAX_HABITS, emptyMonthData } from '../types';
 
-/**
- * The parser is the guard between whatever is on disk — or, one day, whatever
- * a server sends — and everything that renders it. These feed it shapes the app
- * would never write and check that what comes out is always a month the rest
- * of the code can hold without crashing.
- */
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: { getItem: jest.fn(), setItem: jest.fn(), multiGet: jest.fn() },
@@ -229,18 +223,7 @@ describe('loadYearSummary', () => {
   });
 });
 
-/**
- * Reading a month for the backup rather than for the screen.
- *
- * The planner is right to take whatever survived the parser and draw it. The
- * backup is not: what it sends replaces the only other copy that exists, so it
- * has to know the difference between a month that is empty and a month that
- * arrived thinner than it was written. These check both halves — that a real
- * loss is named, and, far more importantly, that the ordinary shapes the app
- * has written over the years still read as complete. A check that cried partial
- * over a v1 habit list or an absent notes key would quietly stop people backing
- * up at all.
- */
+/** Reading a month for the backup rather than for the screen */
 describe('readMonthVouched', () => {
   it('says absent when the month has never been written', async () => {
     store.getItem.mockResolvedValue(null);
@@ -344,9 +327,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a mark on an id no modern habit list has', async () => {
-      // the control for the v1 exemption below: in a record written the modern
-      // way, a mark whose habit is not in the list means the habit went
-      // missing, and that is real loss however ordinary the cell looks
       stored({ habits: [{ id: '0', name: 'Run' }], grid: { '1:0': 1, '2:1': 1 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -355,9 +335,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a mark stranded on a v1 slot that still has its name', async () => {
-      // slot 0 was typed into, so nothing about this cell is explained by the
-      // migration: day 40 is damage, and an empty slot elsewhere in the array
-      // does not excuse it
       stored({ habits: ['Run', ''], grid: { '40:0': 1 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -366,10 +343,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a v1 mark on a slot index the array never had', async () => {
-      // slot 1 really was emptied, so this record has an exemption to make —
-      // but slot 5 was never there to empty, and a mark on it is loss like any
-      // other. Being a v1 record is not on its own a licence to stop counting
-      // what the grid could not keep.
       stored({ habits: ['Run', '', 'Read'], grid: { '1:0': 1, '3:5': 1 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -378,9 +351,7 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a mark on an empty v1 slot that is also on an impossible day', async () => {
-      // the exemption covers exactly what the parser would have kept had the
-      // slot still held a name. v1 never wrote a fortieth of the month, so this
-      // cell is damaged in its own right and stays counted.
+      // the exemption covers exactly what the parser would have kept had the slot still held a name
       stored({ habits: ['Run', ''], grid: { '40:1': 1 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -397,9 +368,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports marks belonging to named v1 slots that fell off the end of the cap', async () => {
-      // those slots were typed into and their names are counted as lost, so
-      // their marks are lost too — the exemption turns on the slot being
-      // *empty*, not merely on its id being absent from the parsed list
       const names = Array.from({ length: MAX_HABITS + 2 }, (_, i) => `h${i}`);
       stored({ habits: names, grid: { '1:0': 1, [`2:${MAX_HABITS}`]: 1 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
@@ -417,8 +385,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports notes even when none of them survived', async () => {
-      // the parser substitutes its four blank lines here, so the answer is
-      // longer than what was on disk and comparing lengths would miss the loss
       stored({ observations: [1, 2] });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -446,10 +412,7 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a goal whose tick was blanked on the way out', async () => {
-      // `parseKeyGoals` writes `done === true`, so anything else at all comes
-      // back unticked. Nothing about that looks like a discarded value — the
-      // goal is still there, with its text — and a finished goal going over
-      // the wire unfinished is the same substitution as a blanked one.
+      // `parseKeyGoals` writes `done === true`, so anything else at all comes back unticked
       stored({
         keyGoals: [
           { text: 'Ship it', done: 'yes' },
@@ -464,8 +427,6 @@ describe('readMonthVouched', () => {
     });
 
     it('reports a goal slot with no tick at all beside its text', async () => {
-      // a missing `keyGoals` key is the documented default; a goal somebody
-      // wrote, with half of it gone, is not
       stored({ keyGoals: [{ text: 'Ship it' }, { text: '', done: false }] });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({
         status: 'partial',
@@ -526,24 +487,15 @@ describe('readMonthVouched', () => {
     });
 
     it('vouches for a v1 month whose marks all sit on slots that kept their names', async () => {
-      // the control: nothing here is orphaned, and it has to stay complete for
-      // the reason it always was, not because of the exemption below
       stored({ habits: ['Run', '', 'Read', '', '', '', '', ''], grid: { '1:0': 1, '2:2': 2 } });
       await expect(readMonthVouched(2026, 8)).resolves.toMatchObject({ status: 'complete' });
     });
 
     it('vouches for a v1 month whose emptied slot left its marks behind', async () => {
-      // Somebody cleared slot 1's name years ago and its marks stayed on disk
-      // under `${day}:1`, which now names no habit. `parseHabits` has always
-      // treated the blank slot as a slot rather than a lost habit; the marks
-      // it stranded are the same migration and not this phone losing anything,
-      // so an ordinary month like this must still be able to back up.
       stored({ habits: ['Run', '', '', '', '', '', '', ''], grid: { '1:0': 1, '2:1': 1 } });
       const read = await readMonthVouched(2026, 8);
       expect(read).toMatchObject({ status: 'complete' });
       if (read.status !== 'complete') throw new Error('expected a complete read');
-      // the orphan is still gone from the data — it is unreachable either way;
-      // what changed is that its absence is no longer called damage
       expect(read.data.grid).toEqual({ '1:0': 1 });
     });
 
@@ -576,17 +528,7 @@ describe('readMonthVouched', () => {
   });
 });
 
-/**
- * The judgement itself, with no store underneath it.
- *
- * `readMonthVouched` used to be the only way to ask "did this parse with
- * nothing lost", and it can only ask it of AsyncStorage. A month arriving from
- * the backup needs the same question asked of a value that never touched a
- * disk, and asking it a second way would be two standards — the looser of which
- * would be the one guarding whichever copy of somebody's history was about to
- * be overwritten. So the rule is one function, and these check that the reader
- * is genuinely made of it rather than agreeing with it by coincidence.
- */
+/** The judgement itself, with no store underneath it */
 describe('vouchMonthValue', () => {
   it.each([
     ['a month with nothing wrong with it', valid],
@@ -600,23 +542,13 @@ describe('vouchMonthValue', () => {
   });
 
   it('has no way of calling a value absent, because a payload never is', () => {
-    // absence is a question about a key in a store. A decrypted document that
-    // holds nothing is a document this phone cannot read, and treating it as an
-    // empty month is how the empty month gets written over a full one.
+    // absence is about a key in a store; an empty payload is unreadable
     expect(vouchMonthValue(null)).toEqual({ status: 'unreadable' });
     expect(vouchMonthValue(undefined)).toEqual({ status: 'unreadable' });
   });
 });
 
-/**
- * The reader a screen that also *writes* has to use.
- *
- * `loadMonth` answers a half-readable record with the half it read, which is
- * right for drawing and ruinous for saving: the survivors go back over the
- * record they survived, and the loss becomes real. This says the same thing
- * `readMonthVouched` says, in a shape a screen can render in every case, so
- * the caller has something to draw and something to refuse to save.
- */
+/** The reader a screen that also *writes* has to use */
 describe('readMonthForEditing', () => {
   it('hands back a whole month and says so', async () => {
     stored(valid);

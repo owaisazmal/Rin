@@ -1,4 +1,4 @@
-import { CellState, KeyGoal, MonthData, cellKey } from '../types';
+import { CellState, MonthData, cellKey } from '../types';
 import { YearMonthSummary } from '../storage';
 import { ThemeMode } from '../theme';
 import { computeStreaks } from '../streaks';
@@ -8,20 +8,14 @@ import { pendingTasks } from '../deadlines';
 import { repeatLabel } from '../recurring';
 import { MONTH_NAMES, monthLength } from '../dates';
 
-/**
- * The payload handed to the iOS widgets.
- *
- * Widgets can't reach AsyncStorage, so the app mirrors a compact snapshot of
- * everything they render into a shared App Group container on every save. Keep
- * this small and flat — it is re-encoded on every keystroke-debounced write.
- */
+// What the iOS widgets render, mirrored into the App Group; kept small and flat, as it is re-encoded on every save.
 
-export interface WidgetHabit {
+interface WidgetHabit {
   id: string;
   name: string;
 }
 
-export interface WidgetTask {
+interface WidgetTask {
   text: string;
   /** the deadline, epoch milliseconds */
   due: number;
@@ -34,12 +28,7 @@ const MAX_WIDGET_TASKS = 8;
 
 export interface WidgetSnapshot {
   updatedAt: number;
-  /**
-   * The app's own appearance setting, which the widgets follow instead of the
-   * phone's. It travels in the snapshot rather than being read from shared
-   * storage separately, so a widget can never render a colour scheme from one
-   * write and data from another.
-   */
+  /** the app's own setting, sent with the data so a widget never mixes two writes */
   theme: ThemeMode;
   year: number;
   /** 0-based, matching the app */
@@ -68,15 +57,7 @@ export interface WidgetSnapshot {
   quotes: string[];
   /** where the user's own quotes begin in `quotes`, which take the "YOUR WORDS." heading */
   ownQuotesFrom: number;
-  /**
-   * Deadlines still to hit, soonest first.
-   *
-   * Only the deadline itself travels, never how far off it is: the widget works
-   * that out against its own clock, so "3h left" stays true between snapshots
-   * instead of ageing into a lie the moment the app is closed. Finished tasks
-   * are left behind — a widget has nothing to say about them — and the list is
-   * capped, because this whole payload is rewritten on every debounced save.
-   */
+  /** open deadlines, soonest first; the widget counts down against its own clock */
   tasks: WidgetTask[];
 }
 
@@ -95,10 +76,6 @@ function packGrid(data: MonthData, daysInMonth: number): Record<string, string> 
     if (any) out[String(day)] = row;
   }
   return out;
-}
-
-function cleanGoals(goals: KeyGoal[]) {
-  return goals.map((g) => ({ text: g.text.trim(), done: g.done }));
 }
 
 export function buildSnapshot(
@@ -164,7 +141,7 @@ export function buildSnapshot(
     currentStreak: streaks.current,
     bestStreak: streaks.best,
     perfectStreak: streaks.perfect,
-    goals: cleanGoals(data.keyGoals),
+    goals: data.keyGoals.map((g) => ({ text: g.text.trim(), done: g.done })),
     yearDone,
     yearMissed,
     yearHabitCounts,

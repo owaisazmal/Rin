@@ -27,39 +27,20 @@ import { needsHolds, restoreOffer } from './src/screens/backupWording';
 import { ThemeContext, Theme, darkPalette, lightPalette } from './src/theme';
 import { deleteBackup, listMonths, restoreMonth } from './src/sync';
 import { useFonts } from 'expo-font';
-/**
- * One import per weight rather than the package root.
- *
- * The root module requires every variant Josefin Sans ships, so importing the
- * five faces from there put all fourteen into the app — thin, extralight,
- * light and every italic among them, half a megabyte of type nothing renders.
- * Each weight is its own module, and naming them individually is what keeps
- * the other nine out.
- */
+// one module per weight: the package root would bundle all fourteen faces
 import { JosefinSans_400Regular } from '@expo-google-fonts/josefin-sans/400Regular';
 import { JosefinSans_400Regular_Italic } from '@expo-google-fonts/josefin-sans/400Regular_Italic';
 import { JosefinSans_500Medium } from '@expo-google-fonts/josefin-sans/500Medium';
 import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
 import { JosefinSans_700Bold } from '@expo-google-fonts/josefin-sans/700Bold';
 
-/**
- * The root: persisted settings, the backup state, the font, and the theme every
- * screen reads from. Which screens exist and how they move is the Navigator's
- * job; what a month contains is the planner's.
- */
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [backup, setBackup] = useState<BackupState | null>(null);
-  // whether this phone holds a backup code, which lives in the Keychain rather
-  // than beside the rest of the state
+  // the code itself lives in the Keychain, not beside the rest of the state
   const [hasCode, setHasCode] = useState(false);
   const [start, setStart] = useState<'planner' | 'backup' | 'intro' | null>(null);
-  /**
-   * Bumped when a restore replaces everything on this phone. The screens below
-   * read storage once, when they mount, which is right for every other way
-   * data changes — a restore is the one moment when what they are holding is
-   * wholesale wrong, so they are rebuilt rather than asked to notice.
-   */
+  // bumped by a restore, so screens that read storage on mount are rebuilt
   const [dataEpoch, setDataEpoch] = useState(0);
   const [fontsLoaded] = useFonts({
     JosefinSans_400Regular,
@@ -69,48 +50,23 @@ export default function App() {
     JosefinSans_700Bold,
   });
 
-  /**
-   * The date Settings reads, moved only by a run that actually put bytes on the
-   * server. Everything allowed to touch it has to be something a person would
-   * call "backed up" — which a restore, whatever else it is, is not, and
-   * neither is a run that finished having sent nothing.
-   */
-  const markSent = useCallback(
-    () => setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: Date.now() })),
+  const patchBackup = useCallback(
+    (patch: Partial<BackupState>) =>
+      setBackup((prev) => ({ onboarded: true, lastBackupAt: null, ...prev, ...patch })),
     []
   );
 
-  /**
-   * Sends what changed, on its own, whenever the app is opened or put down with
-   * something waiting. Mounted here rather than inside the Navigator because a
-   * restore rebuilds everything below this line, and a run in flight through
-   * that would be cancelled halfway by the remount.
-   */
+  // only a run that put bytes on the server moves the date
+  const markSent = useCallback(() => patchBackup({ lastBackupAt: Date.now() }), [patchBackup]);
+
+  // mounted above the Navigator so a restore's remount cannot cut a run in half
   const {
     status: backupStatus,
     refresh: refreshBackupStatus,
     retry: retryBackup,
   } = useAutoBackup(hasCode, markSent);
 
-  /**
-   * Which months the backup holds, looked up only when something is wrong.
-   *
-   * The card offers to pull a damaged month back down, and it may only offer
-   * that when the backup actually has the month — a button that fetches nothing
-   * would be worse than the warning it replaced. Null means nobody has looked,
-   * which `backupWording` treats as "say nothing" rather than "not there", so
-   * the quiet path costs no reads at all.
-   *
-   * The condition that decides this used to break for the one case that needed
-   * it most. Only a blocked document brought the lookup to life, and a document
-   * is blocked only by a run that tried to send it — so a month that went bad
-   * where it lay, which no run ever looks at, was never listed, never offered a
-   * restore and never mentioned. `needsHolds` is that condition now: it lives
-   * beside the wording that consumes the answer, so the two cannot drift again,
-   * and it takes in the damage the ledger carries. It is not one state wider
-   * than that. An ordinary phone, opened and not edited, still costs zero reads,
-   * zero writes and no anonymous sign-in.
-   */
+  // which months the backup holds, listed only when the card's wording needs it; null is "not looked"
   const [backupHolds, setBackupHolds] = useState<readonly string[] | null>(null);
   const stuck = needsHolds(backupStatus);
 
@@ -131,29 +87,13 @@ export default function App() {
     };
   }, [stuck, hasCode]);
 
-  /**
-   * The month Settings is offering to put back, by its document name, or null.
-   *
-   * Handed down to the planner so its notice can point at the way out — and a
-   * name is all that goes down there. The planner has no business knowing
-   * whether a backup exists, which of its months are in one, or what a listing
-   * costs; it knows the month it has open, and it can see whether that is the
-   * one being offered. Everything that decided this is above the Navigator,
-   * which is where the answer already had to live.
-   */
+  // the month Settings offers to put back, handed to the planner by name only
   const restorableMonth = useMemo(
     () => restoreOffer(backupStatus, backupHolds),
     [backupStatus, backupHolds]
   );
 
-  /**
-   * Erase the backup, then let go of the code.
-   *
-   * The order matters: the code is what derives the id every delete is aimed
-   * at, so forgetting it first would leave the documents standing with no way
-   * left to reach them. What stays is everything on this phone — the months are
-   * not what is being deleted, and the dialog says so.
-   */
+  // delete before forgetting the code, which derives the id every delete is aimed at
   const deleteTheBackup = useCallback(async () => {
     const code = await loadCode();
     if (!code) return { ok: false, deleted: 0 };
@@ -161,37 +101,24 @@ export default function App() {
     if (result.ok) {
       await forgetCode();
       setHasCode(false);
-      setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: null }));
+      patchBackup({ lastBackupAt: null });
     }
-    await refreshBackupStatus();
+    refreshBackupStatus();
     return { ok: result.ok, deleted: result.deleted };
-  }, [refreshBackupStatus]);
+  }, [patchBackup, refreshBackupStatus]);
 
-  /**
-   * Replace this phone's damaged copy of one month with the backup's.
-   *
-   * Everything below the Navigator is rebuilt afterwards for the same reason a
-   * full restore does it: the month on screen has just been swapped underneath
-   * whatever was holding it, and a screen that kept its own copy would show the
-   * damage it was told had gone.
-   */
+  // replaces this phone's damaged copy of one month, then rebuilds the screens like a full restore
   const restoreOneMonth = useCallback(
     async (key: string) => {
-      // Neither guard is reachable from the card, which only offers a restore
-      // when this phone holds a code and the key came from the ledger. Null
-      // rather than a reason because there is nothing true to say about a tap
-      // that cannot happen.
+      // unreachable from the card, so there is no reason worth returning
       const code = await loadCode();
       if (!code) return null;
       const [year, month] = key.split('-').map(Number);
       if (!Number.isInteger(year) || !Number.isInteger(month)) return null;
       const pulled = await restoreMonth(code, year, month - 1);
-      // Handed back rather than swallowed: a restore that did not happen leaves
-      // the ledger as it was, so the card redraws unchanged and the tap would
-      // otherwise read as a button that does nothing.
       if (!pulled.ok) return pulled.reason;
       setDataEpoch((n) => n + 1);
-      await refreshBackupStatus();
+      refreshBackupStatus();
       return null;
     },
     [refreshBackupStatus]
@@ -199,9 +126,7 @@ export default function App() {
 
   useEffect(() => {
     loadSettings().then(setSettings);
-    // Neither the intro nor the welcome screen is shown to someone who has
-    // already answered it, so the first screen can't be chosen until both
-    // flags land. Intro first, then sign-in, then the planner.
+    // intro first, then the backup welcome, then the planner, skipping what is already answered
     Promise.all([loadBackupState(), loadIntroSeen(), loadCode()]).then(
       ([state, introSeen, code]) => {
         setBackup(state);
@@ -219,8 +144,7 @@ export default function App() {
     if (backup) saveBackupState(backup);
   }, [backup]);
 
-  // Only once they have loaded: before that there is nothing to change, and a
-  // default written now would overwrite what is stored.
+  // a no-op until loaded, so a default can never overwrite what is stored
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => setSettings((prev) => (prev ? { ...prev, ...patch } : prev)),
     []
@@ -263,9 +187,7 @@ export default function App() {
     [mode, preference, updateSettings]
   );
 
-  // hold the first paint until the persisted theme, the backup state and the font
-  // are all ready, so nothing flashes in the system font, the wrong palette, or
-  // the wrong screen
+  // hold the first paint so nothing flashes in the wrong font, palette or screen
   if (!settings || !backup || !start || !fontsLoaded) return null;
 
   return (
@@ -290,34 +212,14 @@ export default function App() {
             onChangeQuotes={changeQuotes}
             onBackedUp={(_code, outcome) => {
               setHasCode(true);
-              /**
-               * Only a run that sent something is dated.
-               *
-               * A restore clears the date instead of setting one, which is the
-               * opposite of what this did before: it stamped `Date.now()` on
-               * the way through, so restoring a January backup in June
-               * announced "last saved today" at the exact moment somebody
-               * discovered it was five months stale. Nothing has left this
-               * phone — the restore seeded the ledger with what came down, so
-               * there is nothing to send — and the honest way to say that is no
-               * date at all. A refused run keeps whatever date it already had,
-               * for the same reason.
-               */
-              setBackup((prev) => ({
-                onboarded: true,
-                lastBackupAt:
-                  outcome === 'sent'
-                    ? Date.now()
-                    : outcome === 'restored'
-                      ? null
-                      : (prev?.lastBackupAt ?? null),
-              }));
+              // a restore sent nothing from this phone, so it clears the date; an unsent run keeps it
+              patchBackup(
+                outcome === 'unsent'
+                  ? { onboarded: true }
+                  : { onboarded: true, lastBackupAt: outcome === 'sent' ? Date.now() : null }
+              );
               if (outcome === 'restored') {
-                // Everything this launch had worked out — what was refused, how
-                // many attempts had got nowhere, whether anything had been
-                // checked — was about the backup this phone was pointed at
-                // before. A restore points it at another one, and carrying that
-                // account across would describe somebody else's.
+                // what this launch knew was about the backup it was pointed at before
                 forgetLaunch();
                 setDataEpoch((n) => n + 1);
               }
@@ -330,15 +232,11 @@ export default function App() {
             onDeleteBackup={deleteTheBackup}
             onForgetBackup={() => {
               forgetCode();
-              // The refusals and the setbacks were about a backup this phone no
-              // longer has. Whatever it is pointed at next starts from nothing.
               forgetLaunch();
               setHasCode(false);
-              setBackup((prev) => ({ onboarded: prev?.onboarded ?? true, lastBackupAt: null }));
+              patchBackup({ lastBackupAt: null });
             }}
-            onSkipOnboarding={() =>
-              setBackup((prev) => ({ ...(prev as BackupState), onboarded: true }))
-            }
+            onSkipOnboarding={() => patchBackup({ onboarded: true })}
             onIntroDone={saveIntroSeen}
           />
           {/* Drawn over the finished app on cold start, then lifts away and unmounts */}

@@ -1,10 +1,7 @@
 import { computeStreaks } from '../streaks';
 import type { YearMonthSummary } from '../storage';
 
-/**
- * 2026 is not a leap year, so February has 28 days. Several tests below lean on
- * that when they run a streak across a month border.
- */
+/** 2026 is not a leap year, so February has 28 days */
 const YEAR = 2026;
 
 /** Builds the 12-month array from a sparse `{ month: { day: doneCount } }` spec */

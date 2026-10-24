@@ -1,4 +1,4 @@
-import { MONTH_NAMES, monthLength } from './dates';
+import { MONTH_NAMES, monthDocKey, monthLength } from './dates';
 import { loadSettings } from './settings';
 import { readMonthVouched, readStoredMonths } from './storage';
 import { readTasksVouched } from './tasks';
@@ -10,7 +10,7 @@ import type { VouchedRead } from './storage';
 
 /** An unencrypted copy of the user's data for the share sheet; pure apart from `gatherExport` */
 
-export const EXPORT_FORMAT = 'rin-export';
+const EXPORT_FORMAT = 'rin-export';
 /** Raised whenever the file's shape changes; the import checks it before anything else */
 export const EXPORT_VERSION = 1;
 
@@ -21,7 +21,7 @@ export type ExportScope =
   | { kind: 'year'; year: number }
   | { kind: 'all' };
 
-export interface ExportedMonth {
+interface ExportedMonth {
   /** "2026-10", the name the backup files it under too */
   month: string;
   data: MonthData;
@@ -55,10 +55,9 @@ export interface ExportSource {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-const monthKey = (year: number, month: number) => `${year}-${pad(month + 1)}`;
 
 export function scopeKey(scope: ExportScope): string {
-  if (scope.kind === 'month') return monthKey(scope.year, scope.month);
+  if (scope.kind === 'month') return monthDocKey(scope.year, scope.month);
   return scope.kind === 'year' ? String(scope.year) : 'all';
 }
 
@@ -93,11 +92,9 @@ export function buildExport(source: ExportSource, scope: ExportScope, now: numbe
   const ordered = [...source.months].sort((a, b) => a.year - b.year || a.month - b.month);
   for (const { year, month, read } of ordered) {
     if (!inScope(scope, year, month)) continue;
-    const key = monthKey(year, month);
+    const key = monthDocKey(year, month);
     if (read.status === 'complete') months.push({ month: key, data: read.data });
-    else if (read.status === 'partial') {
-      months.push({ month: key, data: read.data, damaged: read.lost });
-    }
+    else if (read.status === 'partial') months.push({ month: key, data: read.data, damaged: read.lost });
     else if (read.status === 'unreadable') skipped.push(key);
   }
 
@@ -130,12 +127,17 @@ function csvCell(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+/** Days in a "2026-10" month */
+function daysIn(key: string): number {
+  const [year, month] = key.split('-').map(Number);
+  return monthLength(year, month - 1);
+}
+
 /** One row per habit per day; the BOM is what makes Excel read it as UTF-8 */
 export function exportCsv(file: ExportFile): string {
   const rows = [['date', 'habit', 'status']];
   for (const { month, data } of file.months) {
-    const [year, m] = month.split('-').map(Number);
-    for (let day = 1; day <= monthLength(year, m - 1); day++) {
+    for (let day = 1; day <= daysIn(month); day++) {
       for (const habit of data.habits) {
         const state = data.grid[cellKey(day, habit.id)] ?? 0;
         rows.push([`${month}-${pad(day)}`, habit.name.trim() || 'Untitled habit', STATUS[state]]);
@@ -153,11 +155,7 @@ export function exportSummary(
   format: ExportFormat
 ): { lines: string[]; damage: string | null } {
   const months = counted(file.months.length, 'month');
-  let rows = 0;
-  for (const { month, data } of file.months) {
-    const [year, m] = month.split('-').map(Number);
-    rows += monthLength(year, m - 1) * data.habits.length;
-  }
+  const rows = file.months.reduce((n, { month, data }) => n + daysIn(month) * data.habits.length, 0);
   const lines =
     format === 'json'
       ? [

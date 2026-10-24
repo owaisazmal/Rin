@@ -1,13 +1,4 @@
-import React, {
-  ReactNode,
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -16,21 +7,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-/**
- * Screen transitions, built on the Animated API alone.
- *
- * The app has no navigation library — screens are booleans in the Navigator — so this
- * is the smallest thing that makes those booleans move: one shared 0→1 value per
- * layer, driving both the screen coming in and the screen it covers, plus an
- * edge swipe that scrubs the same value by hand.
- *
- * Every screen in this app is transparent so the drifting aurora reads through
- * it, which rules out the usual push where an opaque card slides over what's
- * behind it — two transparent screens overlapping would just show both at once.
- * So the outgoing screen fades as it recedes, and is gone by the time the
- * incoming one is halfway in. What's left behind the new screen is the aurora,
- * which is what the design wants there anyway.
- */
+/** Screen transitions: one native 0→1 value per layer; screens are transparent, so a covered one fades out */
 
 /** iOS-ish: quick to leave, long tail settling in. */
 const OPEN_SPEC = { duration: 320, easing: Easing.bezier(0.32, 0.72, 0, 1) };
@@ -59,19 +36,11 @@ export interface ScreenTransition {
   endDrag: (open: boolean) => void;
 }
 
-/**
- * Animate a screen in and out of the stack.
- *
- * `mounted` lags `visible` on the way out so the exit can play; `settledOpen`
- * lags it on the way in so the screen underneath stays rendered until it's
- * genuinely hidden.
- */
 export function useScreenTransition(visible: boolean): ScreenTransition {
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
   const [settledOpen, setSettledOpen] = useState(visible);
-  // The first pass only records where we started; animating from that would
-  // slide the opening screen in on cold start.
+  // the first pass only records the start, so cold start doesn't slide in
   const armed = useRef(false);
 
   useEffect(() => {
@@ -103,24 +72,10 @@ export function useScreenTransition(visible: boolean): ScreenTransition {
   return { progress, visible, mounted, settledOpen, beginDrag, endDrag };
 }
 
-/**
- * A swipeable layer tells its ancestors it exists, so only the innermost one
- * answers an edge swipe.
- *
- * Touch capture runs from the outside in, so without this the sign-in screen
- * would take a swipe meant for the reset screen sitting on top of it and pop
- * both at once. Each layer counts the swipeable layers open inside it and
- * passes the count up; a layer with any of them declines the gesture.
- */
-const DeeperLayers = createContext<(delta: number) => void>(() => {});
-
 type Presentation = 'push' | 'fade';
 
 interface LayerProps {
-  /**
-   * How this screen enters. Omit for the screen at the bottom of the stack,
-   * which is always there and only ever recedes.
-   */
+  /** How this screen enters; omit for the bottom screen, which only ever recedes. */
   transition?: ScreenTransition;
   /** progress of the layer stacked directly on top, if there is one */
   coveredBy?: Animated.Value;
@@ -133,11 +88,7 @@ interface LayerProps {
   children: ReactNode;
 }
 
-/**
- * One screen in the stack: an absolutely-positioned layer that slides and fades
- * on the way in, recedes when something covers it, and can be swiped away from
- * the left edge.
- */
+/** One screen in the stack: slides in, recedes when covered, swipes away from the left edge. */
 export function ScreenLayer({
   transition,
   coveredBy,
@@ -150,32 +101,12 @@ export function ScreenLayer({
   const { width } = useWindowDimensions();
   const progress = transition?.progress;
   const canSwipe = !!(transition && onSwipeBack && swipeBackEnabled);
-
-  const notifyAncestors = useContext(DeeperLayers);
-  const deeper = useRef(0);
-  const countDescendant = useCallback(
-    (delta: number) => {
-      deeper.current += delta;
-      notifyAncestors(delta);
-    },
-    [notifyAncestors]
-  );
-
-  const swipeActive = canSwipe && !!transition?.visible;
-  useEffect(() => {
-    if (!swipeActive) return;
-    notifyAncestors(1);
-    return () => notifyAncestors(-1);
-  }, [swipeActive, notifyAncestors]);
-
   const beginDrag = transition?.beginDrag;
   const endDrag = transition?.endDrag;
 
   const pan = useMemo(() => {
     if (!canSwipe || !progress || !beginDrag || !endDrag) return undefined;
-    // Settle the drag wherever it was let go, then hand the screen back to the
-    // caller — by the time the boolean flips, the screen is already off-stage,
-    // so the exit animation it kicks off has nothing left to travel.
+    // settle where it was let go; by the time the caller pops, it is already off-stage
     const settle = (open: boolean, velocity: number) => {
       Animated.spring(progress, {
         toValue: open ? 1 : 0,
@@ -191,14 +122,9 @@ export function ScreenLayer({
     };
 
     return PanResponder.create({
-      // Capture, so a swipe that starts on the edge wins over any scroll view
-      // it happens to land on. The conditions are narrow enough that nothing
-      // but a deliberate back-swipe gets taken.
+      // capture, so an edge swipe wins over any scroll view it lands on
       onMoveShouldSetPanResponderCapture: (_e, g) =>
-        deeper.current === 0 &&
-        g.x0 <= EDGE_WIDTH &&
-        g.dx > 8 &&
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+        g.x0 <= EDGE_WIDTH && g.dx > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
       onPanResponderGrant: () => beginDrag(),
       onPanResponderMove: (_e, g) => {
         const travelled = Math.max(0, g.dx) / width;
@@ -213,8 +139,7 @@ export function ScreenLayer({
   }, [canSwipe, progress, beginDrag, endDrag, onSwipeBack, width]);
 
   const style = useMemo(() => {
-    // Animated nodes, kept loosely typed: the two composed here are whichever
-    // of enter/cover this layer actually has.
+    // loosely typed: whichever of enter/cover this layer has gets composed
     const translates: any[] = [];
     const opacities: any[] = [];
     const transform: any[] = [];
@@ -280,12 +205,11 @@ export function ScreenLayer({
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, style, hidden && styles.hidden]}
-      // A screen on its way out keeps drawing but stops answering: taps during
-      // an exit belong to whatever is arriving.
+      // taps during an exit belong to whatever is arriving
       pointerEvents={transition && !transition.visible ? 'none' : 'auto'}
       {...(pan?.panHandlers ?? {})}
     >
-      <DeeperLayers.Provider value={countDescendant}>{children}</DeeperLayers.Provider>
+      {children}
     </Animated.View>
   );
 }

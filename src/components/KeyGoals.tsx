@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
-import SectionHeader from './SectionHeader';
+import SectionHeader, { CountBadge } from './SectionHeader';
 import { KeyGoal, MAX_GOAL_LEN } from '../types';
 import { useTheme, cardSurface, RADIUS, FONT, SCALE, wrapSafe } from '../theme';
 
@@ -23,17 +23,6 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
         card: {
           ...cardSurface(palette),
           padding: 18,
-        },
-        countBadge: {
-          backgroundColor: palette.chip,
-          borderRadius: RADIUS.chip,
-          paddingHorizontal: 10,
-          paddingVertical: 3,
-        },
-        countText: {
-          fontSize: 11,
-          fontFamily: FONT.bold,
-          color: palette.inkSoft,
         },
         row: {
           flexDirection: 'row',
@@ -90,13 +79,7 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
     <View style={styles.card}>
       <SectionHeader
         title="KEY GOALS"
-        right={
-          <View style={styles.countBadge}>
-            <Text style={styles.countText} maxFontSizeMultiplier={SCALE.figure}>
-              {doneCount}/{goals.length}
-            </Text>
-          </View>
-        }
+        right={<CountBadge label={`${doneCount}/${goals.length}`} />}
       />
       <View style={styles.row}>
         {goals.map((g, i) => (
@@ -110,13 +93,9 @@ export default function KeyGoals({ goals, onChangeText, onToggleDone }: Props) {
               onChangeText={(t) => onChangeText(i, withoutTabs(t).slice(0, MAX_GOAL_LEN))}
               placeholder="goal"
               placeholderTextColor={palette.inkSoft}
-              // the page scrolls this line clear of the keyboard — see KeyboardSafeScroll
               onFocus={revealOnFocus}
               returnKeyType="done"
-              // `multiline` here is for wrapping, not for paragraphs — these
-              // fields hold one short line. Left on the default, Return types a
-              // newline into them and nothing on screen dismisses the keyboard,
-              // so Android's back button was the only way out of an edit.
+              // multiline only to wrap; Return still closes the keyboard
               submitBehavior="blurAndSubmit"
               multiline
               textAlign="center"

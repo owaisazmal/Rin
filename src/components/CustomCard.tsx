@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { CheckGlyph, CloseGlyph, PlusGlyph } from './Glyphs';
 import { useRevealOnFocus, withoutTabs } from './KeyboardSafeScroll';
-import SectionHeader from './SectionHeader';
+import SectionHeader, { CountBadge } from './SectionHeader';
 import {
   CardItem,
   CardKind,
@@ -10,16 +10,19 @@ import {
   MAX_CARD_ITEM_LEN,
   MAX_CARD_NOTE_LEN,
 } from '../types';
-import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
+import { FONT, Palette, RADIUS, cardSurface, useTheme } from '../theme';
 
-/** A user-made card: a note, a list, or a checklist. */
+/** A user-made card: a note, a list, or a checklist. OBSERVATIONS is a list too. */
 
 interface Props {
   title: string;
   kind: CardKind;
   items: CardItem[];
+  /** line limits, for lists that keep their own */
+  maxItems?: number;
+  maxLength?: number;
   onChangeText: (index: number, text: string) => void;
-  onToggle: (index: number) => void;
+  onToggle?: (index: number) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
 }
@@ -28,6 +31,8 @@ export default function CustomCard({
   title,
   kind,
   items,
+  maxItems = MAX_CARD_ITEMS,
+  maxLength = MAX_CARD_ITEM_LEN,
   onChangeText,
   onToggle,
   onAdd,
@@ -50,14 +55,10 @@ export default function CustomCard({
           kind === 'note' ? null : (
             <View style={styles.headerRight}>
               {kind === 'checklist' && written.length > 0 && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText} maxFontSizeMultiplier={SCALE.figure}>
-                    {ticked}/{written.length}
-                  </Text>
-                </View>
+                <CountBadge label={`${ticked}/${written.length}`} />
               )}
-              {/* gone at the limit rather than greyed out, as on OBSERVATIONS */}
-              {items.length < MAX_CARD_ITEMS && (
+              {/* gone at the limit rather than greyed out: no room to say why */}
+              {items.length < maxItems && (
                 <Pressable
                   hitSlop={8}
                   accessibilityRole="button"
@@ -82,7 +83,6 @@ export default function CustomCard({
           onChangeText={(t) => onChangeText(0, withoutTabs(t).slice(0, MAX_CARD_NOTE_LEN))}
           placeholder="write here…"
           placeholderTextColor={palette.inkSoft}
-          // the page scrolls this box clear of the keyboard — see KeyboardSafeScroll
           onFocus={revealOnFocus}
           // Return adds a line here; the done bar closes the keyboard.
           multiline
@@ -99,7 +99,7 @@ export default function CustomCard({
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: item.done }}
                   accessibilityLabel={item.text || 'untitled line'}
-                  onPress={() => onToggle(i)}
+                  onPress={() => onToggle?.(i)}
                   style={({ pressed }) => [
                     styles.check,
                     item.done && styles.checkOn,
@@ -114,13 +114,13 @@ export default function CustomCard({
               <TextInput
                 style={[styles.input, kind === 'checklist' && item.done && styles.inputDone]}
                 value={item.text}
-                maxLength={MAX_CARD_ITEM_LEN}
-                onChangeText={(t) => onChangeText(i, withoutTabs(t).slice(0, MAX_CARD_ITEM_LEN))}
+                maxLength={maxLength}
+                onChangeText={(t) => onChangeText(i, withoutTabs(t).slice(0, maxLength))}
                 placeholder={kind === 'checklist' ? 'something to tick off…' : 'write it down…'}
                 placeholderTextColor={palette.inkSoft}
                 onFocus={revealOnFocus}
                 returnKeyType="done"
-                // `multiline` is for wrapping, not paragraphs — see Observations
+                // multiline only to wrap; Return still closes the keyboard
                 submitBehavior="blurAndSubmit"
                 multiline
               />
@@ -153,17 +153,6 @@ const makeStyles = (p: Palette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-    },
-    countBadge: {
-      backgroundColor: p.chip,
-      borderRadius: RADIUS.chip,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    countText: {
-      fontSize: 11,
-      fontFamily: FONT.bold,
-      color: p.inkSoft,
     },
     addBtn: {
       width: 30,

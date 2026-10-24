@@ -2,21 +2,10 @@ import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
+import { quietLoop } from '../components/ThemeBackdrop';
 import { FIRE, Palette, RADIUS } from '../theme';
 
-/**
- * The four intro illustrations.
- *
- * Three are drawn in the app's own vocabulary — the open lock, the year grid
- * and the marks — rather than stock artwork, so the intro is showing the thing
- * it describes. The fourth is the desk clip.
- *
- * Every one of them is handed the same box and sizes itself inside it, rather
- * than carrying the fixed pixel dimensions they each used to. Those ranged from
- * 92pt tall to 250, so the eyebrow, the title and the body all sat at a
- * different height on each page and the whole block jumped as you swiped. The
- * box is what stays put; what fills it is free to be tall or wide.
- */
+/** The four intro illustrations, each sized into the same box so the words below never move */
 
 /** The size the art may occupy — the page's column, and the box's height. */
 export interface ArtBox {
@@ -24,12 +13,7 @@ export interface ArtBox {
   height: number;
 }
 
-/**
- * The largest `ratio`-shaped rectangle that fits in the box.
- *
- * `ratio` is width over height, so a tall drawing gives a number below 1 and a
- * wide one above. Whichever axis runs out first decides the size.
- */
+/** The largest rectangle of `ratio` (width over height) that fits in the box */
 function fit(box: ArtBox, ratio: number): { width: number; height: number } {
   const byHeight = box.height * ratio;
   return byHeight <= box.width
@@ -39,16 +23,11 @@ function fit(box: ArtBox, ratio: number): { width: number; height: number } {
 
 /** An open padlock — nothing here is locked away, including the source */
 export function OpenSource({ palette: p, box }: { palette: Palette; box: ArtBox }) {
-  // Held back from the box's full height: a padlock drawn edge to edge reads as
-  // an icon that has been blown up, where the other three read as drawings.
+  // held back from full height, or it reads as a blown-up icon
   const size = fit({ width: box.width, height: box.height * 0.84 }, 52 / 58);
   return (
     <Svg width={size.width} height={size.height} viewBox="0 0 52 58">
-      {/*
-        Shackle swung clear on the right. It ends at the top of the arc rather
-        than dropping back towards the body: a couple of units of gap reads as
-        a closed lock at this size, and the whole point is that it is open.
-      */}
+      {/* the shackle stops at the top of its arc: a small gap would read as closed */}
       <Path
         d="M17 24V15a9 9 0 0 1 18 0"
         stroke={p.accent}
@@ -83,9 +62,7 @@ export function OpenSource({ palette: p, box }: { palette: Palette; box: ArtBox 
 export function FadingStreak({ palette: p, box }: { palette: Palette; box: ArtBox }) {
   const cols = 12;
   const rows = 5;
-  // One step per column, taken from whichever axis is tighter; the cell keeps
-  // three quarters of it and the gap the rest, which is the proportion the
-  // year grid itself uses.
+  // cell and gap in the year grid's own 3:1 proportion
   const step = Math.min(box.width / cols, box.height / rows);
   const gap = step * 0.25;
   const cell = step - gap;
@@ -114,16 +91,7 @@ export function FadingStreak({ palette: p, box }: { palette: Palette; box: ArtBo
   );
 }
 
-/**
- * The clip's own shape, from the file: `assets/video/light.mp4` is 468×750.
- *
- * It is a portrait drawing — a desk at the bottom, a thought bubble filling the
- * top — and it used to be poured into a 4:3 plate under `contentFit="cover"`.
- * Cover keeps the centre, so at that shape it kept a band across the middle
- * worth 47% of the frame and threw away the rest: the top of the bubble and the
- * whole desk, which is to say both of the things the drawing is of. The plate
- * now takes the clip's shape instead of the clip taking the plate's.
- */
+/** `assets/video/light.mp4` is 468×750; the plate takes the clip's shape */
 const CLIP_RATIO = 468 / 750;
 
 /** Looping desk clip — someone mid-thought, which is the page's whole point */
@@ -131,32 +99,14 @@ export function ThinkingClip({ palette: p, box }: { palette: Palette; box: ArtBo
   const styles = useMemo(() => makeClipStyles(p), [p]);
   const size = fit(box, CLIP_RATIO);
 
-  const player = useVideoPlayer(
-    require('../../assets/video/light.mp4'),
-    (v) => {
-      v.loop = true;
-      // the file carries an audio track; an illustration must never make a sound
-      v.muted = true;
-      // ...nor behave like media. On the default the Android player takes audio
-      // focus and the media-button session, so a decorative loop would pause
-      // the user's music and swallow the play button on their headphones.
-      v.audioMixingMode = 'mixWithOthers';
-      v.play();
-    }
-  );
+  const player = useVideoPlayer(require('../../assets/video/light.mp4'), quietLoop);
 
   return (
-    // The clip is black line art on white, so it keeps its own light plate in
-    // both themes — in dark mode it reads as a print pinned to the page rather
-    // than a white rectangle that missed the memo.
+    // black line art on white, so it keeps a light plate in both themes
     <View style={[styles.plate, size]} pointerEvents="none">
       <VideoView
         style={StyleSheet.absoluteFill}
         player={player}
-        // `contain`, like the theme backdrop's clip, so the plate can never
-        // crop the drawing again. With the plate on the clip's own ratio there
-        // is nothing to letterbox today; this is what keeps that true if the
-        // file is ever recut.
         contentFit="contain"
         nativeControls={false}
         allowsPictureInPicture={false}
@@ -189,11 +139,7 @@ export function MarkAndFlame({ palette: p, box }: { palette: Palette; box: ArtBo
         fill="none"
       />
       <Circle cx={164} cy={46} r={26} fill={p.accentSoft} />
-      {/*
-        The flame's ink runs y 28.9–41, so it is both small for this circle and
-        sits well above its centre. Scaled to fill the chip and shifted so the
-        drawing — not its bounding box — lands on (164, 46).
-      */}
+      {/* scaled up and shifted so the flame's ink, not its box, centres on (164, 46) */}
       <G transform="translate(-164 -23.9) scale(2)">
         <Path
           d="M164 28.9c.3 1.9 1.5 2.8 2.5 3.9a5.6 5.6 0 0 1 1.8 3.9 4.3 4.3 0 1 1-8.6 0c0-1.5.7-2.6 1.4-3.5.15.9.6 1.5 1.2 1.7.5-2.2.4-4.4 1.7-6z
@@ -213,11 +159,7 @@ const makeClipStyles = (p: Palette) =>
       borderWidth: 1,
       borderColor: p.lineFaint,
       overflow: 'hidden',
-      // White, not ivory, and only the warm wash below makes them the same
-      // surface: the clip's own field is pure white, and 30% ivory over white
-      // and over ivory do not land on the same colour. On white they do, so a
-      // letterbox bar — if a recut ever puts one there — is invisible instead
-      // of being a faintly cooler rectangle inside the plate.
+      // pure white like the clip's field, so any letterbox bar matches it
       backgroundColor: '#FFFFFF',
     },
     warm: {
@@ -226,8 +168,7 @@ const makeClipStyles = (p: Palette) =>
       left: 0,
       right: 0,
       bottom: 0,
-      // knocks the clip's pure white back towards the brand ivory, so the plate
-      // and the footage read as one surface
+      // warms the plate and the footage together towards the brand ivory
       backgroundColor: 'rgba(255,255,227,0.30)',
     },
   });

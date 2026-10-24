@@ -11,25 +11,14 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-/**
- * Charts drawn to bitmaps.
- *
- * Glance has no canvas primitive — it can only lay out a fixed set of views — so
- * anything that isn't a box or a line has to be rasterised here and handed over
- * as an Image. This is the Android counterpart of the SwiftUI `Shape` code in
- * targets/widgets/Charts.swift, and the geometry is deliberately identical.
- */
+// Glance has no canvas, so charts are drawn to bitmaps; geometry matches targets/widgets/Charts.swift.
 
 private fun fillPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
   this.color = color
   style = Paint.Style.FILL
 }
 
-/**
- * One wedge of an annulus. Android's sweep angles start at 3 o'clock and run
- * clockwise, so every angle is shifted by -90° to put day 1 at the top — the
- * same convention as RadialTracker.tsx.
- */
+/** A wedge of an annulus, shifted -90° so day 1 sits at the top as in RadialTracker.tsx. */
 private fun annularSector(
   cx: Float, cy: Float, r1: Float, r2: Float, startDeg: Float, sweepDeg: Float,
 ): Path {
@@ -48,13 +37,12 @@ fun drawRadialChart(
   theme: WidgetTheme,
   sizePx: Int,
   minRings: Int = 4,
-  showToday: Boolean = true,
 ): Bitmap {
   val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
   val canvas = Canvas(bitmap)
   val cx = sizePx / 2f
   val cy = sizePx / 2f
-  val markerRoom = if (showToday) sizePx * 0.045f else 2f
+  val markerRoom = sizePx * 0.045f
   val outer = sizePx / 2f - markerRoom
   val inner = sizePx * 0.17f
   val rings = maxOf(snapshot.habits.size, minRings)
@@ -81,7 +69,7 @@ fun drawRadialChart(
 
   // a dot outside the rings rather than a wedge across them
   val today = snapshot.today
-  if (showToday && today != null && today <= days) {
+  if (today != null && today <= days) {
     val mid = ((today - 0.5f) * sector - 90f) * Math.PI.toFloat() / 180f
     val radius = outer + markerRoom * 0.6f
     canvas.drawCircle(
@@ -101,7 +89,7 @@ fun drawYearGrid(
   widthPx: Int,
   cellPx: Float,
   gapPx: Float,
-  weekLimit: Int? = null,
+  weekLimit: Int,
 ): Bitmap {
   val step = cellPx + gapPx
   val height = (7 * step - gapPx).toInt().coerceAtLeast(1)
@@ -122,16 +110,14 @@ fun drawYearGrid(
   if (days.isEmpty()) return bitmap
 
   val totalCols = ceil((startOffset + days.size) / 7.0).toInt()
-  // window has to end at today, not at December, or most of the year it shows
-  // nothing but empty future weeks
+  // the window ends at today, not December, or it would mostly show empty future weeks
   val todayIndex = snapshot.today?.let { today ->
     var idx = 0
     for (m in 0 until snapshot.month) idx += snapshot.yearDone.getOrNull(m)?.size ?: 0
     idx + today - 1
   }
   val lastCol = todayIndex?.let { (it + startOffset) / 7 } ?: (totalCols - 1)
-  val firstCol = weekLimit?.let { maxOf(0, lastCol - it + 1) } ?: 0
-  val endCol = if (weekLimit == null) totalCols else lastCol + 1
+  val firstCol = maxOf(0, lastCol - weekLimit + 1)
 
   fun levelColor(day: Day): Int {
     val done = snapshot.yearDone.getOrNull(day.month)?.getOrNull(day.day - 1) ?: 0
@@ -151,7 +137,7 @@ fun drawYearGrid(
     return theme.ghLevels[0]
   }
 
-  for (col in firstCol until endCol) {
+  for (col in firstCol..lastCol) {
     for (row in 0 until 7) {
       val idx = col * 7 + row - startOffset
       if (idx < 0 || idx >= days.size) continue
@@ -197,10 +183,7 @@ fun drawProgressRing(
   return bitmap
 }
 
-/**
- * Horizontal progress bar. Drawn rather than composed because Glance has no way
- * to size a child by a fraction of its parent — weights are integers only.
- */
+/** Horizontal progress bar, drawn so its ends stay round on every API level. */
 fun drawProgressBar(
   fraction: Float,
   theme: WidgetTheme,
@@ -218,7 +201,7 @@ fun drawProgressBar(
   return bitmap
 }
 
-/** Seven-day run of pips used by the streak and quote widgets. */
+/** Seven-day run of pips for the streak widget. */
 fun drawPips(
   snapshot: PlannerSnapshot,
   theme: WidgetTheme,

@@ -23,10 +23,7 @@ const NOW = new Date(2026, 8, 15, 12, 0).getTime();
 const at = (y: number, m: number, d: number, h = 12, min = 0) =>
   new Date(y, m, d, h, min).getTime();
 
-/**
- * One stored month. `marks` is `{ day: [state per habit] }`, so
- * `{ 3: [1, 2] }` means habit one done and habit two missed on the 3rd.
- */
+/** One stored month; `marks` is `{ day: [state per habit] }` */
 function month(
   year: number,
   m: number,

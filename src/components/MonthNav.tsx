@@ -1,14 +1,8 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MONTH_NAMES } from '../dates';
 import { FONT, Palette, RADIUS, SCALE, cardSurface, useTheme } from '../theme';
 
-/**
- * The month bar: an arrow either side of the name, and a swipe across the bar
- * that moves the way the months themselves do — left for the next one. The
- * label slides in from the side the month came from, on a value the caller
- * replays whenever the month changes.
- */
 interface Props {
   year: number;
   /** 0-based */
@@ -20,6 +14,7 @@ interface Props {
   enterFrom: number;
 }
 
+/** The month bar: arrows either side of the name, or swipe left for the next month. */
 export default function MonthNav({ year, month, onShift, anim, enterFrom }: Props) {
   const { palette } = useTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
@@ -36,19 +31,23 @@ export default function MonthNav({ year, month, onShift, anim, enterFrom }: Prop
     [onShift]
   );
 
+  const arrow = (delta: -1 | 1) => (
+    <Pressable
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={delta < 0 ? 'Previous month' : 'Next month'}
+      onPress={() => onShift(delta)}
+      style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
+    >
+      <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
+        {delta < 0 ? '‹' : '›'}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <View style={styles.bar} {...swipe.panHandlers}>
-      <Pressable
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Previous month"
-        onPress={() => onShift(-1)}
-        style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
-      >
-        <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
-          ‹
-        </Text>
-      </Pressable>
+      {arrow(-1)}
       <Animated.View
         style={[
           styles.labelBox,
@@ -72,17 +71,7 @@ export default function MonthNav({ year, month, onShift, anim, enterFrom }: Prop
           {year}
         </Text>
       </Animated.View>
-      <Pressable
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Next month"
-        onPress={() => onShift(1)}
-        style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
-      >
-        <Text style={styles.navArrow} maxFontSizeMultiplier={SCALE.glyph}>
-          ›
-        </Text>
-      </Pressable>
+      {arrow(1)}
     </View>
   );
 }

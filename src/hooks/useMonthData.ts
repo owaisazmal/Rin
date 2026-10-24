@@ -11,7 +11,7 @@ import {
   cellKey,
   emptyCardItems,
   emptyMonthData,
-  nextHabitId,
+  nextId,
 } from '../types';
 import {
   dropCardFromMonths,
@@ -20,19 +20,10 @@ import {
   saveMonth,
 } from '../storage';
 import { clearUnvouched, markDirty, recordUnvouched } from '../syncLedger';
-import { monthLength } from '../dates';
+import { monthDocKey, monthLength } from '../dates';
 import { DayRef, canMark, dayWhen } from '../marking';
 
-/**
- * What this month is called on the server — `2026-09`.
- *
- * The backup writes a month under this name, so it is also the name the ledger
- * has to file it under: a dirty flag on `2026-9` would be a flag on a document
- * nobody ever pushes. Padded here rather than trusted to whoever calls it.
- */
-export function monthDocKey(year: number, month: number): string {
-  return `${year}-${String(month + 1).padStart(2, '0')}`;
-}
+export { monthDocKey } from '../dates';
 
 /** Swaps the habit list; emptying it is remembered so nothing is carried back in */
 function withHabits(prev: MonthData, habits: Habit[]): MonthData {
@@ -42,14 +33,7 @@ function withHabits(prev: MonthData, habits: Habit[]): MonthData {
   return next;
 }
 
-/**
- * The open month: what's in it, and every way it can change.
- *
- * Owns loading, debounced persistence and mutation, so the screen above only
- * has to render and dispatch. Nothing here touches layout, animation or
- * dialogs — `removeHabit` deletes unconditionally and leaves the "are you
- * sure" to the caller, which is the part that belongs to the UI.
- */
+/** The open month: loading, debounced saving and every named edit; confirmations are the caller's */
 export function useMonthData(year: number, month: number, today: DayRef) {
   const [data, setData] = useState<MonthData>(emptyMonthData());
   const [loaded, setLoaded] = useState(false);
@@ -57,21 +41,9 @@ export function useMonthData(year: number, month: number, today: DayRef) {
   const filledNow = useRef(new Set<string>());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<{ year: number; month: number; data: MonthData } | null>(null);
-  /**
-   * The month a user edit is waiting to be reported against, null when there is
-   * nothing to report. It holds the key rather than a bare `true` so that an
-   * edit is always attributed to the month it was made in — the save that
-   * reports it can land after the screen has already moved on to another one.
-   */
+  // the month an unreported user edit belongs to, which the save may outlive
   const touched = useRef<string | null>(null);
-  /**
-   * Whether the record this month was read from was understood in full.
-   *
-   * A ref rather than state because what it gates is the write rather than the
-   * render, and it is set before `loaded` flips — so the effect that reads it
-   * always re-runs after it has been written, and the render that first shows
-   * the month is the render that first sees it.
-   */
+  // whether the record was read in full; a ref, as it gates the write and is set before `loaded` flips
   const vouched = useRef(false);
   // habits shown from an earlier month; not saved here until one is marked or changed
   const inherited = useRef(false);
@@ -82,47 +54,13 @@ export function useMonthData(year: number, month: number, today: DayRef) {
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
-    // A stale `true` left by the month just navigated away from would authorise
-    // a write for this one, so the permission is withdrawn before the read that
-    // grants it rather than after.
+    // withdrawn before the read, so the previous month's `true` can't authorise a write here
     vouched.current = false;
     inherited.current = false;
     filledNow.current = new Set();
     const key = monthDocKey(year, month);
     readMonthForEditing(year, month).then(async ({ data: read, complete, lost }) => {
-      /**
-       * Tell the ledger what this read found, before anything else.
-       *
-       * This is the only place a damaged month is ever noticed. The backup only
-       * looks at documents whose contents changed, and a month that rotted on
-       * disk changed nothing, so nothing on the backup's side of the app was
-       * ever going to examine it — which is how a phone came to say everything
-       * on it was in the backup while a month was missing half its habits. A
-       * screen reading the record is the one moment somebody finds out, so this
-       * is the moment it gets written down.
-       *
-       * A local write and nothing more. It does not mark the month dirty and it
-       * cannot start a run — see `recordUnvouched`, which is emphatic about why:
-       * the only thing this phone could send for this month is the half of it
-       * that survived the parse, and sending that over the whole copy on the
-       * server is the fault being closed rather than the fix.
-       *
-       * The `complete` side is the other half and it matters just as much. A
-       * note that outlived the damage would have the card offering to replace a
-       * month with a copy from the backup that this phone no longer needs and
-       * may well be older, so a read this phone *can* vouch for retires it — a
-       * complete read being the only proof of a whole record there is. That
-       * covers the way out that does not come back through this hook at all:
-       * `restoreMonth` writes the backup's copy straight to disk, and the next
-       * time anybody opens the month, this says so. Both calls leave the record
-       * untouched when there is nothing to change, so an undamaged month costs
-       * a read of the ledger and no write of it.
-       *
-       * Deliberately outside the `cancelled` check below. What was found is a
-       * fact about the file on disk rather than about this screen, and paging
-       * quickly past a damaged month is not a reason for the backup never to
-       * hear about it.
-       */
+      // the only place on-disk damage is noticed, so the ledger hears even if cancelled; never marks dirty
       if (complete) clearUnvouched(key);
       else recordUnvouched(key, lost ?? '');
 
@@ -143,26 +81,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     };
   }, [year, month]);
 
-  /**
-   * The one door every mutation below goes through.
-   *
-   * The ledger has to learn about a change from the edit itself, and from
-   * nothing else. Marking the month dirty inside `saveMonth` would be the
-   * obvious place and is wrong twice over: a restore calls it once per month it
-   * downloads, which would mark three years of freshly arrived history as
-   * needing upload, and the save effect below fires whenever a month finishes
-   * loading, so paging back through history would flag every month browsed and
-   * upload it again.
-   *
-   * Wrapping `setData` once, rather than setting the flag in each of the named
-   * mutators, is the part that keeps this honest. A mutator written later
-   * cannot forget to do it, and forgetting would be invisible — no error, no
-   * failing test, just a month that quietly stops being backed up.
-   *
-   * A change that hands back `prev` untouched is not an edit: React skips the
-   * re-render, and so does this. That is how a mutator declines to do anything
-   * without costing an upload of a month nobody changed.
-   */
+  // the one door for edits, so the ledger hears of them and never of saves or restores
   const edit = useCallback(
     (change: (prev: MonthData) => MonthData, ownsHabits = false) => {
       setData((prev) => {
@@ -178,67 +97,21 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [docKey]
   );
 
-  /**
-   * Tell the ledger, once, about whatever has been edited since the last time.
-   * The flag is cleared before the call rather than after: `markDirty` is one
-   * more best-effort store, and a flag lost to a failed write costs an upload
-   * the next backup works out from the digest anyway, while the same edit
-   * reported twice can outlive the push that answered it and cost a second run.
-   */
+  /** Reports the pending edit once, cleared first so a failed write can't report it twice */
   const reportEdit = useCallback((wrote: boolean) => {
     const key = touched.current;
     if (!key) return;
     touched.current = null;
     markDirty(key);
-    /**
-     * And if that edit went to disk, the month is no longer one this phone
-     * cannot read. What a deliberate edit writes is the whole record — that is
-     * what makes it the repair both backup screens tell people to make — so the
-     * note it was written under is finished. Leaving it would have the card
-     * going on calling a month damaged after somebody had fixed it, which is
-     * the one thing a way out must not do.
-     *
-     * `wrote` is the narrow part, and it is why the flag above is not gated on
-     * it. There is one caller that reports an edit without having saved
-     * anything, and the two answers pull apart exactly there: the phone really
-     * is holding something the backup has not seen, so the flag is true, and
-     * the record on disk is still the damaged one, so the note is still true
-     * as well. Clearing it on the strength of an edit that never landed is the
-     * app going quiet about a month it knows it cannot read.
-     */
+    // a saved edit rewrote the record whole, which repairs it; an unsaved one leaves the damage
     if (wrote) clearUnvouched(key);
   }, []);
 
-  /**
-   * Write the open month out, a moment after it stops changing.
-   *
-   * The second half of the guard is the important one, and it is not about the
-   * backup. This effect fires when `loaded` flips as well as on every edit, so
-   * merely opening a month schedules a save of whatever the read gave back —
-   * and for a record this phone could only half read, that is the survivors
-   * going back over the record they survived. A habit that rotted on disk is
-   * one navigation away from being gone for good, and nobody typed anything.
-   *
-   * It destroys the evidence as well as the data: the record is genuinely
-   * complete once it has been rewritten, so the vouched read the backup makes
-   * says so, and the thinned month goes up over the good copy on the server as
-   * an ordinary edit.
-   *
-   * What it must NOT do is refuse a deliberate edit. Rewriting the month is
-   * exactly how someone repairs a damaged one, and both backup screens tell
-   * them so; a guard that swallowed the repair would leave the month read-only
-   * with no way out and the app giving advice it had made impossible to take.
-   * So the line is drawn at intent, not at damage: a write nobody asked for is
-   * refused, a write somebody typed is honoured. `touched` is set only by the
-   * `edit` wrapper above, so it is exactly the signal for "a person did this".
-   */
+  // a half-read month is only saved once somebody edits it, since that edit is the repair
   useEffect(() => {
     if (!loaded) return;
     const repairing = touched.current !== null;
     if (!vouched.current && !repairing) return;
-    // The repair rewrites the record whole, so what lands on disk from here is
-    // something this phone can vouch for — and the edits that follow it in the
-    // same session are ordinary ones.
     if (repairing) vouched.current = true;
     const record = inherited.current ? { ...data, habits: [] } : data;
     pendingSave.current = { year, month, data: record };
@@ -253,18 +126,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     };
   }, [data, loaded, year, month, reportEdit]);
 
-  /**
-   * Write out pending edits now — used before navigating away from a month.
-   *
-   * It needs no guard of its own: the only thing it writes is `pendingSave`,
-   * and the effect above is the sole writer of that and no longer sets it for a
-   * month this phone could not vouch for. Reporting the edit is deliberate even
-   * then. Somebody typed, nothing was saved, and the flag says the phone holds
-   * something the backup has not seen — which is true: the next run reads the
-   * same damaged record, blocks the month, and the card in Settings names it.
-   * What is *not* reported in that case is a repair, which is what `p` carries
-   * into `reportEdit`: nothing was written, so nothing was mended.
-   */
+  /** Writes pending edits now, before leaving the month; only the guarded effect sets `pendingSave` */
   const flushSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const p = pendingSave.current;
@@ -284,17 +146,16 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [year, month, today, data.grid]
   );
 
-  /**
-   * The same rule, checked against the grid being changed rather than the one
-   * last rendered, so no caller can slip past it.
-   */
-  const setCell = useCallback(
-    (day: number, habitId: string, state: CellState) => {
+  /** The same rule, checked against the grid being changed rather than the one last rendered */
+  const markCell = useCallback(
+    (day: number, habitId: string, next: (current: CellState) => CellState) => {
       const when = dayWhen(year, month, day, today);
       edit((prev) => {
         const key = cellKey(day, habitId);
-        if (!canMark(when, prev.grid[key] ?? 0, filledNow.current.has(key))) return prev;
+        const current = prev.grid[key] ?? 0;
+        if (!canMark(when, current, filledNow.current.has(key))) return prev;
         if (when === 'past') filledNow.current.add(key);
+        const state = next(current);
         const grid = { ...prev.grid };
         if (state === 0) delete grid[key];
         else grid[key] = state;
@@ -304,28 +165,19 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [year, month, today, edit]
   );
 
+  const setCell = useCallback(
+    (day: number, habitId: string, state: CellState) => markCell(day, habitId, () => state),
+    [markCell]
+  );
+
   const cycleCell = useCallback(
-    (day: number, habitId: string) => {
-      const when = dayWhen(year, month, day, today);
-      edit((prev) => {
-        const key = cellKey(day, habitId);
-        if (!canMark(when, prev.grid[key] ?? 0, filledNow.current.has(key))) return prev;
-        if (when === 'past') filledNow.current.add(key);
-        const next: CellState = (((prev.grid[key] ?? 0) + 1) % 3) as CellState;
-        const grid = { ...prev.grid };
-        if (next === 0) delete grid[key];
-        else grid[key] = next;
-        return { ...prev, grid };
-      }, true);
-    },
-    [year, month, today, edit]
+    (day: number, habitId: string) =>
+      markCell(day, habitId, (current) => ((current + 1) % 3) as CellState),
+    [markCell]
   );
 
   const addHabit = useCallback(() => {
-    edit(
-      (prev) => withHabits(prev, [...prev.habits, { id: nextHabitId(prev.habits), name: '' }]),
-      true
-    );
+    edit((prev) => withHabits(prev, [...prev.habits, { id: nextId(prev.habits), name: '' }]), true);
   }, [edit]);
 
   const renameHabit = useCallback(
@@ -385,13 +237,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [edit]
   );
 
-  /**
-   * The count limit lives here as well as in the header that offers the add
-   * control, so that the two cannot drift: `Observations.tsx` hides its button
-   * on the same `< MAX_OBSERVATIONS` it is checked against here. Declining by
-   * handing back `prev` keeps a refused tap out of the ledger — the month has
-   * not changed, so there is nothing to back up.
-   */
+  /** Checked against the same limit `Observations.tsx` hides its button on */
   const addObservation = useCallback(() => {
     edit((prev) =>
       prev.observations.length >= MAX_OBSERVATIONS
@@ -410,10 +256,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [edit]
   );
 
-  /**
-   * The first edit to a card also files it in this month, under its current title
-   * and kind. Declines when the month already holds the most cards it may.
-   */
+  /** The first edit files the card in this month; declines once the month holds the most it may */
   const editCard = useCallback(
     (card: CardRef, change: (items: CardItem[]) => CardItem[]) => {
       edit((prev) => {
@@ -525,21 +368,11 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
   }, [data.grid, data.habits, daysInMonth]);
 
-  // `setData` deliberately isn't returned: every shape of this data has a named
-  // operation above, so no caller has to know how a month is laid out — and a
-  // change made outside those operations would never reach the ledger.
+  // `setData` isn't returned, so every change goes through `edit` and reaches the ledger
   return {
     data,
     loaded,
-    /**
-     * Whether what is on screen is the whole of what is on disk.
-     *
-     * False means this month is being shown but must not be written back, so
-     * the screen has to say so: an app that takes what somebody types and
-     * silently drops it is worse than one that admits it cannot save. Read
-     * through the ref rather than held as state because it is only ever written
-     * immediately before `loaded`, which is what re-renders on it.
-     */
+    /** false: shown but not saved until edited, which the screen has to say */
     vouched: vouched.current,
     daysInMonth,
     stats,

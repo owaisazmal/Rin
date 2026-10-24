@@ -41,8 +41,6 @@ describe('markCells', () => {
 
   it('keeps every cell inside the outer radius and outside the hole', () => {
     for (const c of cells) {
-      // the four corner points are the coordinates after M, after the first
-      // arc's flags, after L, and after the second arc's flags
       const n = numbers(c.d);
       const corners = [
         [n[0], n[1]],

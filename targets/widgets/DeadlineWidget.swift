@@ -1,9 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// Mirrors src/deadlines.ts. The app, the reminders and this widget all have to
-/// agree about how close "close" is, so the bands and the window live in one
-/// place on each side and are kept identical across them.
+/// Mirrors src/deadlines.ts and the Android widget; the bands must match across all three.
 enum Deadline {
   static let hour: TimeInterval = 3600
   static let day: TimeInterval = 86_400
@@ -11,25 +9,11 @@ enum Deadline {
   /// The run-up over which a deadline goes from "someday" to "now"
   static let pressureWindow: TimeInterval = 7 * day
 
-  enum Urgency {
-    case overdue, now, soon, near, later
-  }
-
-  static func urgency(of due: Date, at moment: Date) -> Urgency {
+  static func colour(of due: Date, at moment: Date, _ theme: Theme) -> Color {
     let left = due.timeIntervalSince(moment)
-    if left <= 0 { return .overdue }
-    if left <= hour { return .now }
-    if left <= day { return .soon }
-    if left <= 3 * day { return .near }
-    return .later
-  }
-
-  static func colour(_ u: Urgency, _ theme: Theme) -> Color {
-    switch u {
-    case .overdue, .now: return theme.missed
-    case .soon, .near: return theme.accent
-    case .later: return theme.inkSoft
-    }
+    if left <= hour { return theme.missed }
+    if left <= 3 * day { return theme.accent }
+    return theme.inkSoft
   }
 
   /// 0 a week or more out, 1 at the deadline and past it
@@ -75,23 +59,7 @@ enum Deadline {
     return "\(date) · \(time)"
   }
 
-  /// When the nearest deadline next changes band, so the timeline can refresh
-  /// exactly then rather than waking hourly on the off-chance.
-  static func nextBoundary(after moment: Date, in snapshot: PlannerSnapshot) -> Date? {
-    let leads: [TimeInterval] = [3 * day, day, 3 * hour, hour, 0]
-    return snapshot.deadlines
-      .flatMap { task in leads.map { task.date.addingTimeInterval(-$0) } }
-      .filter { $0 > moment }
-      .min()
-  }
-
-  /// Every moment one of the shown countdowns changes its wording, soonest
-  /// first.
-  ///
-  /// A widget that only reloaded at the urgency bands would sit on "5d left"
-  /// for two days before jumping to "3d left". Entries are cheap where reloads
-  /// are budgeted, so the timeline carries one per step instead: whole days out
-  /// while the label is in days, whole hours once it is in hours.
+  /// Every moment one of the shown countdowns changes its wording, soonest first.
   static func labelChanges(
     after moment: Date,
     in snapshot: PlannerSnapshot,
@@ -109,13 +77,12 @@ enum Deadline {
 
 // MARK: - Deadlines
 
-/// The bar that fills over the last week. Same job as the one in the app: give
-/// the pressure a reading between the colour bands, and give it to people who
-/// can't tell the red from the green.
+/// A filled capsule; on deadlines it fills over the last week, as in the app.
 struct PressureBar: View {
   var fraction: Double
   var tone: Color
   var theme: Theme
+  var height: CGFloat = 3
 
   var body: some View {
     GeometryReader { geo in
@@ -126,7 +93,7 @@ struct PressureBar: View {
           .frame(width: max(2, geo.size.width * min(max(fraction, 0), 1)))
       }
     }
-    .frame(height: 3)
+    .frame(height: height)
   }
 }
 
@@ -137,11 +104,11 @@ struct DeadlineRow: View {
   var compact: Bool
 
   var body: some View {
-    let tone = Deadline.colour(Deadline.urgency(of: item.date, at: now), theme)
+    let tone = Deadline.colour(of: item.date, at: now, theme)
 
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Text(item.text.isEmpty ? "Untitled task" : item.text)
+        Text(item.title)
           .font(.system(size: compact ? 12 : 13, weight: .semibold))
           .foregroundColor(theme.ink)
           .lineLimit(1)
@@ -208,15 +175,14 @@ struct DeadlineWidgetView: View {
             .font(.system(size: 11))
             .foregroundColor(theme.inkSoft)
         } else if family == .systemSmall, let next = tasks.first {
-          // One deadline, read from across the room: the time left is the
-          // headline and everything else is a caption under it.
-          let tone = Deadline.colour(Deadline.urgency(of: next.date, at: now), theme)
+          // one deadline, with the time left as the headline
+          let tone = Deadline.colour(of: next.date, at: now, theme)
           Text(Deadline.timeLeft(next.date, at: now))
             .font(.system(size: 22, weight: .bold))
             .foregroundColor(tone)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-          Text(next.text.isEmpty ? "Untitled task" : next.text)
+          Text(next.title)
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(theme.ink)
             .lineLimit(2)
@@ -248,8 +214,7 @@ struct DeadlineWidgetView: View {
   }
 }
 
-/// Lock Screen. Rendered in the system's own monochrome tint, so it carries no
-/// colour of its own — the words have to do all the work.
+/// Lock Screen, in the system's monochrome tint, so the words carry it.
 struct AccessoryDeadline: View {
   var item: PlannerSnapshot.Task?
   var now: Date
@@ -258,7 +223,7 @@ struct AccessoryDeadline: View {
     VStack(alignment: .leading, spacing: 1) {
       AccessoryHeading(text: "NEXT DUE")
       if let item {
-        Text(item.text.isEmpty ? "Untitled task" : item.text)
+        Text(item.title)
           .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
         Text(Deadline.timeLeft(item.date, at: now) + (item.repeats.map { " · \($0)" } ?? ""))
@@ -282,9 +247,8 @@ struct InlineDeadline: View {
   var body: some View {
     Group {
       if let item {
-        let title = item.text.isEmpty ? "Untitled task" : item.text
         Label(
-          "\(Deadline.timeLeft(item.date, at: now)) · \(title)",
+          "\(Deadline.timeLeft(item.date, at: now)) · \(item.title)",
           systemImage: item.date <= now ? "exclamationmark.circle" : "hourglass"
         )
       } else {
@@ -296,19 +260,12 @@ struct InlineDeadline: View {
 }
 
 struct DeadlineWidget: Widget {
-  private var families: [WidgetFamily] {
-    if #available(iOS 16.0, *) {
-      return [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
-    }
-    return [.systemSmall, .systemMedium, .systemLarge]
-  }
-
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "Deadlines", provider: SnapshotProvider()) { entry in
       DeadlineWidgetView(entry: entry)
     }
     .configurationDisplayName("Deadlines")
     .description("Tasks with a date on them, closest first.")
-    .supportedFamilies(families)
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline])
   }
 }

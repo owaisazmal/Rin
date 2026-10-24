@@ -1,4 +1,4 @@
-/** One planner column on a phone, two once the window fits two phone-width ones (an unfolded iPhone Duo, an iPad) */
+// One planner column on a phone, two once the window fits two phone-width ones (an unfolded iPhone Duo, an iPad)
 
 /** The single column's cap, centred on anything wider */
 export const COLUMN_MAX = 640;
@@ -14,38 +14,19 @@ const CHART_MAX = 420;
 // of the window's height, so a short screen still fits the whole tracker card
 const CHART_HEIGHT_SHARE = 0.47;
 
-export interface Size {
-  width: number;
-  height: number;
-}
-
-export interface SideInsets {
-  left: number;
-  right: number;
-}
-
-export interface Insets extends SideInsets {
-  top: number;
-}
-
 /** Just below the clock and Wi-Fi in the Duo's right-hand status column */
 export const RAIL_TOP = 172;
 
-/** The Duo keeps its status bar in a column down the right edge, with room under it for the planner's buttons */
-export function usesSideRail(insets: Insets): boolean {
+/** The Duo's status bar runs down the right edge, with room under it for the planner's buttons */
+export function usesSideRail(insets: { top: number; left: number; right: number }): boolean {
   return insets.right >= 60 && insets.top < insets.right;
 }
 
-export interface PlannerFit {
-  /** tracker and daily check on the left, the cards on the right */
-  split: boolean;
-  /** width of one column, either way */
-  column: number;
-  /** side of the radial chart */
-  chart: number;
-}
-
-export function plannerFit(window: Size, insets: SideInsets): PlannerFit {
+/** `split` puts the tracker and daily check left and the cards right; `column` is one column's width */
+export function plannerFit(
+  window: { width: number; height: number },
+  insets: { left: number; right: number }
+): { split: boolean; column: number; chart: number } {
   const room = window.width - insets.left - insets.right;
   const half = (Math.min(room, SPLIT_MAX) - 2 * GUTTER - GAP) / 2;
   const split = half >= MIN_COLUMN;

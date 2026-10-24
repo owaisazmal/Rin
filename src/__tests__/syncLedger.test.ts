@@ -2,13 +2,11 @@ import { createHash } from 'crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Ledger,
-  bindingFor,
   clearBlocked,
   clearUnvouched,
   digestOf,
   emptyLedger,
   generationOf,
-  isPending,
   loadLedger,
   loadLedgerFor,
   markDirty,
@@ -24,22 +22,13 @@ import {
   unvouchedNote,
 } from '../syncLedger';
 
-/**
- * The ledger decides what a backup is allowed to skip, so every test here is
- * really the same question asked three ways: can a document that changed end up
- * looking like one already sent? A ledger that forgets too much costs an
- * upload. A ledger that remembers something untrue costs somebody's September.
- */
+// the fingerprint a ledger stores for a backup id
+const bindingFor = (id: string) => emptyLedger(id).binding;
 
 const mockStored = new Map<string, string>();
 const mockFailure = { read: false, write: false };
 
-/**
- * The delay is the point. Every mutation is a read-modify-write, so a mock that
- * answered synchronously would let two of them interleave in a way real storage
- * never quite does — and would let the serialisation test pass without there
- * being any serialisation.
- */
+// the delay lets overlapping read-modify-writes interleave, as real storage can
 jest.mock('@react-native-async-storage/async-storage', () => {
   const yieldToOthers = () => new Promise((resolve) => setTimeout(resolve, 0));
   return {
@@ -59,10 +48,9 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
-/** The mock above, in the shape a test can count calls on */
 const store = AsyncStorage as unknown as { getItem: jest.Mock; setItem: jest.Mock };
 
-/** Two backup ids of the shape `deriveBackupId` produces, without the crypto */
+// two ids of the shape deriveBackupId produces, without the crypto
 const ID = 'a'.repeat(64);
 const OTHER_ID = 'b'.repeat(64);
 
@@ -78,7 +66,6 @@ beforeEach(() => {
   mockFailure.write = false;
 });
 
-/** What is actually on disk, as opposed to what the module says is */
 function onDisk(): unknown {
   const raw = mockStored.get('@monthly-planning/sync-ledger');
   return raw === undefined ? undefined : JSON.parse(raw);
@@ -118,10 +105,6 @@ describe('the record itself', () => {
   });
 });
 
-/**
- * The dangerous one. A digest that outlives the code it was recorded under
- * describes a document on a server this phone is no longer talking to.
- */
 describe('the backup id it is bound to', () => {
   beforeEach(async () => {
     await resetFor(ID);
@@ -137,11 +120,15 @@ describe('the backup id it is bound to', () => {
     expect(ledger.blocked).toEqual([AUGUST]);
   });
 
+  it('costs no write when it is already bound to that id', async () => {
+    store.setItem.mockClear();
+    await loadLedgerFor(ID);
+    expect(store.setItem).not.toHaveBeenCalled();
+  });
+
   it('knows nothing at all about a different id', async () => {
     const ledger = await loadLedgerFor(OTHER_ID);
     expect(ledger).toEqual(emptyLedger(OTHER_ID));
-    // named individually, because any one of these surviving is a month that
-    // the next backup would decide it had already sent
     expect(ledger.digests).toEqual({});
     expect(ledger.dirty).toEqual({});
     expect(ledger.blocked).toEqual([]);
@@ -150,8 +137,6 @@ describe('the backup id it is bound to', () => {
 
   it('wipes the stored record rather than hiding it from the caller', async () => {
     await loadLedgerFor(OTHER_ID);
-    // anything that read the record afterwards would otherwise see the old
-    // digests come back, and skip every month under the new code
     expect(await loadLedger()).toEqual(emptyLedger(OTHER_ID));
     expect(onDisk()).toEqual(emptyLedger(OTHER_ID));
   });
@@ -171,10 +156,6 @@ describe('the backup id it is bound to', () => {
   });
 });
 
-/**
- * The second dangerous one. A backup takes seconds and someone can tick a cell
- * inside them; the generation counter is the only thing that notices.
- */
 describe('a change made while the push was in flight', () => {
   it('clears the dirty flag when nothing moved underneath it', async () => {
     await resetFor(ID);
@@ -235,10 +216,6 @@ describe('a change made while the push was in flight', () => {
   });
 });
 
-/**
- * The third. Saving a month and saving the task list are separate calls from
- * separate screens, and nothing makes them take turns except this.
- */
 describe('writes that overlap', () => {
   it('keeps every key when saves land in the same tick', async () => {
     await resetFor(ID);
@@ -459,16 +436,6 @@ describe('what it survives', () => {
   });
 });
 
-/**
- * A refusal that outlives the reason for it.
- *
- * Nothing clears `blocked` except a push that lands, and a run only starts when
- * something is waiting. So a refused document that stopped counting as waiting
- * takes the phone's whole backup down with it: no run, so no push, so no way
- * back out of `blocked`, forever. The way out has to be the edit — deleting half
- * of an oversized September is exactly how somebody fixes "too large", and it is
- * the only signal this phone will ever get that a retry is worth making.
- */
 describe('a refusal that the user has since edited around', () => {
   it('is waiting again the moment the refused document changes', async () => {
     await resetFor(ID);
@@ -482,7 +449,6 @@ describe('a refusal that the user has since edited around', () => {
     await markDirty(SEPTEMBER);
 
     const ledger = await loadLedger();
-    expect(isPending(ledger, SEPTEMBER)).toBe(true);
     expect(pendingKeys(ledger)).toEqual([SEPTEMBER]);
     expect(pendingCount(ledger)).toBe(1);
     // and still refused as far as the last run knows, so Settings can name it
@@ -515,8 +481,7 @@ describe('a refusal that the user has since edited around', () => {
     await markDirty(SEPTEMBER);
     await recordBlocked(SEPTEMBER, generation);
 
-    // the version that was refused is not the version on the phone, so the
-    // phone still has something to say
+    // the refused version is not the one on the phone
     expect(pendingCount(await loadLedger())).toBe(1);
   });
 
@@ -538,21 +503,10 @@ describe('a refusal that the user has since edited around', () => {
         blocked: [AUGUST],
       })
     );
-    // an upload that gets refused again costs one request; a phone that never
-    // tries again costs somebody their history
     expect(pendingCount(await loadLedger())).toBe(1);
   });
 });
 
-/**
- * What a restore is allowed to say about the months it did not bring down.
- *
- * Seeding is the one call that hands out digests for documents this phone never
- * sent, so it is the one call that can talk a backup out of an upload it needs
- * to make. A code that holds fewer months than the phone is the ordinary case —
- * an old backup, a second phone — and every month on this side of that gap is a
- * month that exists nowhere else.
- */
 describe('a phone that has just restored, and still holds more than the backup', () => {
   it('keeps a local-only month waiting when the restore did not cover it', async () => {
     await resetFor(ID);
@@ -585,8 +539,7 @@ describe('a phone that has just restored, and still holds more than the backup',
 
     const ledger = await loadLedger();
     expect(ledger.binding).toBe(bindingFor(ID));
-    // the digests from the old code are gone, and the months they described are
-    // waiting rather than orphaned
+    // the old code's digests are gone, and the months they described are waiting
     expect(ledger.digests).toEqual({ [SEPTEMBER]: digestOf('september') });
     expect(pendingKeys(ledger)).toEqual([JANUARY, FEBRUARY]);
   });
@@ -602,8 +555,7 @@ describe('a phone that has just restored, and still holds more than the backup',
     await resetFor(ID);
     await markDirty(SEPTEMBER);
     await seedPushed(ID, { [SEPTEMBER]: digestOf('september') }, [SEPTEMBER]);
-    // writing the downloaded month to disk is best-effort like every other
-    // store, so the flag stays until a run has read the file and agreed
+    // the restore's write is best-effort, so the flag stays until a run agrees
     expect((await loadLedger()).dirty[SEPTEMBER]).toBe(1);
   });
 
@@ -613,15 +565,6 @@ describe('a phone that has just restored, and still holds more than the backup',
   });
 });
 
-/**
- * A flag nobody is ever going to act on.
- *
- * Opening the planner on a month writes it to disk empty, and the backup steps
- * over an empty month that has never been sent rather than filing a document
- * that says nothing. The flag that edit set has to come down with it, or the
- * card in Settings counts a month that no run will ever send — and a number
- * that never goes down is not a status, it is a nag.
- */
 describe('a document the backup has decided not to send', () => {
   it('stops being counted, without being called sent', async () => {
     await resetFor(ID);
@@ -664,16 +607,6 @@ describe('a document the backup has decided not to send', () => {
   });
 });
 
-/**
- * The id, at rest.
- *
- * The backup code lives in the Keychain as `WHEN_UNLOCKED_THIS_DEVICE_ONLY`
- * precisely so it never reaches an iCloud device backup. AsyncStorage does, and
- * the backup id is enough on its own to overwrite or delete every document in
- * somebody's backup. So the id is not what gets written down here — a one-way
- * fingerprint of it is, which is all the "does this ledger belong to this code"
- * check has ever needed.
- */
 describe('the id it does not write down', () => {
   it('keeps the backup id out of storage entirely', async () => {
     await resetFor(ID);
@@ -693,8 +626,7 @@ describe('the id it does not write down', () => {
   it('cannot be turned back into the id it came from', () => {
     expect(bindingFor(ID)).toMatch(/^[0-9a-f]{64}$/);
     expect(bindingFor(ID)).not.toBe(ID);
-    // and it is not the digest of the id either, which would let anything that
-    // hashes plaintext recognise it
+    // nor the plain digest of the id
     expect(bindingFor(ID)).not.toBe(digestOf(ID));
   });
 
@@ -719,23 +651,11 @@ describe('the id it does not write down', () => {
       '@monthly-planning/sync-ledger',
       JSON.stringify({ binding: ID.toUpperCase(), digests: { [SEPTEMBER]: digestOf('s') } })
     );
-    // unreadable binding means unknown backup, and an unknown backup is one
-    // whose digests describe a server this phone may never have talked to
     expect((await loadLedger()).binding).toBeNull();
     await expect(loadLedgerFor(ID)).resolves.toEqual(emptyLedger(ID));
   });
 });
 
-/**
- * The damage the backup would otherwise never hear about.
- *
- * A run only looks at documents whose contents changed, and a month that rotted
- * on disk changed nothing — so it was never examined, never blocked, and never
- * offered the copy the backup was holding for it. This is where a screen writes
- * down what it could not read, and the whole of its value is in what it does
- * *not* do: it must not mark anything dirty, must not park a refusal, and must
- * not become a reason to send the half of a month that survived the parse.
- */
 describe('a document this phone could not read in full', () => {
   const LOST = '1 of 2 habits, 1 grid entry';
 
@@ -749,24 +669,17 @@ describe('a document this phone could not read in full', () => {
   });
 
   it('does not mark the document dirty, and does not make it waiting', async () => {
-    // The load-bearing one. Dirty means the phone holds something the backup
-    // should be sent, and what it holds is the part of September that survived
-    // — sending that would put it over the whole copy on the server, which is
-    // the fault this note exists to report rather than to cause.
+    // sending the surviving part would overwrite the whole copy on the server
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
 
     const ledger = await loadLedger();
     expect(ledger.dirty).toEqual({});
-    expect(isPending(ledger, SEPTEMBER)).toBe(false);
     expect(pendingKeys(ledger)).toEqual([]);
     expect(pendingCount(ledger)).toBe(0);
   });
 
   it('is not recorded as a refusal', async () => {
-    // Nothing was offered to the server and nothing was turned down. Filed as a
-    // refusal it would inherit the generation guard, which expires on an edit —
-    // and an edit does not make this worth another try, it ends it.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
 
@@ -779,7 +692,6 @@ describe('a document this phone could not read in full', () => {
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
 
-    // nothing in this process any more: the next launch reads the file back
     expect(onDisk()).toMatchObject({ unvouched: { [SEPTEMBER]: LOST } });
     expect(unvouchedNote(await loadLedgerFor(ID), SEPTEMBER)).toBe(LOST);
   });
@@ -791,9 +703,6 @@ describe('a document this phone could not read in full', () => {
   });
 
   it('tells a record nothing survived of apart from one nobody has read', async () => {
-    // The empty phrase is a real answer — damaged, with nothing left to name —
-    // and null is the absence of any answer. Reading them as the same thing
-    // would lose a whole month out of the list.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, '');
 
@@ -819,10 +728,6 @@ describe('a document this phone could not read in full', () => {
   });
 
   it('writes nothing when it has nothing new to say', async () => {
-    // Both hooks call this on every read of a document they cannot vouch for,
-    // and paging through a year of months would otherwise write the identical
-    // record back a dozen times — on a phone that is supposed to cost nothing
-    // when nobody is editing, and racing whatever a run is recording.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
 
@@ -849,17 +754,10 @@ describe('a document this phone could not read in full', () => {
   });
 });
 
-/**
- * The two ways a month stops being damaged, which are the two ways a whole
- * record gets back onto the phone.
- */
 describe('a record written whole again', () => {
   const LOST = '1 of 2 habits';
 
   it('is no longer damaged once the note is cleared', async () => {
-    // The repair: somebody edits the month, the hook writes the whole record
-    // out and reports it, and what it reports is that there is nothing left to
-    // rescue.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
     await clearUnvouched(SEPTEMBER);
@@ -870,7 +768,6 @@ describe('a record written whole again', () => {
   });
 
   it('clears only the document it is about', async () => {
-    // The rescue puts one month back, not a year of them.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, LOST);
     await recordUnvouched(JANUARY, LOST);
@@ -879,9 +776,7 @@ describe('a record written whole again', () => {
   });
 
   it('leaves a refusal exactly where it was', async () => {
-    // A month can be both: too large for the rules and damaged on disk. Mending
-    // the record says nothing about whether the server will take it, and the
-    // card has to go on saying so.
+    // a month can be both too large for the rules and damaged on disk
     await resetFor(ID);
     await markDirty(SEPTEMBER);
     await recordBlocked(SEPTEMBER, 1);
@@ -894,10 +789,6 @@ describe('a record written whole again', () => {
   });
 
   it('is not cleared by a refusal being lifted', async () => {
-    // The mirror image, and the reason these are two lists rather than one.
-    // `clearBlocked` is called for reasons that say nothing whatever about this
-    // phone's own copy — taking the park off documents an expired token got
-    // turned away, most of all — and a month is no less unreadable for it.
     await resetFor(ID);
     await markDirty(SEPTEMBER);
     await recordBlocked(SEPTEMBER, 1);
@@ -910,10 +801,6 @@ describe('a record written whole again', () => {
   });
 });
 
-/**
- * A stored record is a file somebody could have edited, and the direction each
- * field fails in is a decision rather than an accident.
- */
 describe('damage notes read back off disk', () => {
   async function stored(unvouched: unknown): Promise<Ledger> {
     mockStored.set(
@@ -924,18 +811,13 @@ describe('damage notes read back off disk', () => {
   }
 
   it('keeps the key when the phrase cannot be used', async () => {
-    // Read the way dirty flags are read rather than the way digests are. A note
-    // nobody can read is still a note somebody wrote, and dropping it would put
-    // the phone back to calling itself fully backed up over a document it has
-    // already decided it cannot read.
     const ledger = await stored({ [SEPTEMBER]: 42, [AUGUST]: null, [JANUARY]: { a: 1 } });
     expect(unvouchedKeys(ledger)).toEqual([JANUARY, AUGUST, SEPTEMBER].sort());
     expect(unvouchedNote(ledger, SEPTEMBER)).toBe('');
   });
 
   it('drops a phrase far longer than anything the voucher writes', async () => {
-    // Dropped rather than shortened: cutting `12 of 12 habits` in half makes a
-    // sentence that is not true, and the card would print it.
+    // dropped rather than shortened, since a cut phrase would be untrue
     const ledger = await stored({ [SEPTEMBER]: 'x'.repeat(500) });
     expect(unvouchedNote(ledger, SEPTEMBER)).toBe('');
   });
@@ -954,9 +836,6 @@ describe('damage notes read back off disk', () => {
   });
 
   it('is not carried across to another backup', async () => {
-    // It would still be true — the damage is on this phone whichever code it is
-    // holding — but the reason anybody is told is that the backup has a whole
-    // copy, and a code pointed at an empty tree has nothing to offer.
     await resetFor(ID);
     await recordUnvouched(SEPTEMBER, '1 of 2 habits');
     expect(unvouchedKeys(await loadLedgerFor(OTHER_ID))).toEqual([]);

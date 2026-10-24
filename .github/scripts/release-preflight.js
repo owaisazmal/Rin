@@ -50,7 +50,7 @@ for (const p of platforms) {
   if (Number(value) > last) {
     console.log(`${p}: ${field} ${value} is above the last EAS cloud store build (${last || 'none'})`);
   } else {
-    errors.push(`${field} is ${value} but EAS already has a store build numbered ${last}. Bump it in app.json, commit, and run the release again.`);
+    errors.push(`${field} is ${value} but EAS already has a store build numbered ${last}. Run "npm run bump", commit, and run the release again.`);
   }
 }
 

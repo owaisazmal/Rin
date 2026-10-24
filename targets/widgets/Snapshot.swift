@@ -15,20 +15,17 @@ struct PlannerSnapshot: Codable {
 
   struct Task: Codable {
     let text: String
-    /// The deadline, epoch milliseconds — the app's clock, not a countdown.
-    /// Storing the moment rather than the distance to it is what lets the
-    /// widget stay accurate between snapshots.
+    /// epoch milliseconds
     let due: Double
     /// "weekly" / "monthly" / "yearly" on a recurring deadline, nil on a one-off
     var repeats: String? = nil
 
     var date: Date { Date(timeIntervalSince1970: due / 1000) }
+    var title: String { text.isEmpty ? "Untitled task" : text }
   }
 
   let updatedAt: Double
-  /// The app's appearance setting — "dark" or "light". Optional because
-  /// snapshots written before the widgets followed the app have no such key,
-  /// and a missing one falls back to the system scheme rather than failing.
+  /// "dark" or "light"; optional so older snapshots still decode
   let theme: String?
   let year: Int
   /// 0-based, matching the app
@@ -51,38 +48,18 @@ struct PlannerSnapshot: Codable {
   let yearMissed: [[Int]]
   let yearHabitCounts: [Int]
   let yearTotal: Int
-  /// Decoded leniently — snapshots written before the quote widget existed
-  /// have no `quotes` key, and a missing one shouldn't fail the whole decode.
+  // optional so snapshots from before these features still decode
   let quotes: [String]?
-  /// Where the user's own quotes begin in `quotes`; absent from older snapshots, which hold none
+  /// where the user's own quotes begin in `quotes`
   let ownQuotesFrom: Int?
-  /// Likewise optional: a snapshot written before deadlines existed carries no
-  /// `tasks` key, and that must not fail the decode for every other widget.
   let tasks: [Task]?
 
-  /// Unfinished deadlines, soonest first — overdue ones included, and first in
-  /// the list, since a deadline that has gone by is the one worth showing.
+  /// Unfinished deadlines, soonest first, overdue ones included.
   var deadlines: [Task] {
     (tasks ?? []).sorted { $0.due < $1.due }
   }
 
-  /// Same day-of-year rotation as `quoteForDate` in src/quotes.ts, so the app
-  /// and the widget always show the same quote on a given day.
-  func quote(on date: Date) -> String? {
-    guard let quotes, !quotes.isEmpty else { return nil }
-    let cal = Calendar.current
-    guard let dayOfYear = cal.ordinality(of: .day, in: .year, for: date) else { return nil }
-    return quotes[dayOfYear % quotes.count]
-  }
-
-  /// Whether the day's quote is one the user wrote, which `quoteHeading` in src/quotes.ts heads "YOUR WORDS."
-  func quoteIsOwn(on date: Date) -> Bool {
-    guard let quotes, !quotes.isEmpty, let ownQuotesFrom,
-          let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) else { return false }
-    return dayOfYear % quotes.count >= ownQuotesFrom
-  }
-
-  /// The day's quote and the ones after it in rotation order, each marked when the user wrote it.
+  /// The day's quote then the rest in rotation order, same as `quoteForDate` in src/quotes.ts.
   func rotation(from date: Date) -> [(text: String, own: Bool)] {
     guard let quotes, !quotes.isEmpty,
           let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: date) else { return [] }
@@ -105,9 +82,10 @@ struct PlannerSnapshot: Codable {
     return row.filter { $0 == "1" }.count
   }
 
-  func missedCount(day: Int) -> Int {
-    guard let row = grid[String(day)] else { return 0 }
-    return row.filter { $0 == "2" }.count
+  /// The week up to today, for the run of pips.
+  var recentDays: [(day: Int, done: Bool)] {
+    guard let today else { return [] }
+    return (max(1, today - 6)...today).map { ($0, doneCount(day: $0) > 0) }
   }
 
   /// Shown before the app has ever written a snapshot, and in the widget gallery.
@@ -123,9 +101,7 @@ struct PlannerSnapshot: Codable {
 
     var grid: [String: String] = [:]
     for d in 1...max(day, 1) {
-      // a plausible-looking sample so the gallery preview isn't empty
-      let pattern = ["1110", "1101", "1111", "1011", "1210"][d % 5]
-      grid[String(d)] = pattern
+      grid[String(d)] = ["1110", "1101", "1111", "1011", "1210"][d % 5]
     }
 
     var yearDone: [[Int]] = []
@@ -141,7 +117,6 @@ struct PlannerSnapshot: Codable {
 
     return PlannerSnapshot(
       updatedAt: now.timeIntervalSince1970 * 1000,
-      // the gallery preview has no app setting to follow yet
       theme: nil,
       year: year,
       month: month,
@@ -186,55 +161,35 @@ struct PlannerSnapshot: Codable {
   }()
 }
 
-enum SnapshotStore {
-  /// Must match app.json, expo-target.config.js and WidgetBridgeModule.swift.
-  static let appGroup = "group.com.owaiskhan.monthlyplanning"
-  static let key = "widgetSnapshot"
-
-  static func load() -> PlannerSnapshot? {
-    guard
-      let defaults = UserDefaults(suiteName: appGroup),
-      let json = defaults.string(forKey: key),
-      let data = json.data(using: .utf8)
-    else { return nil }
-    return try? JSONDecoder().decode(PlannerSnapshot.self, from: data)
-  }
-}
-
 struct SnapshotEntry: TimelineEntry {
   let date: Date
   let snapshot: PlannerSnapshot
-  /// true when no snapshot has been written yet, so views can nudge the user
-  let isPlaceholder: Bool
 }
 
 /// One provider serves every widget — they all render from the same snapshot.
 struct SnapshotProvider: TimelineProvider {
+  /// The App Group must match app.json, expo-target.config.js and WidgetBridgeModule.swift.
+  private func load() -> PlannerSnapshot {
+    guard
+      let json = UserDefaults(suiteName: "group.com.owaiskhan.monthlyplanning")?.string(forKey: "widgetSnapshot"),
+      let snapshot = try? JSONDecoder().decode(PlannerSnapshot.self, from: Data(json.utf8))
+    else { return .placeholder }
+    return snapshot
+  }
+
   func placeholder(in context: Context) -> SnapshotEntry {
-    SnapshotEntry(date: Date(), snapshot: .placeholder, isPlaceholder: true)
+    SnapshotEntry(date: Date(), snapshot: .placeholder)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
-    let loaded = SnapshotStore.load()
-    completion(
-      SnapshotEntry(
-        date: Date(),
-        snapshot: loaded ?? .placeholder,
-        isPlaceholder: loaded == nil
-      )
-    )
+    completion(SnapshotEntry(date: Date(), snapshot: load()))
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-    let loaded = SnapshotStore.load()
-    let snapshot = loaded ?? .placeholder
+    let snapshot = load()
     let now = Date()
 
-    // The app reloads timelines whenever the data changes, so a timeline only
-    // has to cover what moves on its own: "today" rolling over at midnight, and
-    // every countdown stepping down. Those are entries, not reloads — WidgetKit
-    // budgets how often an extension may be woken, but not how many entries it
-    // hands back when it is.
+    // the app reloads on every change; entries only cover midnight and the countdowns stepping down
     let midnight =
       Calendar.current.nextDate(
         after: now,
@@ -247,9 +202,7 @@ struct SnapshotProvider: TimelineProvider {
     dates.append(midnight)
     dates = Array(Set(dates)).sorted()
 
-    let entries = dates.map {
-      SnapshotEntry(date: $0, snapshot: snapshot, isPlaceholder: loaded == nil)
-    }
+    let entries = dates.map { SnapshotEntry(date: $0, snapshot: snapshot) }
     completion(Timeline(entries: entries, policy: .after(dates.last ?? midnight)))
   }
 }

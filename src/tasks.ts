@@ -1,17 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nextDue, parseRepeat } from './recurring';
-import type { VouchedRead, VouchedValue } from './storage';
+import { forEditing, readJson, readVouched, writeJson } from './storage';
+import type { ForEditing, VouchedRead, VouchedValue } from './storage';
+import { nextId } from './types';
 
-/**
- * Tasks that are due by a certain moment.
- *
- * Deliberately not part of `MonthData`. A deadline is anchored to a date, not
- * to the month you happen to have open: a task written in August and due in
- * October belongs to neither month's page, and its reminders have to keep
- * firing while you browse September. So it is one flat list, ordered by time
- * and nothing else.
- */
+export type { VouchedValue } from './storage';
 
+/** A deadline; kept out of `MonthData` because it belongs to a date, not to the month that is open */
 export interface Task {
   /** stable id, so reminders and rows survive edits and reordering */
   id: string;
@@ -19,11 +13,7 @@ export interface Task {
   /** the deadline itself, epoch milliseconds */
   due: number;
   done: boolean;
-  /**
-   * When it was actually finished, epoch milliseconds. Absent on a task that
-   * isn't done, and on anything ticked off before this was recorded — history
-   * treats a missing value as "finished, time unknown" rather than guessing.
-   */
+  /** epoch ms; absent on a task finished before this was recorded, which history files as time unknown */
   completedAt?: number;
   /** absent on a one-off; a finished occurrence keeps it to say which series it was */
   repeat?: Repeat;
@@ -37,18 +27,9 @@ export interface Repeat {
   day?: number;
 }
 
-/** A deadline's own field limit; the group in `types.ts` explains the sizing. */
 export const MAX_TASK_TEXT = 200;
 
 const TASKS_KEY = '@monthly-planning/tasks';
-
-export function nextTaskId(tasks: Task[]): string {
-  const max = tasks.reduce((m, t) => {
-    const n = parseInt(t.id, 10);
-    return Number.isFinite(n) ? Math.max(m, n) : m;
-  }, -1);
-  return String(max + 1);
-}
 
 /** Drops anything that isn't a usable task rather than letting it reach the UI */
 export function parseTasks(raw: unknown): Task[] {
@@ -89,47 +70,18 @@ export function toggleDone(tasks: Task[], id: string, now: number): Task[] {
   // the open row keeps its id and moves on; the finished one is filed under a new id
   return [
     ...tasks.map((t) => (t === task ? { ...t, due: nextDue(t.due, repeat, now) } : t)),
-    { ...finished, id: nextTaskId(tasks) },
+    { ...finished, id: nextId(tasks) },
   ];
 }
 
 export async function loadTasks(): Promise<Task[]> {
-  try {
-    const raw = await AsyncStorage.getItem(TASKS_KEY);
-    return raw ? parseTasks(JSON.parse(raw)) : [];
-  } catch {
-    return [];
-  }
+  return parseTasks(await readJson(TASKS_KEY));
 }
 
-/**
- * `VouchedRead` and `VouchedValue` are declared in `storage.ts`, next to the
- * lossy month readers they exist to qualify, and imported here as types only —
- * nothing about the month store reaches this module at runtime. Re-exported so
- * a caller can take the reader and the shape of its answer from the same place.
- */
-export type { VouchedRead, VouchedValue } from './storage';
-
-/**
- * Whether a parsed deadline list became the list it was meant to be.
- *
- * The twin of `vouchMonthValue` in `storage.ts`, and here for the same reason:
- * a list read off this phone's disk and a shard decrypted off the wire are the
- * same question, so they get the same answer from the same place rather than
- * two standards that drift apart. `readTasksVouched` below is the disk caller;
- * `pullTaskShards` in `sync.ts` is the wire one.
- *
- * Rows are all that is counted. `parseTasks` also clears a completion time off
- * a task that is not done, and that is the parser doing its documented job on a
- * value nothing should have written — the deadline itself is still there, so it
- * is a correction rather than a loss, and calling it one would block the backup
- * of every half-migrated list.
- */
+/** Whether a parsed deadline list lost rows; the disk read and the backup pull share it */
 export function vouchTasksValue(raw: unknown): VouchedValue<Task[]> {
-  // a list stored as something that is not a list is a record this phone
-  // cannot read, not a list that lost rows
   if (!Array.isArray(raw)) return { status: 'unreadable' };
-
+  // only rows count: clearing a stray completion time is a correction, not a loss
   const data = parseTasks(raw);
   if (data.length === raw.length) return { status: 'complete', data };
   return {
@@ -139,93 +91,16 @@ export function vouchTasksValue(raw: unknown): VouchedValue<Task[]> {
   };
 }
 
-/**
- * The deadline list read the way the backup needs it.
- *
- * `loadTasks` answers an empty list for a phone that has never saved a
- * deadline, for a file that will not parse, and for a store that will not
- * answer. Every screen is right not to care — it draws nothing in all three
- * cases. Backing up is the one caller for which the difference is the entire
- * question, because the first means the deadlines were deleted and the others
- * mean do not touch the archive. So this is the same single read, saying
- * afterwards which of them it was.
- */
-export async function readTasksVouched(): Promise<VouchedRead<Task[]>> {
-  let raw: string | null;
-  try {
-    raw = await AsyncStorage.getItem(TASKS_KEY);
-  } catch {
-    // a store that will not answer is not a phone with no deadlines
-    return { status: 'unreadable' };
-  }
-  if (raw === null || raw === undefined) return { status: 'absent' };
-
-  try {
-    return vouchTasksValue(JSON.parse(raw));
-  } catch {
-    return { status: 'unreadable' };
-  }
+/** The deadline list read the way the backup needs it, telling absent apart from unreadable */
+export function readTasksVouched(): Promise<VouchedRead<Task[]>> {
+  return readVouched(TASKS_KEY, vouchTasksValue);
 }
 
-/** A deadline list to draw, and whether the record it came from was whole */
-export interface TasksForEditing {
-  /** the rows that survived, or an empty list when nothing could be read */
-  data: Task[];
-  /** false when the bytes on disk held more rows than `data` does */
-  complete: boolean;
-  /**
-   * What the voucher could not account for — `1 of 2 deadlines` — and absent
-   * whenever there is nothing to say: a list read in full, and a record that
-   * could not be read at all, where no row survived to be counted against any
-   * other. The twin of the field on `MonthForEditing`, and there for the same
-   * reason: the screen is what hands this to the ledger.
-   */
-  lost?: string;
+/** The reader for the screen that also saves the list */
+export async function readTasksForEditing(): Promise<ForEditing<Task[]>> {
+  return forEditing(await readTasksVouched(), []);
 }
 
-/**
- * The reader for the screen that also writes what it read — the twin of
- * `readMonthForEditing` in `storage.ts`, and it exists for the same reason.
- *
- * `loadTasks` answers a half-parsed list with the rows that survived, which is
- * right for drawing it. It is wrong for a screen that then saves, because the
- * survivors go back over the record they survived and the dropped rows stop
- * being recoverable — at which point `readTasksVouched` says `complete`, the
- * thinned list backs up as an ordinary edit, and every guard in `sync.ts` is
- * looking at a record that no longer knows it was damaged. That is a deletion
- * of deadlines nobody touched, which is a bug whether or not this phone has
- * ever backed anything up.
- *
- * So: the same single read, something to draw in every case, and one flag
- * saying whether writing it back would be a save or a deletion. A caller that
- * writes must not write when `complete` is false.
- *
- * `useTasks` is the caller this exists for.
- */
-export async function readTasksForEditing(): Promise<TasksForEditing> {
-  const record = await readTasksVouched();
-  switch (record.status) {
-    case 'complete':
-      return { data: record.data, complete: true };
-    case 'partial':
-      return { data: record.data, complete: false, lost: record.lost };
-    case 'absent':
-      // nothing is stored under the key, which is a phone that has never
-      // written a deadline. An empty list is exactly what is there, so writing
-      // one back takes nothing away.
-      return { data: [], complete: true };
-    default:
-      // the store would not answer, or the bytes are not JSON. There is nothing
-      // to draw but an empty list, and saving that empty list is how every
-      // deadline on this phone goes at once.
-      return { data: [], complete: false };
-  }
-}
-
-export async function saveTasks(tasks: Task[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-  } catch {
-    // best-effort persistence, matching the rest of the app's stores
-  }
+export function saveTasks(tasks: Task[]): Promise<void> {
+  return writeJson(TASKS_KEY, tasks);
 }

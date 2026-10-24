@@ -15,7 +15,7 @@ export interface KeyGoal {
 /** What a custom card holds: free text, plain lines, or lines that can be ticked. */
 export type CardKind = 'note' | 'list' | 'checklist';
 
-export const CARD_KINDS: readonly CardKind[] = ['note', 'list', 'checklist'];
+const CARD_KINDS: readonly CardKind[] = ['note', 'list', 'checklist'];
 
 /** One line of a custom card. A note is a single item; only a checklist reads `done`. */
 export interface CardItem {
@@ -23,10 +23,7 @@ export interface CardItem {
   done: boolean;
 }
 
-/**
- * A custom card as a month stores it. Title and kind are kept so a restored
- * month can rebuild its own cards.
- */
+/** A custom card as a month stores it; title and kind let a restored month rebuild it */
 export interface CustomCard {
   /** matches the layout's id for the card, so a rename never detaches its lines */
   id: string;
@@ -50,24 +47,7 @@ export interface MonthData {
   cards?: CustomCard[];
 }
 
-/**
- * How much text a field will take from here on.
- *
- * A month's ciphertext has a ceiling in the security rules, but these numbers
- * are not that ceiling divided up: a full month of ordinary use sits at a few
- * percent of it, and each limit below is simply the most anyone plausibly
- * wants to type into that particular field. The rule is the backstop for a
- * record that somehow arrives oversized — a paste of a whole document into a
- * multiline box is the obvious way — not the budget these are spent against.
- *
- * They apply to new typing only. Anything already saved, including values
- * written before these existed, is left exactly as it is.
- *
- * Every field that uses one sets it twice, as a `maxLength` prop and as a
- * slice inside `onChangeText`. The prop is what stops the keyboard and shows
- * the user where the end is; the slice is what actually holds, because
- * `maxLength` on a multiline input is not honoured by every Android IME.
- */
+// Limits on new typing; fields also slice, since some Android IMEs ignore maxLength
 export const MAX_HABITS = 10;
 export const MAX_HABIT_NAME = 24;
 export const MAX_OBSERVATION_LEN = 280;
@@ -82,7 +62,6 @@ export const MAX_CARD_NOTE_LEN = 1000;
 /** A month can hold leftovers of deleted cards, so its cap is above the live one. */
 export const MAX_MONTH_CARDS = 12;
 
-/** The shape every custom card id has; the parsers hold stored ids to it */
 const CARD_ID = /^c-[0-9a-z]{4,20}$/;
 
 export function isCardId(id: unknown): id is string {
@@ -91,6 +70,11 @@ export function isCardId(id: unknown): id is string {
 
 export function isCardKind(kind: unknown): kind is CardKind {
   return CARD_KINDS.includes(kind as CardKind);
+}
+
+/** A plain object, as opposed to null, an array or a primitive */
+export function isRecord(raw: unknown): raw is Record<string, unknown> {
+  return !!raw && typeof raw === 'object' && !Array.isArray(raw);
 }
 
 /** What a card shows in a month that has nothing filed under it yet */
@@ -126,9 +110,10 @@ export function cellKey(day: number, habitId: string): string {
   return `${day}:${habitId}`;
 }
 
-export function nextHabitId(habits: Habit[]): string {
-  const max = habits.reduce((m, h) => {
-    const n = parseInt(h.id, 10);
+/** One more than the highest numeric id, so habits and deadlines number themselves */
+export function nextId(items: readonly { id: string }[]): string {
+  const max = items.reduce((m, item) => {
+    const n = parseInt(item.id, 10);
     return Number.isFinite(n) ? Math.max(m, n) : m;
   }, -1);
   return String(max + 1);

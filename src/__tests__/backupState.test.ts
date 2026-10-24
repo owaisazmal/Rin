@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  emptyBackupState,
+  BackupState,
   forgetCode,
   loadBackupState,
   loadCode,
@@ -8,12 +8,8 @@ import {
   saveCode,
 } from '../backupState';
 
-/**
- * Two stores, deliberately kept apart: the code goes to the Keychain, and the
- * unremarkable part — has it been answered, when did it last run — goes beside
- * the habit grids. What matters here is that the code never crosses into the
- * second one.
- */
+const emptyBackupState: BackupState = { onboarded: false, lastBackupAt: null };
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: { getItem: jest.fn(), setItem: jest.fn() },

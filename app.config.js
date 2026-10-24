@@ -1,12 +1,4 @@
-/**
- * Everything static lives in app.json; this exists for the one thing that
- * can't. Firebase's two config files are gitignored, so their paths differ
- * between a checkout (repo root) and an EAS build (wherever EAS writes a file
- * environment variable). Reading them from the environment lets both work
- * without either putting the files in the repo.
- *
- * See .env.example for the variable names.
- */
+// Firebase's config files are gitignored, so EAS builds pass their paths in as file env vars (see .env.example).
 module.exports = ({ config }) => ({
   ...config,
   ios: {

@@ -7,29 +7,15 @@ export type ThemeMode = 'dark' | 'light';
 /** What Settings stores; `system` is resolved to a ThemeMode from the OS before anything draws */
 export type ThemePreference = ThemeMode | 'system';
 
-/**
- * The four brand colours the whole app is built from. Every other value in the
- * palettes below is a lighter or darker shade of one of these four — no new hue
- * is ever introduced. Slate is the only chromatic one, so it carries every
- * accent; the greys and ivory carry structure and text.
- *
- * A few shades exist because the four alone can't cover both modes: slate on
- * ivory is 3.83:1 where body copy needs 4.5:1, so light mode darkens it and
- * dark mode lightens it.
- */
-export const BRAND = {
+/** The four brand colours every palette value is a shade of, bar the done and missed greens and reds */
+const BRAND = {
   charcoal: '#4A4A4A',
   grey: '#CBCBCB',
   ivory: '#FFFFE3',
   slate: '#6D8196',
 } as const;
 
-/**
- * Fire, for the streak flame. The second deliberate exception to the four brand
- * colours, after the green and red of done/missed: an alight flame has to look
- * alight, and no brand hue is warm. Mode-independent — fire is the same colour
- * on either ground. A dead streak drops back to the palette's own ink.
- */
+/** The streak flame, the same on either ground, since no brand hue is warm */
 export const FIRE = {
   bodyTop: '#F97316',
   bodyBottom: '#FBBF24',
@@ -37,12 +23,7 @@ export const FIRE = {
   coreBottom: '#FEF08A',
 } as const;
 
-/**
- * Josefin Sans ships weights 100–700 only, and iOS ignores `fontWeight` once a
- * custom `fontFamily` is set — so every weight in the UI maps onto a real font
- * file here instead of relying on synthetic bolding. The heaviest UI weights
- * (the old 800/900) land on Bold, which is as heavy as this family goes.
- */
+/** One real font file per weight, since iOS ignores `fontWeight` once a custom `fontFamily` is set */
 export const FONT = {
   regular: 'JosefinSans_400Regular',
   medium: 'JosefinSans_500Medium',
@@ -51,10 +32,7 @@ export const FONT = {
   italic: 'JosefinSans_400Regular_Italic',
 } as const;
 
-/**
- * Line height (or font size, where there is none) for text that can wrap. On 3x
- * iPhones a whole-pixel height can round short and clip the last line.
- */
+/** Line height for text that can wrap; on 3x iPhones a whole-pixel height can clip the last line */
 export function wrapSafe(size: number): number {
   return Platform.OS === 'ios' ? size + 0.01 : size;
 }
@@ -80,17 +58,10 @@ export interface Palette {
   /** brand colour — accent bars, active states, today markers, calls to action */
   accent: string;
   accentSoft: string;
-  /**
-   * Foregrounds on filled surfaces. Accent and state fills sit at opposite ends
-   * of the lightness range in light mode — a dark slate button vs a bright green
-   * one — so one shared foreground can't stay readable on both.
-   */
+  /** foregrounds on filled surfaces; light mode's accent and state fills are too far apart to share one */
   onAccent: string;
   onState: string;
-  /**
-   * Habit checked off / missed. The one deliberate exception to the four brand
-   * colours: green and red carry meaning no brand colour can.
-   */
+  /** green and red carry a meaning no brand colour can */
   done: string;
   doneSoft: string;
   missed: string;
@@ -134,44 +105,11 @@ export const darkPalette: Palette = {
 
 export const lightPalette: Palette = {
   bg: BRAND.ivory,
-  /**
-   * A darker grey than `BRAND.grey`, for the three blobs that carry the drift.
-   *
-   * Matching dark's separation is not enough here: with grey as far below
-   * ivory as dark's blobs sat above their ground, the light drift still stayed
-   * the fainter of the two at every opacity worth using. A near-white page keeps the eye light-adapted, and a step away from
-   * white costs more to see than the same step away from black. So light is
-   * given the wider gap rather than the equal one.
-   *
-   * Index 3 keeps `BRAND.grey` and stays the quiet one, as `#242424` is in dark.
-   */
+  // a darker grey than the brand's, since a step away from white is harder to see than one from black
   blobs: ['#A0A0A0', '#A0A0A0', BRAND.slate, BRAND.grey, BRAND.slate],
-  /**
-   * Well above dark's 0.55, and on purpose. Matching dark by measurement was
-   * tried and rejected by eye twice: at equal spread, and again at 109% of it,
-   * the light drift still read as the fainter of the two. A near-white page
-   * keeps the eye light-adapted and a step away from white costs more to see
-   * than the same step away from black, so light is given the wider gap.
-   *
-   * Not worth pushing much past this, though: the blobs are wider than the
-   * screen and overlap everywhere, so more opacity eventually stops adding
-   * circles and just darkens the page. The other half of the fix is below.
-   */
+  // above dark's 0.55 on purpose: equal measured spread still read fainter on a light page
   blobStrength: 0.65,
-  /**
-   * Lighter on the page than it looks, and that is the point: 20% of the drift
-   * comes through, against the 12% it used to pass.
-   *
-   * This, not the blobs, is why light mode read as the flatter of the two.
-   * Cards cover most of the screen, and dark's are 22% transparent — measured,
-   * its drift is *stronger* seen through a card (8.6 levels of spread) than in
-   * the bare gutter beside it (5.7). Light's old 0.88 inverted that: 12.1 in
-   * the gutter, 5.8 through the card. The circles were there and the cards
-   * were sitting on them.
-   *
-   * Text stays clear of WCAG AA: charcoal on this surface holds about 7:1 even
-   * over the darkest part of a blob.
-   */
+  // 20% see-through so the drift shows through cards; charcoal text still holds about 7:1
   card: 'rgba(255,255,250,0.80)',
   chip: '#ececdb',
   ink: BRAND.charcoal,
@@ -194,10 +132,7 @@ export const lightPalette: Palette = {
   shadowOpacity: 0.16,
 };
 
-/**
- * Corner radii. Rectangular surfaces get only a slight curve; `pill` is kept
- * for elements that are genuinely circular (icon buttons, dots), not capsules.
- */
+/** Corner radii; `pill` is for genuinely circular elements (icon buttons, dots), not capsules */
 export const RADIUS = {
   card: 18,
   control: 10,
@@ -211,34 +146,13 @@ export const COLUMN = { width: '100%', maxWidth: COLUMN_MAX, alignSelf: 'center'
 /** iPhone modals default to portrait only, but an unfolded Duo shows the app on its side */
 export const MODAL_ORIENTATIONS: ModalProps['supportedOrientations'] = ['portrait', 'landscape'];
 
-/**
- * The shadow as one CSS colour. iOS wants the tint and the strength as two
- * props, CSS wants them as one; both palettes keep `shadow` as `#rrggbb`, so a
- * six-digit parse covers it.
- */
+/** The shadow as one CSS colour; both palettes keep `shadow` as `#rrggbb` */
 function shadowRgba(p: Palette): string {
   const n = parseInt(p.shadow.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${p.shadowOpacity})`;
 }
 
-/**
- * Shared surface every card on the planner screen sits on.
- *
- * The two platforms draw the same shadow from different props, and they have
- * to. Android's `elevation` paints under the *whole* view, and these cards are
- * translucent on purpose, so the shadow came back up through the card: a soft
- * dark band inside every edge, stopping dead about 16dp in. Four of those read
- * as a faded rectangle sitting inside each card, which is what the cards
- * looked like on Android and never did on iOS.
- *
- * `boxShadow` is the fix. RN clips the view's own rounded rect out of the
- * shadow before drawing it, so none of it lands under the card and the
- * translucency stays honest. CSS states blur as twice the Gaussian sigma where
- * iOS states it as sigma, hence 40 against iOS's 20 — the same shadow in the
- * other unit. iOS keeps `shadow*` because it already looked right, and Android
- * below API 28 has no `boxShadow` to fall back on, so it gets the border and
- * no shadow, which is the quieter of the two failures.
- */
+/** Every planner card's surface; Android uses `boxShadow`, since `elevation` shows through translucent cards */
 export function cardSurface(p: Palette): ViewStyle {
   return {
     backgroundColor: p.card,
@@ -253,6 +167,7 @@ export function cardSurface(p: Palette): ViewStyle {
         shadowOffset: { width: 0, height: 12 },
       },
       default: {
+        // CSS blur is twice the Gaussian sigma iOS takes, so 40 here matches iOS's 20
         boxShadow: [
           { offsetX: 0, offsetY: 12, blurRadius: 40, color: shadowRgba(p) },
         ],
