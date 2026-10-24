@@ -73,7 +73,7 @@ jobs:
     name: EAS build (${{ matrix.platform }})
     needs: [preflight, ci]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120 # most of it is waiting on the EAS queue and build
     strategy:
       fail-fast: false
       matrix:
@@ -111,3 +111,8 @@ jobs:
             echo "::notice::Android is not submitted. Download the .aab from the build page and upload it in Play Console."
             printf '\nAndroid is uploaded by hand: download the .aab from the build page and add it to a release in Play Console.\n' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Wait for build
+        # the build was started with --no-wait so its link is in the summary first; this fails the job if EAS fails it
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: node .github/scripts/build-wait.js "$RUNNER_TEMP/build.json"
