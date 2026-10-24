@@ -10,7 +10,7 @@ on:
         options: [all, ios, android]
         default: all
       submit:
-        description: Submit to the stores when done (needs store credentials saved in EAS)
+        description: Submit iOS to App Store Connect when done (Android is uploaded to Play Console by hand)
         type: boolean
         default: false
   push:
@@ -103,6 +103,11 @@ jobs:
           node .github/scripts/release-preflight.js # a re-run of one leg skips the preflight job
           args=(--platform "$PLATFORM" --profile production-ci --non-interactive --no-wait --freeze-credentials --json
                 --message "GitHub Actions: $GITHUB_REF_NAME (${GITHUB_SHA::7})")
-          if [ "$SUBMIT" = true ]; then args+=(--auto-submit-with-profile production); fi
+          # Android has no Play service account on EAS, so only iOS is submitted
+          if [ "$SUBMIT" = true ] && [ "$PLATFORM" = ios ]; then args+=(--auto-submit-with-profile production); fi
           eas build "${args[@]}" > "$RUNNER_TEMP/build.json"
           node .github/scripts/build-summary.js "$RUNNER_TEMP/build.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$PLATFORM" = android ]; then
+            echo "::notice::Android is not submitted. Download the .aab from the build page and upload it in Play Console."
+            printf '\nAndroid is uploaded by hand: download the .aab from the build page and add it to a release in Play Console.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
