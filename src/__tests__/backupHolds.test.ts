@@ -23,7 +23,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('expo-crypto', () => ({
   __esModule: true,
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   getRandomBytes: (n: number) => new Uint8Array(require('crypto').randomBytes(n)),
 }));
 

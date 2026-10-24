@@ -26,10 +26,8 @@ import {
   markSVG,
   monthLength,
   quoteForDate,
-  todayTick,
   trackerCells,
   trackerDayLabels,
-  trackerGeometry,
   yearCalendar,
   yearCells,
   yearLevel,
@@ -88,7 +86,7 @@ const theme = {
     document.documentElement.dataset.theme = mode;
     try {
       localStorage.setItem(THEME_KEY, mode);
-    } catch (e) {
+    } catch {
       /* private mode, or site data blocked — the choice just won't persist */
     }
     this.listeners.forEach((fn) => fn(mode));
@@ -865,7 +863,7 @@ function initLedger() {
       const u = new URL(url, location.href);
       origin = u.origin === location.origin ? 'this page' : u.host;
       file = u.pathname.split('/').filter(Boolean).pop() || '/';
-    } catch (e) {
+    } catch {
       return;
     }
     if (origin !== 'this page') third++;
@@ -885,7 +883,7 @@ function initLedger() {
   performance.getEntriesByType('resource').forEach(add);
   try {
     new PerformanceObserver((l) => l.getEntries().forEach(add)).observe({ type: 'resource', buffered: true });
-  } catch (e) {
+  } catch {
     /* no PerformanceObserver: the table still holds everything loaded so far */
   }
 }
@@ -1671,7 +1669,7 @@ function initShowcase() {
       try {
         build(true);
         composed = true;
-      } catch (err) {
+      } catch {
         // the API is there but not in the shape expected: scrub the same keyframes instead
         anims.forEach((a) => a.cancel());
         anims = [];

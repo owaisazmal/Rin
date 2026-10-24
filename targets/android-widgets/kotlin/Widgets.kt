@@ -17,9 +17,11 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -57,15 +59,20 @@ class WidgetScope(val context: Context, val size: DpSize, val snap: PlannerSnaps
 // each widget keeps its own class, since receivers and Glance state are keyed by class
 abstract class PlannerWidget(private val content: @Composable WidgetScope.() -> Unit) : GlanceAppWidget() {
   override val sizeMode = SizeMode.Exact
-  override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent {
-    val scope = WidgetScope(LocalContext.current, LocalSize.current, rememberSnapshot(context))
-    Box(
-      modifier = GlanceModifier
-        .fillMaxSize()
-        .background(scope.theme.provider(scope.theme.bg))
-        .cornerRadius(20.dp)
-        .padding(PAD.dp)
-    ) { scope.content() }
+  override suspend fun provideGlance(context: Context, id: GlanceId) {
+    // a tap opens the app, as it does on iOS
+    val open = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    provideContent {
+      val scope = WidgetScope(LocalContext.current, LocalSize.current, rememberSnapshot(context))
+      Box(
+        modifier = GlanceModifier
+          .fillMaxSize()
+          .background(scope.theme.provider(scope.theme.bg))
+          .cornerRadius(20.dp)
+          .padding(PAD.dp)
+          .let { if (open == null) it else it.clickable(actionStartActivity(open)) }
+      ) { scope.content() }
+    }
   }
 }
 

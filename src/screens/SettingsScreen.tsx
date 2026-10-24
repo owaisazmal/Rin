@@ -42,7 +42,6 @@ import {
   exportNotice,
   exportSummary,
   gatherExport,
-  scopeKey,
   scopeTitle,
 } from '../exportData';
 import { shareExport } from '../exportFile';
@@ -711,16 +710,20 @@ function ExportSection({ styles, palette }: { styles: Styles; palette: Palette }
     });
   }, []);
   const picked = stored[monthAt];
-  const scope: ExportScope | null =
-    scopeKind === 'all'
-      ? { kind: 'all' }
-      : scopeKind === 'month'
-        ? picked
-          ? { kind: 'month', year: picked.year, month: picked.month }
-          : null
-        : years[yearAt] !== undefined
-          ? { kind: 'year', year: years[yearAt] }
-          : null;
+  const chosenYear = years[yearAt];
+  const scope = useMemo<ExportScope | null>(
+    () =>
+      scopeKind === 'all'
+        ? { kind: 'all' }
+        : scopeKind === 'month'
+          ? picked
+            ? { kind: 'month', year: picked.year, month: picked.month }
+            : null
+          : chosenYear !== undefined
+            ? { kind: 'year', year: chosenYear }
+            : null,
+    [scopeKind, picked, chosenYear]
+  );
   const stepAt = scopeKind === 'month' ? monthAt : yearAt;
   const stepCount = scopeKind === 'month' ? stored.length : years.length;
   const step = (delta: number) =>
@@ -747,8 +750,9 @@ function ExportSection({ styles, palette }: { styles: Styles; palette: Palette }
 
   // what the file will hold, read again whenever the range changes
   const [preview, setPreview] = useState<ExportFile | null>(null);
-  const scopeId = scope ? scopeKey(scope) : null;
+  const [readAt, setReadAt] = useState(Date.now);
   useEffect(() => {
+    setReadAt(Date.now());
     if (!scope) {
       setPreview(null);
       return;
@@ -761,7 +765,7 @@ function ExportSection({ styles, palette }: { styles: Styles; palette: Palette }
     return () => {
       live = false;
     };
-  }, [scopeId]);
+  }, [scope]);
   const summary = preview ? exportSummary(preview, format) : null;
 
   const [exporting, setExporting] = useState(false);
@@ -850,7 +854,7 @@ function ExportSection({ styles, palette }: { styles: Styles; palette: Palette }
           </View>
           <View style={styles.rowText}>
             <Text style={styles.ticketName} maxFontSizeMultiplier={SCALE.row} numberOfLines={1}>
-              {scope ? exportFileName(scope, format, Date.now()) : 'No months yet'}
+              {scope ? exportFileName(scope, format, readAt) : 'No months yet'}
             </Text>
             {(summary?.lines ?? (scope ? ['Reading…'] : [])).map((line) => (
               <Text key={line} style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>

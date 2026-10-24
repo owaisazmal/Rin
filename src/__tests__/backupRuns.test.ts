@@ -52,7 +52,6 @@ jest.mock('expo-secure-store', () => {
 
 jest.mock('expo-crypto', () => ({
   __esModule: true,
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   getRandomBytes: (n: number) => new Uint8Array(require('crypto').randomBytes(n)),
 }));
 
@@ -125,7 +124,6 @@ jest.mock('@react-native-firebase/firestore', () => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const keychain = (require('expo-secure-store') as { __keychain: Map<string, string> }).__keychain;
 
 beforeEach(async () => {

@@ -37,7 +37,11 @@ export function useYearWindow({
   const [stored, setStored] = useState<number[]>([]);
   const [loaded, setLoaded] = useState<Record<number, YearMonthSummary[]>>({});
 
-  const months = useMemo(() => spanMonths(span, now), [span, now.year, now.month]);
+  const { year: nowYear, month: nowMonth } = now;
+  const months = useMemo(
+    () => spanMonths(span, { year: nowYear, month: nowMonth }),
+    [span, nowYear, nowMonth]
+  );
 
   // Paging the planner (or the clock) out of the span brings it along, preferring rolling; picking a span doesn't.
   const watched = useRef({

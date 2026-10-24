@@ -11,12 +11,15 @@ const CROSS = 'M7 7 L17 17 M17 7 L7 17';
 
 export default function MarkButton({
   kind,
+  habit,
   active,
   disabled = false,
   palette,
   onPress,
 }: {
   kind: 'done' | 'missed';
+  /** the habit's name, for screen readers */
+  habit: string;
   active: boolean;
   /** a past day's existing mark can't be changed, and a future day can't be marked */
   disabled?: boolean;
@@ -41,7 +44,14 @@ export default function MarkButton({
   const soft = kind === 'done' ? palette.doneSoft : palette.missedSoft;
 
   return (
-    <Pressable hitSlop={6} onPress={onPress} disabled={disabled}>
+    <Pressable
+      hitSlop={6}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`Mark ${habit} ${kind}`}
+      accessibilityState={{ selected: active }}
+    >
       {({ pressed }) => (
         <Animated.View
           style={{

@@ -50,6 +50,7 @@ export default function DueDatePicker({ visible, value, repeat, onCancel, onConf
     month: new Date(value).getMonth(),
   }));
   const [every, setEvery] = useState<RepeatChoice>(repeat ?? 'never');
+  const [todayStart, setTodayStart] = useState(() => startOfDay(Date.now()));
 
   // adopt the task's deadline on opening only, so it never fights the picking
   useEffect(() => {
@@ -58,10 +59,10 @@ export default function DueDatePicker({ visible, value, repeat, onCancel, onConf
     setPicked(d);
     setCursor({ year: d.getFullYear(), month: d.getMonth() });
     setEvery(repeat ?? 'never');
+    setTodayStart(startOfDay(Date.now()));
   }, [visible, value, repeat]);
 
   const cells = useMemo(() => monthCells(cursor.year, cursor.month), [cursor]);
-  const todayStart = startOfDay(Date.now());
 
   const shiftMonth = (delta: number) => {
     const d = new Date(cursor.year, cursor.month + delta, 1);

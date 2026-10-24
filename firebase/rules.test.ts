@@ -28,7 +28,6 @@ jest.mock('expo-crypto', () => ({
   getRandomBytes: (n: number) => new Uint8Array(mockRandomBytes(n)),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const backup = require('../src/backup') as typeof import('../src/backup');
 
 /**

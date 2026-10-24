@@ -44,7 +44,6 @@ const vouchMonth = readMonthVouched as jest.MockedFunction<typeof readMonthVouch
 
 jest.mock('expo-crypto', () => ({
   __esModule: true,
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   getRandomBytes: (n: number) => new Uint8Array(require('crypto').randomBytes(n)),
 }));
 
@@ -242,7 +241,6 @@ describe('what goes on the wire', () => {
   it('starts App Check with the first request rather than at launch, and once', async () => {
     let fresh!: typeof import('../sync');
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       fresh = require('../sync');
     });
     expect(mockState.appCheckStarts).toBe(0);

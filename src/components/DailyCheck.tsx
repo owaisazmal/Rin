@@ -188,6 +188,7 @@ export default function DailyCheck({
                   <MarkButton
                     key={mark}
                     kind={mark === 1 ? 'done' : 'missed'}
+                    habit={h.name || 'Unnamed habit'}
                     active={state === mark}
                     disabled={!canMark(h.id)}
                     palette={palette}

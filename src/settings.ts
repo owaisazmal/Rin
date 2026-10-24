@@ -1,5 +1,5 @@
-import { PlannerLayout, defaultLayout, parseLayout } from './layout';
-import { QuotePrefs, defaultQuotePrefs, parseQuotePrefs } from './quotes';
+import { PlannerLayout, parseLayout } from './layout';
+import { QuotePrefs, parseQuotePrefs } from './quotes';
 import { readJson, writeJson } from './storage';
 import { isRecord } from './types';
 import type { ColorSchemeName } from 'react-native';

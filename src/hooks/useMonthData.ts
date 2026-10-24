@@ -237,7 +237,7 @@ export function useMonthData(year: number, month: number, today: DayRef) {
     [edit]
   );
 
-  /** Checked against the same limit `Observations.tsx` hides its button on */
+  /** Checked against the same limit the planner's Observations card hides its add button on */
   const addObservation = useCallback(() => {
     edit((prev) =>
       prev.observations.length >= MAX_OBSERVATIONS

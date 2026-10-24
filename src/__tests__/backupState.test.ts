@@ -33,7 +33,6 @@ jest.mock('expo-secure-store', () => {
 });
 
 const local = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const keychain = (require('expo-secure-store') as { __keychain: Map<string, string> }).__keychain;
 
 const CODE = 'K7Q2-9XBM-4TRV-8NPZ-3HGD-6WYS';
