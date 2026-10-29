@@ -24,7 +24,7 @@ import {
   open,
   seal,
 } from './backup';
-import { MonthData, cardHasContent } from './types';
+import { MonthData, isEmptyMonth } from './types';
 import { Task, loadTasks, readTasksVouched, saveTasks, vouchTasksValue } from './tasks';
 import {
   listStoredMonths,
@@ -261,16 +261,6 @@ export type BackupRun =
       blocked: BlockedDoc[];
     }
   | { ok: false; reason: 'offline' };
-
-function isEmptyMonth(data: MonthData): boolean {
-  return (
-    data.habits.length === 0 &&
-    Object.keys(data.grid).length === 0 &&
-    data.observations.every((line) => line.trim() === '') &&
-    data.keyGoals.every((goal) => goal.text.trim() === '' && !goal.done) &&
-    (data.cards ?? []).every((card) => !cardHasContent(card.items))
-  );
-}
 
 // Task docs to name when the list can't be read: those on record, or `current` on a first backup.
 function taskDocsOf(ledger: Ledger): string[] {

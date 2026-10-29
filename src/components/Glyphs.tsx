@@ -53,6 +53,10 @@ export function ShareGlyph({ color, size = 16 }: Props) {
   return <Glyph d="M12 14V4M8.2 7.6 12 3.8l3.8 3.8M7.5 10.5H6v9h12v-9h-1.5" color={color} size={size} />;
 }
 
+export function ImportGlyph({ color, size = 16 }: Props) {
+  return <Glyph d="M12 3.8v10M8.2 10.2 12 14l3.8-3.8M7.5 10.5H6v9h12v-9h-1.5" color={color} size={size} />;
+}
+
 /** a link that leaves the app */
 export function ExternalGlyph({ color, size = 14 }: Props) {
   return <Glyph d="M9.5 6.5h8v8M17.5 6.5 7 17" color={color} size={size} />;

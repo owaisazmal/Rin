@@ -29,7 +29,7 @@ export interface Repeat {
 
 export const MAX_TASK_TEXT = 200;
 
-const TASKS_KEY = '@monthly-planning/tasks';
+export const TASKS_KEY = '@monthly-planning/tasks';
 
 /** Drops anything that isn't a usable task rather than letting it reach the UI */
 export function parseTasks(raw: unknown): Task[] {

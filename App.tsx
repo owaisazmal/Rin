@@ -173,6 +173,16 @@ export default function App() {
     []
   );
 
+  // an import writes straight to storage, so the screens are rebuilt as after a restore
+  const importDone = useCallback(
+    (change: ((prev: Settings) => Settings) | null, reload: boolean) => {
+      if (change) setSettings((prev) => (prev ? change(prev) : prev));
+      if (reload) setDataEpoch((n) => n + 1);
+      refreshBackupStatus();
+    },
+    [refreshBackupStatus]
+  );
+
   // re-renders when the OS appearance changes, which is what `system` follows
   const osScheme = useColorScheme();
   const preference = settings?.theme ?? 'dark';
@@ -210,6 +220,7 @@ export default function App() {
             onChangeNotifications={changeNotifications}
             quotes={settings.quotes}
             onChangeQuotes={changeQuotes}
+            onImported={importDone}
             onBackedUp={(_code, outcome) => {
               setHasCode(true);
               // a restore sent nothing from this phone, so it clears the date; an unsent run keeps it

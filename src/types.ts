@@ -93,6 +93,17 @@ export function cardHasContent(items: readonly CardItem[]): boolean {
   return items.some((item) => item.text.trim() !== '' || item.done);
 }
 
+/** Nothing anyone wrote: no habits, marks, notes, goals or card lines */
+export function isEmptyMonth(data: MonthData): boolean {
+  return (
+    data.habits.length === 0 &&
+    Object.keys(data.grid).length === 0 &&
+    data.observations.every((line) => line.trim() === '') &&
+    data.keyGoals.every((goal) => goal.text.trim() === '' && !goal.done) &&
+    (data.cards ?? []).every((card) => !cardHasContent(card.items))
+  );
+}
+
 export function emptyMonthData(): MonthData {
   return {
     habits: [],

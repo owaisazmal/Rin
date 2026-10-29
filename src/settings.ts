@@ -108,8 +108,7 @@ export function placeSlot(
 }
 
 /** Coerced field by field, so an unknown value falls back on its own rather than taking the rest with it */
-export async function loadSettings(): Promise<Settings> {
-  const raw = await readJson(SETTINGS_KEY);
+export function parseSettings(raw: unknown): Settings {
   const p = isRecord(raw) ? raw : {};
   return {
     theme: p.theme === 'light' || p.theme === 'system' ? p.theme : 'dark',
@@ -118,6 +117,10 @@ export async function loadSettings(): Promise<Settings> {
     notifications: parseNotifications(p.notifications),
     quotes: parseQuotePrefs(p.quotes),
   };
+}
+
+export async function loadSettings(): Promise<Settings> {
+  return parseSettings(await readJson(SETTINGS_KEY));
 }
 
 /** The mode to draw in; `system` follows the OS and falls back to dark when it gives no answer */

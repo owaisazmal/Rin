@@ -16,7 +16,7 @@ import {
   isRecord,
 } from './types';
 
-function monthKey(year: number, month: number): string {
+export function monthKey(year: number, month: number): string {
   return `@monthly-planning/${monthDocKey(year, month)}`;
 }
 
@@ -37,6 +37,11 @@ export async function writeJson(key: string, value: unknown): Promise<void> {
   } catch {
     // ignored on purpose
   }
+}
+
+/** Several records in one store call, which throws rather than swallowing a failure */
+export async function writeMany(entries: [string, unknown][]): Promise<void> {
+  await AsyncStorage.multiSet(entries.map(([key, value]) => [key, JSON.stringify(value)]));
 }
 
 // Months also arrive from the server, so every field is type-checked and anything malformed is dropped.

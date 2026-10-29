@@ -24,11 +24,13 @@ import {
   CloseGlyph,
   ExternalGlyph,
   GridGlyph,
+  ImportGlyph,
   ShareGlyph,
   ThemeIcon,
   UnlockGlyph,
 } from '../components/Glyphs';
 import { DeadlineLead, MAX_SLOTS, NotificationPrefs, placeSlot } from '../settings';
+import type { Settings } from '../settings';
 import { DISCIPLINE_QUOTES, MAX_CUSTOM_QUOTES, QuotePrefs, QuoteSource, placeQuote } from '../quotes';
 import { notificationsBlocked } from '../notifications';
 import { listStoredMonths } from '../storage';
@@ -42,9 +44,27 @@ import {
   exportNotice,
   exportSummary,
   gatherExport,
+  monthTitle,
   scopeTitle,
 } from '../exportData';
 import { shareExport } from '../exportFile';
+import {
+  ImportFile,
+  ImportPlan,
+  MonthChoice,
+  SettingsChoice,
+  applyImport,
+  applySettings,
+  importDoneText,
+  importNotice,
+  importSummary,
+  monthList,
+  newQuotes,
+  previewImport,
+  readImport,
+  refusalText,
+} from '../importData';
+import { pickImport } from '../importFile';
 import type { BackupStatus } from '../hooks/useAutoBackup';
 import { backupCard, nameOf, restoreFailure } from './backupWording';
 import { device } from '../device';
@@ -92,6 +112,15 @@ const SCOPE_OPTIONS = [
   { value: 'all' as ExportScope['kind'], label: 'ALL' },
 ] as const;
 
+const CLASH_OPTIONS = [
+  { value: 'mine' as MonthChoice, label: 'KEEP MINE' },
+  { value: 'replace' as MonthChoice, label: 'REPLACE' },
+  { value: 'skip' as MonthChoice, label: 'SKIP' },
+] as const;
+
+// a damaged copy here has nothing whole to keep
+const DAMAGED_OPTIONS = CLASH_OPTIONS.filter((o) => o.value !== 'mine');
+
 function quoteSummary({ source, custom }: QuotePrefs): string {
   const builtIn = DISCIPLINE_QUOTES.length;
   if (source === 'builtin') return `The ${builtIn} that come with Rin, one a day`;
@@ -134,6 +163,8 @@ interface Props extends BackupProps {
   /** which quotes the planner's card shows, and the user's own */
   quotes: QuotePrefs;
   onChangeQuotes: (change: (prev: QuotePrefs) => QuotePrefs) => void;
+  /** after an import: settings to apply, and whether stored months or deadlines changed */
+  onImported: (change: ((prev: Settings) => Settings) | null, reload: boolean) => void;
   onClose: () => void;
 }
 
@@ -142,6 +173,7 @@ export default function SettingsScreen({
   onChangeNotifications: change,
   quotes,
   onChangeQuotes,
+  onImported,
   onClose,
   ...backup
 }: Props) {
@@ -494,6 +526,7 @@ export default function SettingsScreen({
         </View>
 
         <ExportSection styles={styles} palette={palette} />
+        <ImportSection styles={styles} palette={palette} quotes={quotes} onImported={onImported} />
 
         <SectionHeader title="ABOUT" />
         <View style={styles.card}>
@@ -900,6 +933,269 @@ function ExportSection({ styles, palette }: { styles: Styles; palette: Palette }
   );
 }
 
+function ImportSection({
+  styles,
+  palette,
+  quotes,
+  onImported,
+}: {
+  styles: Styles;
+  palette: Palette;
+  quotes: QuotePrefs;
+  onImported: Props['onImported'];
+}) {
+  const [busy, setBusy] = useState<'reading' | 'importing' | null>(null);
+  const [picked, setPicked] = useState<{ name: string; file: ImportFile; plan: ImportPlan } | null>(
+    null
+  );
+  const [choices, setChoices] = useState<Record<string, MonthChoice>>({});
+  const [apply, setApply] = useState<SettingsChoice>({ settings: false, quotes: false });
+
+  /** Reads and checks the whole file before anything is shown; a refusal changes nothing */
+  const choose = async () => {
+    if (busy) return;
+    setBusy('reading');
+    try {
+      const chosen = await pickImport();
+      if (!chosen) return;
+      const read =
+        chosen.text === null
+          ? ({ ok: false, refusal: { reason: 'foreign' } } as const)
+          : readImport(chosen.text);
+      if (!read.ok) {
+        const { title, body } = refusalText(read.refusal);
+        Alert.alert(title, body);
+        return;
+      }
+      const plan = await previewImport(read.file);
+      setPicked({ name: chosen.name, file: read.file, plan });
+      // a month on both starts on skip, so only a tap can overwrite it
+      setChoices(
+        Object.fromEntries(
+          plan.months.filter((m) => m.status === 'clash').map((m) => [m.key, 'skip' as const])
+        )
+      );
+      setApply({ settings: false, quotes: false });
+    } catch {
+      Alert.alert('Nothing was imported', `Rin could not open the file on this ${device()}.`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const run = async () => {
+    if (!picked || busy) return;
+    setBusy('importing');
+    try {
+      const result = await applyImport(picked.file, choices);
+      const from = picked.file.settings;
+      const chosen = { ...apply };
+      setPicked(null);
+      onImported(
+        from && (chosen.settings || chosen.quotes)
+          ? (prev) => applySettings(prev, from, chosen)
+          : null,
+        result.months + result.deadlines > 0
+      );
+      Alert.alert('Imported', importDoneText(result, chosen, device()));
+    } catch {
+      Alert.alert('The import did not finish', `Rin could not save everything on this ${device()}. Try again.`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const notice = picked && importNotice(picked.file, picked.plan, choices, apply);
+  const confirm = () => {
+    if (!notice) return;
+    Alert.alert(
+      'Import this file?',
+      notice,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Import', onPress: run },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  if (!picked) {
+    return (
+      <>
+        <SectionHeader title="IMPORT" />
+        <View style={styles.card}>
+          <View style={styles.toggleRow}>
+            <View style={styles.rowIcon}>
+              <BracesGlyph color={palette.accent} size={18} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle} maxFontSizeMultiplier={SCALE.row}>
+                From a JSON export
+              </Text>
+              <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+                You see what it holds before anything changes
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            disabled={busy !== null}
+            onPress={choose}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.primary, styles.shareBtn, pressed && { opacity: 0.85 }]}
+          >
+            <ImportGlyph color={palette.onAccent} size={15} />
+            <Text style={styles.primaryText} maxFontSizeMultiplier={SCALE.heading}>
+              {busy ? 'READING…' : 'CHOOSE FILE'}
+            </Text>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
+
+  const { file, plan } = picked;
+  const summary = importSummary(file);
+  const keysOf = (status: 'new' | 'same') =>
+    plan.months.filter((m) => m.status === status).map((m) => m.key);
+  const fresh = keysOf('new');
+  const same = keysOf('same');
+  const clashes = plan.months.filter((m) => m.status === 'clash');
+  const { deadlines } = plan;
+  const deadlineText = deadlines.blocked
+    ? `Left out: this ${device()}'s deadlines can't be read in full`
+    : file.deadlines.length === 0
+      ? 'None in the file'
+      : deadlines.add.length === 0
+        ? 'All of them are already here'
+        : `${deadlines.add.length} to add${deadlines.already ? ` · ${deadlines.already} already here` : ''}`;
+  const quoteCount = file.settings ? newQuotes(quotes, file.settings.quotes).length : 0;
+
+  const block = (label: string, text: string) => (
+    <View style={styles.importBlock}>
+      <Text style={styles.exportLabel} maxFontSizeMultiplier={SCALE.heading}>
+        {label}
+      </Text>
+      <Text style={styles.importText} maxFontSizeMultiplier={SCALE.row}>
+        {text}
+      </Text>
+    </View>
+  );
+
+  return (
+    <>
+      <SectionHeader title="IMPORT" />
+      <View style={styles.card}>
+        <View style={[styles.ticket, styles.importTicket]}>
+          <View style={styles.rowIcon}>
+            <BracesGlyph color={palette.accent} size={18} />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.ticketName} maxFontSizeMultiplier={SCALE.row} numberOfLines={1}>
+              {picked.name}
+            </Text>
+            <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+              {summary.line}
+            </Text>
+            {summary.made ? (
+              <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+                {summary.made}
+              </Text>
+            ) : null}
+            {summary.damage ? (
+              <Text style={[styles.rowSub, styles.ticketDamage]} maxFontSizeMultiplier={SCALE.row}>
+                {summary.damage}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {fresh.length ? block('NEW MONTHS', monthList(fresh)) : null}
+        {same.length ? block('ALREADY HERE', monthList(same)) : null}
+        {clashes.map((m) => {
+          const choice = choices[m.key] ?? 'skip';
+          return (
+            <View key={m.key} style={styles.importBlock}>
+              <Text style={styles.exportLabel} maxFontSizeMultiplier={SCALE.heading}>
+                ON BOTH
+              </Text>
+              <Text style={styles.importText} maxFontSizeMultiplier={SCALE.row}>
+                {monthTitle(m.key)}
+              </Text>
+              <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
+                {m.damagedHere
+                  ? `This ${device()}'s copy is damaged`
+                  : choice === 'mine'
+                    ? m.merged?.adds
+                      ? m.merged.left
+                        ? `Adds what fits; ${m.merged.left} stay out`
+                        : 'Adds what only the file has'
+                      : 'Yours already has everything in it'
+                    : choice === 'replace'
+                      ? `The file's copy replaces this ${device()}'s`
+                      : 'Left as it is'}
+              </Text>
+              <SegmentedControl
+                options={m.damagedHere ? DAMAGED_OPTIONS : CLASH_OPTIONS}
+                value={choice}
+                onChange={(next) => setChoices((prev) => ({ ...prev, [m.key]: next }))}
+                verticalPadding={9}
+                style={styles.importChoice}
+              />
+            </View>
+          );
+        })}
+        {block('DEADLINES', deadlineText)}
+
+        {file.settings ? (
+          <View style={styles.importBlock}>
+            <ToggleRow
+              styles={styles}
+              palette={palette}
+              title="Settings"
+              sub="Replace theme, chart, cards and reminders"
+              on={apply.settings}
+              onPress={() => setApply((a) => ({ ...a, settings: !a.settings }))}
+            />
+            {quoteCount ? (
+              <ToggleRow
+                styles={styles}
+                palette={palette}
+                title="Your quotes"
+                sub={`Add ${quoteCount === 1 ? 'the 1 quote' : `${quoteCount} quotes`} you don't have yet`}
+                on={apply.quotes}
+                onPress={() => setApply((a) => ({ ...a, quotes: !a.quotes }))}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <Pressable
+          disabled={busy !== null || !notice}
+          onPress={confirm}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.primary,
+            styles.shareBtn,
+            !notice && styles.off,
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <ImportGlyph color={palette.onAccent} size={15} />
+          <Text style={styles.primaryText} maxFontSizeMultiplier={SCALE.heading}>
+            {busy ? 'IMPORTING…' : notice ? 'IMPORT' : 'NOTHING TO IMPORT'}
+          </Text>
+        </Pressable>
+        <GhostButton
+          styles={styles}
+          label="CANCEL"
+          disabled={busy !== null}
+          onPress={() => setPicked(null)}
+        />
+      </View>
+    </>
+  );
+}
+
 function PrimaryButton({
   styles,
   label,
@@ -1287,6 +1583,21 @@ const makeStyles = (p: Palette) =>
       flexDirection: 'row',
       gap: 8,
       marginTop: 12,
+    },
+    importTicket: {
+      marginTop: 0,
+    },
+    importBlock: {
+      marginTop: 14,
+    },
+    importText: {
+      marginTop: 3,
+      fontSize: 15,
+      fontFamily: FONT.semibold,
+      color: p.ink,
+    },
+    importChoice: {
+      marginTop: 8,
     },
     chips: {
       flexDirection: 'row',

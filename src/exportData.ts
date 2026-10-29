@@ -10,7 +10,7 @@ import type { VouchedRead } from './storage';
 
 /** An unencrypted copy of the user's data for the share sheet; pure apart from `gatherExport` */
 
-const EXPORT_FORMAT = 'rin-export';
+export const EXPORT_FORMAT = 'rin-export';
 /** Raised whenever the file's shape changes; the import checks it before anything else */
 export const EXPORT_VERSION = 1;
 
@@ -147,7 +147,7 @@ export function exportCsv(file: ExportFile): string {
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
 
-const counted = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+export const counted = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
 /** What the preview card lists: what the file holds, and what could not be read */
 export function exportSummary(
@@ -184,7 +184,7 @@ function monthName(year: number, month: number): string {
   return `${name[0]}${name.slice(1).toLowerCase()} ${year}`;
 }
 
-function monthTitle(key: string): string {
+export function monthTitle(key: string): string {
   const [year, month] = key.split('-').map(Number);
   return monthName(year, month - 1);
 }
@@ -195,7 +195,7 @@ export function scopeTitle(scope: ExportScope): string {
   return scope.kind === 'year' ? String(scope.year) : 'Everything';
 }
 
-function listed(names: string[]): string {
+export function listed(names: string[]): string {
   if (names.length < 2) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
