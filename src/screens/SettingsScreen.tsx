@@ -945,7 +945,7 @@ function ImportSection({
   onImported: Props['onImported'];
 }) {
   const [busy, setBusy] = useState<'reading' | 'importing' | null>(null);
-  const [picked, setPicked] = useState<{ name: string; file: ImportFile; plan: ImportPlan } | null>(
+  const [picked, setPicked] = useState<{ name: string | null; file: ImportFile; plan: ImportPlan } | null>(
     null
   );
   const [choices, setChoices] = useState<Record<string, MonthChoice>>({});
@@ -1091,7 +1091,7 @@ function ImportSection({
           </View>
           <View style={styles.rowText}>
             <Text style={styles.ticketName} maxFontSizeMultiplier={SCALE.row} numberOfLines={1}>
-              {picked.name}
+              {picked.name ?? 'Rin export'}
             </Text>
             <Text style={styles.rowSub} maxFontSizeMultiplier={SCALE.row}>
               {summary.line}
