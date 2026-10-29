@@ -14,7 +14,8 @@ export async function pickImport(): Promise<{ name: string; text: string | null 
   const file = picked.result;
   try {
     if ((file.size ?? 0) > MAX_BYTES) return { name: file.name, text: null };
-    return { name: file.name, text: await file.text() };
+    // sync like the export's write; an export is small enough to read in one go
+    return { name: file.name, text: file.textSync() };
   } finally {
     // iOS hands Rin a copy, which is Rin's to remove; on Android it is the user's file
     if (Platform.OS === 'ios') {

@@ -1024,7 +1024,7 @@ function ImportSection({
       <>
         <SectionHeader title="IMPORT" />
         <View style={styles.card}>
-          <View style={styles.toggleRow}>
+          <View style={styles.importIntro}>
             <View style={styles.rowIcon}>
               <BracesGlyph color={palette.accent} size={18} />
             </View>
@@ -1583,6 +1583,10 @@ const makeStyles = (p: Palette) =>
       flexDirection: 'row',
       gap: 8,
       marginTop: 12,
+    },
+    importIntro: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     importTicket: {
       marginTop: 0,
