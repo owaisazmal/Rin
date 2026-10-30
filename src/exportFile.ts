@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Platform, Share } from 'react-native';
 import type { ExportFormat } from './exportData';
 
@@ -15,7 +16,5 @@ export async function shareExport(name: string, body: string, format: ExportForm
     await Share.share({ url: file.uri });
     return;
   }
-  // loaded here, so an Android build without the module only fails the export
-  const Sharing = await import('expo-sharing');
   await Sharing.shareAsync(file.uri, { mimeType: MIME[format], dialogTitle: name });
 }
