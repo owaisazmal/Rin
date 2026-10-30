@@ -57,6 +57,31 @@ export function ImportGlyph({ color, size = 16 }: Props) {
   return <Glyph d="M12 3.8v10M8.2 10.2 12 14l3.8-3.8M7.5 10.5H6v9h12v-9h-1.5" color={color} size={size} />;
 }
 
+export function BellGlyph({ color, size = 16 }: Props) {
+  return <Glyph d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 21h4" color={color} size={size} />;
+}
+
+export function QuoteGlyph({ color, size = 16 }: Props) {
+  return (
+    <Glyph
+      d="M10.5 6.5c-3 .9-4.5 3.2-4.5 6.5v4h4.5v-4.5H6.2M18.5 6.5c-3 .9-4.5 3.2-4.5 6.5v4h4.5v-4.5h-4.3"
+      color={color}
+      size={size}
+    />
+  );
+}
+
+/** the encrypted backup, going up */
+export function CloudGlyph({ color, size = 16 }: Props) {
+  return (
+    <Glyph
+      d="M7.5 18.5H7a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.7 8.6a4.5 4.5 0 0 1-.2 9.9M12 20.5v-7M9.2 16 12 13.2l2.8 2.8"
+      color={color}
+      size={size}
+    />
+  );
+}
+
 /** a link that leaves the app */
 export function ExternalGlyph({ color, size = 14 }: Props) {
   return <Glyph d="M9.5 6.5h8v8M17.5 6.5 7 17" color={color} size={size} />;

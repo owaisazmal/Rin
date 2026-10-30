@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BackHandler } from 'react-native';
 import PlannerScreen from '../screens/PlannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import DataScreen from '../screens/DataScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SummaryScreen, { SummarySource } from '../screens/SummaryScreen';
 import BackupScreen, { BackupOutcome } from '../screens/BackupScreen';
@@ -15,7 +16,7 @@ import type { PlannerLayout } from '../layout';
 import { ChartType, NotificationPrefs, Settings } from '../settings';
 import type { QuotePrefs } from '../quotes';
 
-type Screen = 'planner' | 'settings' | 'history' | 'summary' | 'backup' | 'intro';
+type Screen = 'planner' | 'settings' | 'data' | 'history' | 'summary' | 'backup' | 'intro';
 type BackupVariant = 'onboarding' | 'standalone';
 
 export default function Navigator({
@@ -42,7 +43,7 @@ export default function Navigator({
   onSkipOnboarding,
   onIntroDone,
 }: {
-  initialScreen: Exclude<Screen, 'settings' | 'history' | 'summary'>;
+  initialScreen: Exclude<Screen, 'settings' | 'data' | 'history' | 'summary'>;
   hasBackup: boolean;
   lastBackupAt: number | null;
   /** what is still waiting to go, and what the server would not take */
@@ -102,17 +103,17 @@ export default function Navigator({
     setScreen('backup');
   };
 
-  // Settings stays underneath a backup screen opened from it
-  const settingsLayer = useScreenTransition(
-    screen === 'settings' || (screen === 'backup' && backupVariant === 'standalone')
-  );
+  // Settings stays under Backup & data, and both under a backup screen opened from there
+  const overData = screen === 'backup' && backupVariant === 'standalone';
+  const settingsLayer = useScreenTransition(screen === 'settings' || screen === 'data' || overData);
+  const dataLayer = useScreenTransition(screen === 'data' || overData);
   const backupLayer = useScreenTransition(screen === 'backup' || screen === 'intro');
   const historyLayer = useScreenTransition(screen === 'history');
   const summaryLayer = useScreenTransition(screen === 'summary');
 
   const dismissBackup = () => {
     if (backupVariant === 'standalone') {
-      setScreen('settings');
+      setScreen('data');
     } else {
       onSkipOnboarding();
       toPlanner();
@@ -126,8 +127,12 @@ export default function Navigator({
         toPlanner();
         return true;
       }
-      if (screen === 'backup' && backupVariant === 'standalone') {
+      if (screen === 'data') {
         setScreen('settings');
+        return true;
+      }
+      if (screen === 'backup' && backupVariant === 'standalone') {
+        setScreen('data');
         return true;
       }
       return false;
@@ -182,10 +187,30 @@ export default function Navigator({
 
       <ScreenLayer
         transition={settingsLayer}
-        coveredBy={backupVariant === 'standalone' ? backupLayer.progress : undefined}
+        coveredBy={dataLayer.progress}
+        hidden={dataLayer.settledOpen}
         onSwipeBack={toPlanner}
       >
         <SettingsScreen
+          hasBackup={hasBackup}
+          lastBackupAt={lastBackupAt}
+          backupStatus={backupStatus}
+          backupHolds={backupHolds}
+          onOpenData={() => setScreen('data')}
+          notifications={notifications}
+          onChangeNotifications={onChangeNotifications}
+          quotes={quotes}
+          onChangeQuotes={onChangeQuotes}
+          onClose={toPlanner}
+        />
+      </ScreenLayer>
+
+      <ScreenLayer
+        transition={dataLayer}
+        coveredBy={backupVariant === 'standalone' ? backupLayer.progress : undefined}
+        onSwipeBack={() => setScreen('settings')}
+      >
+        <DataScreen
           hasBackup={hasBackup}
           lastBackupAt={lastBackupAt}
           backupStatus={backupStatus}
@@ -198,12 +223,9 @@ export default function Navigator({
           onRestoreMonth={onRestoreMonth}
           onDeleteBackup={onDeleteBackup}
           onForgetBackup={onForgetBackup}
-          notifications={notifications}
-          onChangeNotifications={onChangeNotifications}
           quotes={quotes}
-          onChangeQuotes={onChangeQuotes}
           onImported={onImported}
-          onClose={toPlanner}
+          onBack={() => setScreen('settings')}
         />
       </ScreenLayer>
 

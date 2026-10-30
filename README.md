@@ -170,7 +170,8 @@ src/navigation/Navigator       which screens exist and what sits under what
 src/screens/IntroScreen        four-page first run
 src/screens/BackupScreen       make a backup, or restore one
 src/screens/backupWording      what those two screens are allowed to say about a run
-src/screens/SettingsScreen     backup + appearance
+src/screens/SettingsScreen     reminders, quotes, appearance; folded cards
+src/screens/DataScreen         backup, export and import, opened from Settings
 src/screens/HistoryScreen      the log, read-only
 src/screens/PlannerScreen      the planner, layout and gestures only
 
