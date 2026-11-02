@@ -11,14 +11,8 @@ on:
       - '**.md'
       - '.github/workflows/pages.yml'
       - '.github/dependabot.yml'
+  # Required checks must report even for documentation-only pull requests.
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - 'screenshots/**'
-      - 'assets/store/**'
-      - '**.md'
-      - '.github/workflows/pages.yml'
-      - '.github/dependabot.yml'
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -35,6 +29,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci:
+    name: CI
+    needs: [changes, test, rules, native, ios-widgets]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const jobs = JSON.parse(process.env.RESULTS);
+          for (const [name, { result }] of Object.entries(jobs)) {
+            console.log(`${name}: ${result}`);
+            const allowed = ['changes', 'test'].includes(name)
+              ? ['success']
+              : ['success', 'skipped'];
+            if (!allowed.includes(result)) process.exitCode = 1;
+          }
+          NODE
+
   changes:
     name: Changed files
     runs-on: ubuntu-latest
