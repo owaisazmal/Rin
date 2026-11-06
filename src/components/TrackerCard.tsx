@@ -1,11 +1,12 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import ChartLegend from './ChartLegend';
 import ChartPicker, { CHART_INFO, ChartGlyph } from './ChartPicker';
+import { ShareGlyph } from './Glyphs';
 import { PickerChip } from './Picker';
 import SectionHeader from './SectionHeader';
 import type { ChartType } from '../settings';
-import { FONT, Palette, cardSurface, useTheme, wrapSafe } from '../theme';
+import { FONT, Palette, RADIUS, cardSurface, useTheme, wrapSafe } from '../theme';
 
 /** The frame around whichever chart is showing: picker, animated slot, progress bar and legend */
 
@@ -21,6 +22,8 @@ interface Props {
   enterFrom: number;
   stats: { done: number; total: number; pct: number };
   hasHabits: boolean;
+  /** opens the share sheet for the month on screen */
+  onShare: () => void;
   /** the chart, or null while its data is still loading */
   children: ReactNode;
 }
@@ -32,6 +35,7 @@ export default function TrackerCard({
   enterFrom,
   stats,
   hasHabits,
+  onShare,
   children,
 }: Props) {
   const { palette } = useTheme();
@@ -53,12 +57,23 @@ export default function TrackerCard({
       <SectionHeader
         title="TRACKER"
         right={
-          <PickerChip
+          <View style={styles.headerRight}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share this month as a picture"
+              hitSlop={6}
+              onPress={onShare}
+              style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.6 }]}
+            >
+              <ShareGlyph color={palette.ink} size={17} />
+            </Pressable>
+            <PickerChip
             label={CHART_INFO[chart].label}
             icon={<ChartGlyph type={chart} width={21} palette={palette} />}
             accessibilityLabel={`Showing the ${CHART_INFO[chart].label.toLowerCase()} chart. Change the chart.`}
             onPress={() => setPicking(true)}
           />
+          </View>
         }
       />
       <ChartPicker
@@ -136,6 +151,18 @@ const makeStyles = (p: Palette) =>
       ...cardSurface(p),
       paddingVertical: 18,
       paddingHorizontal: 16,
+    },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    /** the same height as the chip beside it */
+    shareBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: RADIUS.pill,
+      borderWidth: 1,
+      borderColor: p.lineFaint,
+      backgroundColor: p.chip,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     slot: {
       alignItems: 'center',

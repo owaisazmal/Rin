@@ -14,6 +14,7 @@
     "@react-native-firebase/auth": "^26.4.1",
     "@react-native-firebase/firestore": "^26.4.1",
     "expo": "^57.0.26",
+    "expo-application": "~57.0.3",
     "expo-build-properties": "~57.0.22",
     "expo-crypto": "~57.0.3",
     "expo-file-system": "~57.0.7",
@@ -23,11 +24,13 @@
     "expo-sharing": "~57.0.22",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
+    "expo-store-review": "~57.0.3",
     "expo-video": "~57.0.2",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

@@ -17,6 +17,7 @@ import MonthNav from '../components/MonthNav';
 import QuoteCard from '../components/QuoteCard';
 import RadialTracker from '../components/RadialTracker';
 import RoundButton from '../components/RoundButton';
+import ShareMonthSheet from '../components/ShareMonthSheet';
 import StreakBadge from '../components/StreakBadge';
 import TrackerCard from '../components/TrackerCard';
 import WeekdayHeat from '../components/WeekdayHeat';
@@ -26,6 +27,7 @@ import { useChartTransition } from '../hooks/useChartTransition';
 import { useCurrentStreak } from '../hooks/useCurrentStreak';
 import { monthDocKey, useMonthData } from '../hooks/useMonthData';
 import { useNow } from '../hooks/useNow';
+import { useReviewPrompt } from '../hooks/useReviewPrompt';
 import { useReminderSync, useWidgetSync } from '../hooks/useOutboundSync';
 import { TaskStore } from '../hooks/useTasks';
 import { useYearSummary } from '../hooks/useYearSummary';
@@ -159,6 +161,7 @@ export default function PlannerScreen({
   // which task's deadline is being edited, or null when the sheet is closed
   const [editingDue, setEditingDue] = useState<string | null>(null);
   const [editingLayout, setEditingLayout] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   /** A month restored from a backup can hold cards the layout does not know yet. */
   useEffect(() => {
@@ -168,6 +171,7 @@ export default function PlannerScreen({
 
   const yearMonths = useYearSummary(year, month, data, daysInMonth);
   const streakDays = useCurrentStreak(year, yearMonths);
+  useReviewPrompt(loaded, year, yearMonths);
   // the year grid's own span, which crosses New Year, unlike the January-first yearMonths
   const yearWindow = useYearWindow({
     now: todayRef,
@@ -452,6 +456,7 @@ export default function PlannerScreen({
                 enterFrom={enterFrom}
                 stats={stats}
                 hasHabits={data.habits.length > 0}
+                onShare={() => setSharing(true)}
               >
                 {renderChart()}
               </TrackerCard>
@@ -488,6 +493,18 @@ export default function PlannerScreen({
             if (editingDue) setTaskDue(editingDue, due, repeat);
             setEditingDue(null);
           }}
+        />
+
+        <ShareMonthSheet
+          visible={sharing}
+          onClose={() => setSharing(false)}
+          year={year}
+          month={month}
+          daysInMonth={daysInMonth}
+          habits={data.habits}
+          grid={data.grid}
+          today={today}
+          stats={stats}
         />
 
         <LayoutEditor
